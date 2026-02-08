@@ -90,7 +90,7 @@ Please provide your analysis in the following JSON format (and ONLY valid JSON, 
 
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=1500,
+            max_tokens=2000,
             messages=[
                 {"role": "user", "content": prompt}
             ]
@@ -101,31 +101,80 @@ Please provide your analysis in the following JSON format (and ONLY valid JSON, 
 
         # Try to extract JSON from the response
         try:
-            # Handle case where response might have markdown code blocks
-            if "```json" in response_text:
-                json_start = response_text.index("```json") + 7
-                json_end = response_text.index("```", json_start)
-                response_text = response_text[json_start:json_end]
-            elif "```" in response_text:
-                json_start = response_text.index("```") + 3
-                json_end = response_text.index("```", json_start)
-                response_text = response_text[json_start:json_end]
+            clean_text = response_text.strip()
 
-            suggestions = json.loads(response_text.strip())
+            # Strip markdown code blocks (```json ... ``` or ``` ... ```)
+            if "```json" in clean_text:
+                json_start = clean_text.index("```json") + 7
+                # Find the closing ``` — if missing (truncated), take everything after opening
+                closing = clean_text.find("```", json_start)
+                if closing != -1:
+                    clean_text = clean_text[json_start:closing]
+                else:
+                    clean_text = clean_text[json_start:]
+            elif "```" in clean_text:
+                json_start = clean_text.index("```") + 3
+                closing = clean_text.find("```", json_start)
+                if closing != -1:
+                    clean_text = clean_text[json_start:closing]
+                else:
+                    clean_text = clean_text[json_start:]
+
+            clean_text = clean_text.strip()
+
+            # If JSON is truncated (no closing brace), try to repair it
+            if clean_text.startswith("{") and not clean_text.endswith("}"):
+                # Count braces to find how many we need to close
+                open_braces = clean_text.count("{") - clean_text.count("}")
+                open_brackets = clean_text.count("[") - clean_text.count("]")
+
+                # Trim to last complete value (before any cut-off string)
+                last_quote = clean_text.rfind('"')
+                if last_quote > 0:
+                    # Check if we're mid-string — find a safe cut point
+                    last_complete = max(
+                        clean_text.rfind('}'),
+                        clean_text.rfind(']'),
+                        clean_text.rfind('"', 0, last_quote),
+                    )
+                    if last_complete > 0:
+                        clean_text = clean_text[:last_complete + 1]
+
+                # Close any open brackets/braces
+                clean_text += "]" * max(0, clean_text.count("[") - clean_text.count("]"))
+                clean_text += "}" * max(0, clean_text.count("{") - clean_text.count("}"))
+
+            suggestions = json.loads(clean_text)
             suggestions["ai_powered"] = True
             return suggestions
 
-        except (json.JSONDecodeError, ValueError):
-            # If JSON parsing fails, return the raw text in a structured format
+        except (json.JSONDecodeError, ValueError) as parse_error:
+            print(f"JSON parse error: {parse_error}")
+            print(f"Raw response (first 300 chars): {response_text[:300]}")
+
+            # Last resort: try to extract just the summary from raw text
+            summary = response_text
+            # Strip any markdown/JSON artifacts for display
+            for prefix in ['```json', '```', '{', '"summary":', '"summary" :']:
+                summary = summary.replace(prefix, '')
+            summary = summary.replace('```', '').strip().strip('"').strip()
+            # Take first sentence or two as summary
+            if len(summary) > 300:
+                cut = summary.find('.', 150)
+                if cut != -1 and cut < 400:
+                    summary = summary[:cut + 1]
+                else:
+                    summary = summary[:300] + '...'
+
             return {
-                "summary": response_text[:500],
+                "summary": summary,
                 "strengths": [],
                 "critical_improvements": [],
                 "keyword_suggestions": [],
                 "rewrite_suggestions": [],
                 "quick_wins": [],
                 "ai_powered": True,
-                "parse_note": "AI analysis completed but structured parsing had issues. See summary for details."
+                "parse_note": "AI analysis completed but structured parsing had issues."
             }
 
     except Exception as e:
