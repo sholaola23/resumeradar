@@ -35,7 +35,11 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
         missing_certs = keyword_results.get("missing_keywords", {}).get("certifications", [])
         match_score = keyword_results.get("overall_score", 0)
 
+        from datetime import datetime
+        today = datetime.now().strftime('%B %Y')
+
         prompt = f"""You are an expert career coach and ATS (Applicant Tracking System) optimization specialist.
+Today's date is {today}. Any dates from 2025 or earlier are in the PAST, not the future. Do NOT flag past dates as fake or future-dated.
 
 Analyze this resume against the job description and provide specific, actionable suggestions.
 
