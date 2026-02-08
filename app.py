@@ -10,7 +10,6 @@ import secrets
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
@@ -32,9 +31,17 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
 # Rate limiting — protect API credits and prevent abuse
+# Use X-Forwarded-For header behind Render's proxy to get real client IP
+def get_real_ip():
+    """Get the real client IP, handling Render's reverse proxy."""
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr or '127.0.0.1'
+
 limiter = Limiter(
     app=app,
-    key_func=get_remote_address,
+    key_func=get_real_ip,
     default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://",
 )
@@ -66,7 +73,7 @@ def index():
 
 
 @app.route('/api/scan', methods=['POST'])
-@limiter.limit("10 per hour")
+@limiter.limit("15 per hour")
 def scan_resume():
     """
     Main API endpoint: analyze resume against job description.
@@ -205,7 +212,7 @@ def download_report():
 
 
 @app.route('/api/email-report', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("10 per hour")
 def email_report():
     """
     Send the ATS scan report via email using Resend.
