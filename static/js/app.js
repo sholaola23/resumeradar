@@ -4,6 +4,19 @@
  * and report generation (copy, download, email).
  */
 
+// Sanitize AI text — strip JSON/markdown artifacts that may leak through
+function sanitizeAIText(text) {
+    if (!text) return '';
+    if (text.includes('```') || text.includes('"summary"') || text.trim().startsWith('{')) {
+        text = text.replace(/```json/g, '').replace(/```/g, '').replace(/[{}]/g, '')
+            .replace(/"summary"\s*:/g, '').replace(/"strengths"\s*:/g, '')
+            .replace(/"critical_improvements"\s*:/g, '').replace(/"quick_wins"\s*:/g, '')
+            .replace(/"keyword_suggestions"\s*:/g, '').replace(/"rewrite_suggestions"\s*:/g, '')
+            .trim().replace(/^"|"$/g, '').trim();
+    }
+    return text;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // DOM ELEMENTS
@@ -346,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // AI Summary
         if (ai.summary) {
             report.push('SUMMARY');
-            report.push(ai.summary);
+            report.push(sanitizeAIText(ai.summary));
             report.push('');
         }
 
@@ -637,7 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
         report.push('');
 
         if (ai.summary) {
-            report.push(ai.summary);
+            report.push(sanitizeAIText(ai.summary));
             report.push('');
         }
 
@@ -744,13 +757,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Summary text
         let summaryText = '';
         if (data.ai_suggestions && data.ai_suggestions.summary) {
-            summaryText = data.ai_suggestions.summary;
-        } else if (score >= 75) {
-            summaryText = "Strong match! Your resume aligns well with this job description. A few targeted tweaks could push you even higher.";
-        } else if (score >= 50) {
-            summaryText = "Decent foundation, but there are noticeable gaps. Focus on adding the missing technical keywords and you'll see a significant jump.";
-        } else {
-            summaryText = "Your resume needs significant optimization for this role. Don't worry — the suggestions below will show you exactly what to add and change.";
+            summaryText = sanitizeAIText(data.ai_suggestions.summary);
+        }
+        // Fallback if AI summary is empty or was all artifacts
+        if (!summaryText) {
+            if (score >= 75) {
+                summaryText = "Strong match! Your resume aligns well with this job description. A few targeted tweaks could push you even higher.";
+            } else if (score >= 50) {
+                summaryText = "Decent foundation, but there are noticeable gaps. Focus on adding the missing technical keywords and you'll see a significant jump.";
+            } else {
+                summaryText = "Your resume needs significant optimization for this role. Don't worry — the suggestions below will show you exactly what to add and change.";
+            }
         }
         scoreSummary.innerHTML = `<p>${summaryText}</p>`;
 

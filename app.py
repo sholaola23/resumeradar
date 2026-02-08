@@ -252,6 +252,14 @@ def email_report():
         ai = scan_data.get('ai_suggestions', {}) or {}
         summary = ai.get('summary', 'Your ATS scan report is ready.')
 
+        # Sanitize summary — strip any JSON/markdown artifacts that may have leaked through
+        if summary and ('```' in summary or '"summary"' in summary or summary.strip().startswith('{')):
+            for artifact in ['```json', '```', '{', '}', '"summary":', '"summary" :']:
+                summary = summary.replace(artifact, '')
+            summary = summary.strip().strip('"').strip()
+            if not summary:
+                summary = 'Your ATS scan report is ready.'
+
         # Build the HTML email body
         html_body = f"""
         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
