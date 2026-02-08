@@ -42,7 +42,7 @@ def get_real_ip():
 limiter = Limiter(
     app=app,
     key_func=get_real_ip,
-    default_limits=["500 per day", "100 per hour"],
+    default_limits=["2000 per day", "500 per hour"],
     storage_uri="memory://",
 )
 
@@ -67,6 +67,7 @@ def allowed_file(filename):
 # ============================================================
 
 @app.route('/')
+@limiter.exempt
 def index():
     """Serve the main application page."""
     return render_template('index.html')
@@ -410,6 +411,7 @@ def subscribe_newsletter():
 
 
 @app.route('/api/health', methods=['GET'])
+@limiter.exempt
 def health_check():
     """Health check endpoint."""
     has_api_key = bool(os.getenv('ANTHROPIC_API_KEY')) and os.getenv('ANTHROPIC_API_KEY') != 'your-anthropic-api-key-here'
@@ -457,6 +459,11 @@ def not_found(e):
     if request.path.startswith('/api/'):
         return jsonify({"error": "Not found."}), 404
     return render_template('404.html'), 404
+
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return jsonify({"error": "Method not allowed."}), 405
 
 
 @app.errorhandler(500)
