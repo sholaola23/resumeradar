@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResumeRadar — Beat the Bots, Land the Interview</title>
+    <meta name="description" content="Free ATS resume scanner. Upload your resume, paste a job description, and get instant feedback on keyword matches, gaps, and how to optimize for Applicant Tracking Systems.">
+
+    <!-- Open Graph (for LinkedIn/social sharing) -->
+    <meta property="og:title" content="ResumeRadar — Beat the Bots, Land the Interview">
+    <meta property="og:description" content="Free tool: upload your resume + paste a job description = instant ATS match score, missing keywords, and actionable fixes. Stop applying blind.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="en_US">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="ResumeRadar — Beat the Bots, Land the Interview">
+    <meta name="twitter:description" content="Free tool: See exactly why your resume gets filtered out by ATS systems — and how to fix it in minutes.">
+
+    <!-- Favicon (emoji-based) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- ============ HEADER ============ -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <span class="logo-icon">📡</span>
+                <span class="logo-text">ResumeRadar</span>
+            </div>
+            <p class="tagline">Beat the bots. Land the interview.</p>
+        </div>
+    </header>
+
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+        <div class="container">
+            <h1>Is your resume getting past the <span class="highlight">ATS robots</span>?</h1>
+            <p class="hero-sub">75% of resumes are filtered out before a human ever sees them. Paste your resume and a job description below — we'll show you exactly what's missing and how to fix it.</p>
+        </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS ============ -->
+    <section class="how-it-works">
+        <div class="container">
+            <div class="steps-grid">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Upload Resume</h3>
+                        <p>PDF, DOCX, or paste text</p>
+                    </div>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Paste Job Description</h3>
+                        <p>Copy from the job posting</p>
+                    </div>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Get Your Score</h3>
+                        <p>Keywords, gaps & fixes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ MAIN SCANNER ============ -->
+    <main class="scanner-section">
+        <div class="container">
+            <form id="scanForm" class="scan-form" enctype="multipart/form-data">
+                <div class="form-grid">
+                    <!-- LEFT: Resume Input -->
+                    <div class="form-panel">
+                        <h2>📄 Your Resume</h2>
+                        <div class="input-tabs">
+                            <button type="button" class="tab-btn active" data-tab="upload">Upload File</button>
+                            <button type="button" class="tab-btn" data-tab="paste">Paste Text</button>
+                        </div>
+
+                        <!-- Upload Tab -->
+                        <div class="tab-content active" id="tab-upload">
+                            <div class="file-upload-area" id="dropZone">
+                                <div class="upload-icon">📎</div>
+                                <p class="upload-text">Drag & drop your resume here</p>
+                                <p class="upload-subtext">or click to browse</p>
+                                <p class="upload-formats">PDF or DOCX • Max 5MB</p>
+                                <input type="file" id="resumeFile" name="resume_file" accept=".pdf,.docx" hidden>
+                            </div>
+                            <div class="file-selected" id="fileSelected" style="display: none;">
+                                <span class="file-icon">📄</span>
+                                <span class="file-name" id="fileName"></span>
+                                <button type="button" class="file-remove" id="removeFile">✕</button>
+                            </div>
+                        </div>
+
+                        <!-- Paste Tab -->
+                        <div class="tab-content" id="tab-paste">
+                            <textarea
+                                id="resumeText"
+                                name="resume_text"
+                                placeholder="Paste your full resume text here...
+
+Include everything: contact info, summary, experience, education, skills, certifications..."
+                                rows="12"
+                            ></textarea>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: Job Description -->
+                    <div class="form-panel">
+                        <h2>📋 Job Description</h2>
+                        <textarea
+                            id="jobDescription"
+                            name="job_description"
+                            placeholder="Paste the full job description here...
+
+Include the job title, requirements, responsibilities, qualifications — everything from the posting."
+                            rows="14"
+                            required
+                        ></textarea>
+                    </div>
+                </div>
+
+                <!-- SCAN BUTTON -->
+                <div class="scan-button-wrapper">
+                    <button type="submit" class="scan-btn" id="scanBtn">
+                        <span class="scan-btn-text">📡 Scan My Resume</span>
+                        <span class="scan-btn-loading" style="display: none;">
+                            <span class="spinner"></span>
+                            Analyzing your resume...
+                        </span>
+                    </button>
+                </div>
+
+                <!-- ERROR MESSAGE -->
+                <div class="error-message" id="errorMessage" style="display: none;"></div>
+            </form>
+
+            <!-- ============ RESULTS ============ -->
+            <div class="results-section" id="results" style="display: none;">
+
+                <!-- Score Card -->
+                <div class="result-card score-card">
+                    <h2>Your ATS Match Score</h2>
+                    <div class="score-display">
+                        <div class="score-circle" id="scoreCircle">
+                            <svg viewBox="0 0 120 120">
+                                <circle class="score-bg" cx="60" cy="60" r="54" />
+                                <circle class="score-fill" cx="60" cy="60" r="54" id="scoreFill" />
+                            </svg>
+                            <div class="score-number" id="scoreNumber">0%</div>
+                        </div>
+                        <div class="score-summary" id="scoreSummary"></div>
+                    </div>
+                    <div class="score-stats" id="scoreStats"></div>
+                </div>
+
+                <!-- Category Breakdown -->
+                <div class="result-card">
+                    <h2>📊 Category Breakdown</h2>
+                    <div class="category-bars" id="categoryBars"></div>
+                </div>
+
+                <!-- Missing Keywords -->
+                <div class="result-card keywords-card">
+                    <h2>⚠️ Missing Keywords</h2>
+                    <p class="card-subtitle">These keywords appear in the job description but NOT in your resume. ATS systems are scanning for them.</p>
+                    <div class="keywords-grid" id="missingKeywords"></div>
+                </div>
+
+                <!-- Matched Keywords -->
+                <div class="result-card matched-card">
+                    <h2>✅ Matched Keywords</h2>
+                    <p class="card-subtitle">Great news — your resume already includes these job-relevant keywords.</p>
+                    <div class="keywords-grid" id="matchedKeywords"></div>
+                </div>
+
+                <!-- AI Suggestions -->
+                <div class="result-card ai-card">
+                    <h2>🤖 Smart Suggestions</h2>
+                    <div class="ai-badge" id="aiBadge"></div>
+                    <div id="aiSuggestions"></div>
+                </div>
+
+                <!-- ATS Formatting -->
+                <div class="result-card ats-card">
+                    <h2>📋 ATS Formatting Check</h2>
+                    <div id="atsFormatting"></div>
+                </div>
+
+                <!-- Scan Again -->
+                <div class="scan-again-wrapper">
+                    <button type="button" class="scan-again-btn" id="scanAgainBtn">↑ Scan Another Resume</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============ FOOTER ============ -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-built">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Olushola Oladipupo</a> — AWS Solutions Architect</p>
+            <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
+            <p class="footer-privacy">🔒 Your resume is analyzed in real-time and never stored. Your data stays yours.</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
