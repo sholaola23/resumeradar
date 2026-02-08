@@ -1,6 +1,7 @@
 /**
- * ATS Scanner — Frontend Application
- * Handles form interaction, API calls, and results rendering.
+ * ResumeRadar — Frontend Application
+ * Handles form interaction, API calls, results rendering,
+ * and report generation (copy, download, email).
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -25,6 +26,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tab elements
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
+
+    // Report action buttons
+    const copyReportBtn = document.getElementById('copyReportBtn');
+    const downloadReportBtn = document.getElementById('downloadReportBtn');
+    const emailReportBtn = document.getElementById('emailReportBtn');
+
+    // Email modal
+    const emailModal = document.getElementById('emailModal');
+    const closeModalBtn = document.getElementById('closeModal');
+    const cancelModalBtn = document.getElementById('cancelModal');
+    const sendEmailBtn = document.getElementById('sendEmailBtn');
+    const emailInput = document.getElementById('emailInput');
+
+    // Store the last scan data for report generation
+    let lastScanData = null;
 
     // ============================================================
     // TAB SWITCHING
@@ -165,6 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // Store data for report generation
+            lastScanData = data;
+
             // Render results
             renderResults(data);
 
@@ -181,6 +200,321 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsSection.style.display = 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    // ============================================================
+    // REPORT GENERATION
+    // ============================================================
+
+    /**
+     * Generate a clean, readable text report from the scan data.
+     */
+    function generateTextReport(data) {
+        const ai = data.ai_suggestions || {};
+        const ats = data.ats_formatting || {};
+        const now = new Date().toLocaleDateString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        let report = [];
+
+        report.push('═══════════════════════════════════════════');
+        report.push('  RESUMERADAR — ATS SCAN REPORT');
+        report.push('  Beat the scan. Land the interview.');
+        report.push('═══════════════════════════════════════════');
+        report.push(`  Generated: ${now}`);
+        report.push('');
+
+        // Score
+        report.push('───────────────────────────────────────────');
+        report.push(`  ATS MATCH SCORE: ${data.match_score}%`);
+        report.push('───────────────────────────────────────────');
+        report.push(`  Keywords Matched: ${data.total_matched}`);
+        report.push(`  Keywords Missing: ${data.total_missing}`);
+        report.push(`  Total Job Keywords: ${data.total_job_keywords}`);
+        report.push('');
+
+        // AI Summary
+        if (ai.summary) {
+            report.push('SUMMARY');
+            report.push(ai.summary);
+            report.push('');
+        }
+
+        // Category Breakdown
+        report.push('───────────────────────────────────────────');
+        report.push('  CATEGORY BREAKDOWN');
+        report.push('───────────────────────────────────────────');
+        const catLabels = {
+            technical_skills: 'Technical Skills',
+            soft_skills: 'Soft Skills',
+            certifications: 'Certifications',
+            education: 'Education',
+            action_verbs: 'Action Verbs',
+        };
+        for (const [key, info] of Object.entries(data.category_scores || {})) {
+            if (info.total > 0) {
+                report.push(`  ${catLabels[key] || key}: ${Math.round(info.score)}% (${info.matched}/${info.total})`);
+            }
+        }
+        report.push('');
+
+        // Missing Keywords
+        const missingEntries = Object.entries(data.missing_keywords || {}).filter(([, v]) => v && v.length > 0);
+        if (missingEntries.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  MISSING KEYWORDS');
+            report.push('───────────────────────────────────────────');
+            for (const [cat, words] of missingEntries) {
+                report.push(`  ${catLabels[cat] || cat}: ${words.join(', ')}`);
+            }
+            report.push('');
+        }
+
+        // Matched Keywords
+        const matchedEntries = Object.entries(data.matched_keywords || {}).filter(([, v]) => v && v.length > 0);
+        if (matchedEntries.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  MATCHED KEYWORDS');
+            report.push('───────────────────────────────────────────');
+            for (const [cat, words] of matchedEntries) {
+                report.push(`  ${catLabels[cat] || cat}: ${words.join(', ')}`);
+            }
+            report.push('');
+        }
+
+        // Strengths
+        if (ai.strengths && ai.strengths.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  YOUR STRENGTHS');
+            report.push('───────────────────────────────────────────');
+            ai.strengths.forEach(s => report.push(`  + ${s}`));
+            report.push('');
+        }
+
+        // Key Improvements
+        if (ai.critical_improvements && ai.critical_improvements.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  KEY IMPROVEMENTS');
+            report.push('───────────────────────────────────────────');
+            ai.critical_improvements.forEach(item => {
+                report.push(`  [${(item.priority || 'medium').toUpperCase()}] ${item.section}: ${item.issue}`);
+                report.push(`    → ${item.suggestion}`);
+                report.push('');
+            });
+        }
+
+        // Keyword Suggestions
+        if (ai.keyword_suggestions && ai.keyword_suggestions.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  HOW TO ADD MISSING KEYWORDS');
+            report.push('───────────────────────────────────────────');
+            ai.keyword_suggestions.forEach(item => {
+                report.push(`  "${item.keyword}" → ${item.where_to_add}`);
+                report.push(`    ${item.how_to_add}`);
+                report.push('');
+            });
+        }
+
+        // Quick Wins
+        if (ai.quick_wins && ai.quick_wins.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  QUICK WINS');
+            report.push('───────────────────────────────────────────');
+            ai.quick_wins.forEach(w => report.push(`  * ${w}`));
+            report.push('');
+        }
+
+        // ATS Formatting
+        if (ats.issues && ats.issues.length > 0) {
+            report.push('───────────────────────────────────────────');
+            report.push('  ATS FORMATTING ISSUES');
+            report.push('───────────────────────────────────────────');
+            ats.issues.forEach(issue => {
+                const icons = { critical: '[!!]', warning: '[!]', info: '[i]' };
+                report.push(`  ${icons[issue.type] || '[i]'} ${issue.message}`);
+                report.push(`    ${issue.detail}`);
+            });
+            report.push('');
+        }
+
+        report.push('═══════════════════════════════════════════');
+        report.push('  Report by ResumeRadar');
+        report.push('  Built by Olushola Oladipupo');
+        report.push('  https://www.linkedin.com/in/olushola-oladipupo/');
+        report.push('═══════════════════════════════════════════');
+
+        return report.join('\n');
+    }
+
+    // ============================================================
+    // COPY REPORT
+    // ============================================================
+    copyReportBtn.addEventListener('click', async () => {
+        if (!lastScanData) return;
+
+        const reportText = generateTextReport(lastScanData);
+
+        try {
+            await navigator.clipboard.writeText(reportText);
+            showToast('Report copied to clipboard!');
+        } catch (err) {
+            // Fallback for browsers that don't support clipboard API
+            const textarea = document.createElement('textarea');
+            textarea.value = reportText;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showToast('Report copied to clipboard!');
+        }
+    });
+
+    // ============================================================
+    // DOWNLOAD REPORT
+    // ============================================================
+    downloadReportBtn.addEventListener('click', () => {
+        if (!lastScanData) return;
+
+        const reportText = generateTextReport(lastScanData);
+        const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        const date = new Date().toISOString().split('T')[0];
+        a.download = `ResumeRadar_Report_${date}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast('Report downloaded!');
+    });
+
+    // ============================================================
+    // EMAIL REPORT (via mailto)
+    // ============================================================
+    emailReportBtn.addEventListener('click', () => {
+        emailModal.style.display = 'flex';
+        emailInput.value = '';
+        emailInput.focus();
+    });
+
+    closeModalBtn.addEventListener('click', closeModal);
+    cancelModalBtn.addEventListener('click', closeModal);
+
+    // Close modal on backdrop click
+    emailModal.addEventListener('click', (e) => {
+        if (e.target === emailModal) closeModal();
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && emailModal.style.display === 'flex') {
+            closeModal();
+        }
+    });
+
+    function closeModal() {
+        emailModal.style.display = 'none';
+    }
+
+    sendEmailBtn.addEventListener('click', () => {
+        const email = emailInput.value.trim();
+
+        if (!email || !email.includes('@')) {
+            emailInput.style.borderColor = '#dc2626';
+            emailInput.focus();
+            return;
+        }
+
+        if (!lastScanData) return;
+
+        const reportText = generateTextReport(lastScanData);
+        const score = lastScanData.match_score;
+
+        const subject = encodeURIComponent(`ResumeRadar Report — ATS Match Score: ${score}%`);
+        const body = encodeURIComponent(reportText);
+
+        // Use mailto with the report content
+        // Truncate if needed (mailto has URL length limits ~2000 chars in some browsers)
+        const maxBodyLength = 1800;
+        let emailBody = reportText;
+        if (emailBody.length > maxBodyLength) {
+            // Send a shorter version via mailto
+            emailBody = generateShortReport(lastScanData);
+        }
+
+        const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(emailBody)}`;
+
+        window.location.href = mailtoUrl;
+
+        closeModal();
+        showToast('Opening your email client...');
+    });
+
+    /**
+     * Generate a shorter report for email (mailto has URL length limits)
+     */
+    function generateShortReport(data) {
+        const ai = data.ai_suggestions || {};
+        let report = [];
+
+        report.push('RESUMERADAR — ATS SCAN REPORT');
+        report.push(`Generated: ${new Date().toLocaleDateString()}`);
+        report.push('');
+        report.push(`ATS MATCH SCORE: ${data.match_score}%`);
+        report.push(`Keywords Matched: ${data.total_matched} | Missing: ${data.total_missing} | Total: ${data.total_job_keywords}`);
+        report.push('');
+
+        if (ai.summary) {
+            report.push(ai.summary);
+            report.push('');
+        }
+
+        // Missing keywords (compact)
+        const missing = Object.entries(data.missing_keywords || {})
+            .filter(([, v]) => v && v.length > 0)
+            .map(([, words]) => words.join(', '));
+        if (missing.length > 0) {
+            report.push('MISSING KEYWORDS: ' + missing.join(', '));
+            report.push('');
+        }
+
+        // Quick wins
+        if (ai.quick_wins && ai.quick_wins.length > 0) {
+            report.push('QUICK WINS:');
+            ai.quick_wins.forEach(w => report.push(`* ${w}`));
+            report.push('');
+        }
+
+        report.push('---');
+        report.push('Full report available at ResumeRadar');
+        report.push('Built by Olushola Oladipupo');
+
+        return report.join('\n');
+    }
+
+    // ============================================================
+    // TOAST NOTIFICATION
+    // ============================================================
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        const toastIcon = toast.querySelector('.toast-icon');
+
+        toastMessage.textContent = message;
+        toastIcon.textContent = isError ? '⚠️' : '✅';
+        toast.className = isError ? 'toast toast-error' : 'toast';
+        toast.style.display = 'flex';
+
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 3000);
+    }
 
     // ============================================================
     // RENDER RESULTS
@@ -219,6 +553,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const scoreFill = document.getElementById('scoreFill');
         const scoreSummary = document.getElementById('scoreSummary');
         const scoreStats = document.getElementById('scoreStats');
+
+        // Reset circle for re-scans
+        scoreFill.style.strokeDashoffset = 339.292;
 
         // Animate score number
         animateNumber(scoreNumber, score);

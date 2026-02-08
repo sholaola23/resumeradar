@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ResumeRadar — Beat the Bots, Land the Interview</title>
+    <title>ResumeRadar — Beat the Scan. Land the Interview.</title>
     <meta name="description" content="Free ATS resume scanner. Upload your resume, paste a job description, and get instant feedback on keyword matches, gaps, and how to optimize for Applicant Tracking Systems.">
 
     <!-- Open Graph (for LinkedIn/social sharing) -->
-    <meta property="og:title" content="ResumeRadar — Beat the Bots, Land the Interview">
+    <meta property="og:title" content="ResumeRadar — Beat the Scan. Land the Interview.">
     <meta property="og:description" content="Free tool: upload your resume + paste a job description = instant ATS match score, missing keywords, and actionable fixes. Stop applying blind.">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_US">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="ResumeRadar — Beat the Bots, Land the Interview">
+    <meta name="twitter:title" content="ResumeRadar — Beat the Scan. Land the Interview.">
     <meta name="twitter:description" content="Free tool: See exactly why your resume gets filtered out by ATS systems — and how to fix it in minutes.">
 
     <!-- Favicon (emoji-based) -->
@@ -33,14 +33,14 @@
                 <span class="logo-icon">📡</span>
                 <span class="logo-text">ResumeRadar</span>
             </div>
-            <p class="tagline">Beat the bots. Land the interview.</p>
+            <p class="tagline">Beat the scan. Land the interview.</p>
         </div>
     </header>
 
     <!-- ============ HERO ============ -->
     <section class="hero">
         <div class="container">
-            <h1>Is your resume getting past the <span class="highlight">ATS robots</span>?</h1>
+            <h1>Is your resume getting past the <span class="highlight">ATS scan</span>?</h1>
             <p class="hero-sub">75% of resumes are filtered out before a human ever sees them. Paste your resume and a job description below — we'll show you exactly what's missing and how to fix it.</p>
         </div>
     </section>
@@ -151,6 +151,25 @@ Include the job title, requirements, responsibilities, qualifications — everyt
             <!-- ============ RESULTS ============ -->
             <div class="results-section" id="results" style="display: none;">
 
+                <!-- Report Actions Bar -->
+                <div class="report-actions">
+                    <button type="button" class="report-btn" id="copyReportBtn">
+                        <span class="report-btn-icon">📋</span> Copy Report
+                    </button>
+                    <button type="button" class="report-btn" id="downloadReportBtn">
+                        <span class="report-btn-icon">📥</span> Download Report
+                    </button>
+                    <button type="button" class="report-btn" id="emailReportBtn">
+                        <span class="report-btn-icon">📧</span> Email Report
+                    </button>
+                </div>
+
+                <!-- Toast notification -->
+                <div class="toast" id="toast" style="display: none;">
+                    <span class="toast-icon">✅</span>
+                    <span class="toast-message" id="toastMessage"></span>
+                </div>
+
                 <!-- Score Card -->
                 <div class="result-card score-card">
                     <h2>Your ATS Match Score</h2>
@@ -207,6 +226,32 @@ Include the job title, requirements, responsibilities, qualifications — everyt
             </div>
         </div>
     </main>
+
+    <!-- ============ EMAIL MODAL ============ -->
+    <div class="modal-overlay" id="emailModal" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📧 Email Your Report</h3>
+                <button type="button" class="modal-close" id="closeModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">We'll format your full ATS analysis into a clean email you can reference later or forward to a career coach.</p>
+                <div class="modal-field">
+                    <label for="emailInput">Email Address</label>
+                    <input type="email" id="emailInput" placeholder="your@email.com" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn-secondary" id="cancelModal">Cancel</button>
+                    <button type="button" class="modal-btn-primary" id="sendEmailBtn">
+                        <span class="send-text">Send Report</span>
+                        <span class="send-loading" style="display: none;">
+                            <span class="spinner spinner-sm"></span> Sending...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- ============ FOOTER ============ -->
     <footer class="footer">
