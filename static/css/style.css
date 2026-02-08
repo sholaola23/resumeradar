@@ -1357,8 +1357,20 @@ textarea::placeholder {
 }
 
 @media (max-width: 480px) {
+    .container {
+        padding: 0 12px;
+    }
+
     .hero h1 {
         font-size: 1.35rem;
+    }
+
+    .hero-sub {
+        font-size: 0.85rem;
+    }
+
+    .scan-form {
+        padding: 16px;
     }
 
     .score-circle {
@@ -1368,5 +1380,100 @@ textarea::placeholder {
 
     .score-number {
         font-size: 1.6rem;
+    }
+
+    .result-card {
+        padding: 16px;
+    }
+
+    .result-card h2 {
+        font-size: 1rem;
+    }
+
+    /* Category bars — tighter on small screens */
+    .category-item .category-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    /* Keywords — smaller tags */
+    .keyword-tag {
+        font-size: 11px;
+        padding: 4px 8px;
+    }
+
+    /* AI suggestions — tighter spacing */
+    .improvement-item {
+        padding: 12px;
+    }
+
+    /* Email modal */
+    .modal {
+        max-width: 100%;
+    }
+
+    .modal-header {
+        padding: 16px;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .modal-btn-secondary,
+    .modal-btn-primary {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+
+    /* Newsletter popup — tighter on small screens */
+    .newsletter-modal {
+        margin: 8px;
+    }
+
+    .newsletter-header {
+        padding: 28px 16px 20px;
+    }
+
+    .newsletter-header h3 {
+        font-size: 18px;
+    }
+
+    .newsletter-subtitle {
+        font-size: 12px;
+    }
+
+    .newsletter-icon {
+        font-size: 36px;
+    }
+
+    .newsletter-body {
+        padding: 16px;
+    }
+
+    .newsletter-input {
+        padding: 12px 14px;
+        font-size: 14px;
+    }
+
+    .newsletter-submit-full {
+        padding: 14px 20px;
+        font-size: 15px;
+    }
+
+    /* Footer */
+    .footer {
+        padding: 24px 0;
+    }
+
+    .footer-built,
+    .footer-mission {
+        font-size: 12px;
     }
 }
