@@ -253,6 +253,36 @@ Include the job title, requirements, responsibilities, qualifications — everyt
         </div>
     </div>
 
+    <!-- ============ NEWSLETTER POPUP (MANDATORY) ============ -->
+    <div class="modal-overlay newsletter-overlay" id="newsletterPopup" style="display: none;">
+        <div class="newsletter-modal">
+
+            <div class="newsletter-header">
+                <div class="newsletter-icon">📡</div>
+                <h3>Your results are ready!</h3>
+                <p class="newsletter-subtitle">Subscribe to get your ATS scan results — plus practical tech career tips, certification guides, and AI fundamentals in just 3 minutes a week.</p>
+            </div>
+
+            <div class="newsletter-body">
+                <form id="newsletterForm" class="newsletter-form">
+                    <div class="newsletter-input-stack">
+                        <input type="text" id="newsletterFirstName" placeholder="First name" class="newsletter-input" required>
+                        <input type="email" id="newsletterEmail" placeholder="Email address" class="newsletter-input" required>
+                        <button type="submit" class="newsletter-submit-btn newsletter-submit-full">
+                            <span class="nl-btn-text">Subscribe & View My Results</span>
+                            <span class="nl-btn-loading" style="display: none;">
+                                <span class="spinner spinner-sm"></span> Subscribing...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+
+                <p class="newsletter-trust">Join other tech professionals on Shola's Tech Notes.</p>
+                <p class="newsletter-privacy">Free forever. Unsubscribe anytime. We respect your inbox.</p>
+            </div>
+        </div>
+    </div>
+
     <!-- ============ FOOTER ============ -->
     <footer class="footer">
         <div class="container">

@@ -7,14 +7,17 @@ Built by Olushola Oladipupo
 import os
 import uuid
 import secrets
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
 from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting
 from backend.ai_analyzer import get_ai_suggestions
+from backend.report_generator import generate_pdf_report
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -27,6 +30,14 @@ app = Flask(
 )
 app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 CORS(app)
+
+# Rate limiting — protect API credits and prevent abuse
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+)
 
 # File upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
@@ -55,6 +66,7 @@ def index():
 
 
 @app.route('/api/scan', methods=['POST'])
+@limiter.limit("10 per hour")
 def scan_resume():
     """
     Main API endpoint: analyze resume against job description.
@@ -158,6 +170,230 @@ def scan_resume():
         return jsonify({"error": "Something went wrong during the analysis. Please try again."}), 500
 
 
+@app.route('/api/download-report', methods=['POST'])
+@limiter.limit("20 per hour")
+def download_report():
+    """
+    Generate and return a PDF report from scan data.
+
+    Accepts:
+        JSON body with the scan results data.
+
+    Returns:
+        PDF file download.
+    """
+    try:
+        scan_data = request.get_json()
+        if not scan_data:
+            return jsonify({"error": "No scan data provided."}), 400
+
+        pdf_bytes = bytes(generate_pdf_report(scan_data))
+
+        return Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': 'attachment; filename=ResumeRadar_Report.pdf',
+                'Content-Type': 'application/pdf',
+                'Content-Length': str(len(pdf_bytes))
+            }
+        )
+
+    except Exception as e:
+        print(f"PDF generation error: {str(e)}")
+        return jsonify({"error": "Failed to generate PDF report."}), 500
+
+
+@app.route('/api/email-report', methods=['POST'])
+@limiter.limit("5 per hour")
+def email_report():
+    """
+    Send the ATS scan report via email using Resend.
+
+    Accepts:
+        JSON body with 'email' and 'scan_data'.
+
+    Returns:
+        JSON success/error response.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided."}), 400
+
+        email = data.get('email', '').strip()
+        scan_data = data.get('scan_data')
+
+        if not email or '@' not in email:
+            return jsonify({"error": "Please provide a valid email address."}), 400
+
+        if not scan_data:
+            return jsonify({"error": "No scan data provided."}), 400
+
+        # Check for Resend API key
+        resend_key = os.getenv('RESEND_API_KEY')
+        if not resend_key or resend_key == 'your-resend-api-key-here':
+            return jsonify({"error": "Email service is not configured yet. Please download or copy your report instead."}), 503
+
+        import resend
+        resend.api_key = resend_key
+
+        # Generate the PDF attachment
+        pdf_bytes = bytes(generate_pdf_report(scan_data))
+
+        score = scan_data.get('match_score', 0)
+        ai = scan_data.get('ai_suggestions', {}) or {}
+        summary = ai.get('summary', 'Your ATS scan report is ready.')
+
+        # Build the HTML email body
+        html_body = f"""
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
+            <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">ResumeRadar</h1>
+                <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 14px;">Beat the scan. Land the interview.</p>
+            </div>
+
+            <div style="background: white; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
+                <h2 style="margin: 0 0 8px; font-size: 20px; color: #1f2937;">Your ATS Match Score</h2>
+
+                <div style="text-align: center; margin: 24px 0;">
+                    <span style="font-size: 56px; font-weight: 800; color: {'#059669' if score >= 75 else '#d97706' if score >= 50 else '#dc2626'};">{score}%</span>
+                </div>
+
+                <p style="font-size: 15px; line-height: 1.6; color: #4b5563;">{summary}</p>
+
+                <div style="display: flex; justify-content: space-around; margin: 24px 0; text-align: center;">
+                    <div>
+                        <div style="font-size: 24px; font-weight: 800; color: #059669;">{scan_data.get('total_matched', 0)}</div>
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Matched</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 24px; font-weight: 800; color: #dc2626;">{scan_data.get('total_missing', 0)}</div>
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Missing</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">{scan_data.get('total_job_keywords', 0)}</div>
+                        <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Total</div>
+                    </div>
+                </div>
+
+                <div style="background: #f3f4f6; padding: 16px; border-radius: 8px; margin-top: 24px;">
+                    <p style="margin: 0; font-size: 13px; color: #6b7280;">
+                        Your full detailed report is attached as a PDF, including keyword breakdowns,
+                        AI suggestions, and ATS formatting checks.
+                    </p>
+                </div>
+            </div>
+
+            <div style="background: #1f2937; padding: 24px; border-radius: 0 0 12px 12px; text-align: center;">
+                <p style="color: #9ca3af; margin: 0 0 4px; font-size: 13px;">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" style="color: #93c5fd; text-decoration: none;">Olushola Oladipupo</a></p>
+                <p style="color: #6b7280; margin: 0; font-size: 11px;">Your resume is analyzed in real-time and never stored.</p>
+            </div>
+        </div>
+        """
+
+        # Send the email with PDF attachment
+        import base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+        params = {
+            "from": "ResumeRadar <reports@sholastechnotes.com>",
+            "to": [email],
+            "subject": f"Your ResumeRadar Report — ATS Match Score: {score}%",
+            "html": html_body,
+            "attachments": [
+                {
+                    "filename": "ResumeRadar_Report.pdf",
+                    "content": pdf_base64,
+                }
+            ],
+        }
+
+        result = resend.Emails.send(params)
+
+        return jsonify({
+            "success": True,
+            "message": f"Report sent to {email}!"
+        })
+
+    except Exception as e:
+        print(f"Email sending error: {str(e)}")
+        return jsonify({"error": f"Failed to send email. Please try downloading the report instead."}), 500
+
+
+@app.route('/api/subscribe', methods=['POST'])
+@limiter.limit("10 per hour")
+def subscribe_newsletter():
+    """
+    Subscribe a user to the Beehiiv newsletter.
+
+    Accepts:
+        JSON body with 'email'.
+
+    Returns:
+        JSON success/error response.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided."}), 400
+
+        email = data.get('email', '').strip()
+        first_name = data.get('first_name', '').strip()
+
+        if not email or '@' not in email:
+            return jsonify({"error": "Please provide a valid email address."}), 400
+
+        if not first_name:
+            return jsonify({"error": "Please provide your first name."}), 400
+
+        beehiiv_key = os.getenv('BEEHIIV_API_KEY')
+        pub_id = os.getenv('BEEHIIV_PUBLICATION_ID')
+
+        if not beehiiv_key or not pub_id:
+            return jsonify({"error": "Newsletter service is not configured."}), 503
+
+        import requests as http_requests
+
+        # Build the subscription payload with first name as custom field
+        subscription_data = {
+            'email': email,
+            'reactivate_existing': True,
+            'send_welcome_email': True,
+            'utm_source': 'resumeradar',
+            'custom_fields': [
+                {
+                    'name': 'first_name',
+                    'value': first_name,
+                }
+            ],
+        }
+
+        response = http_requests.post(
+            f'https://api.beehiiv.com/v2/publications/{pub_id}/subscriptions',
+            headers={
+                'Authorization': f'Bearer {beehiiv_key}',
+                'Content-Type': 'application/json',
+            },
+            json=subscription_data,
+            timeout=10,
+        )
+
+        if response.status_code in [200, 201]:
+            return jsonify({
+                "success": True,
+                "message": "You're subscribed! Check your inbox."
+            })
+        else:
+            error_msg = response.json().get('message', 'Subscription failed')
+            print(f"Beehiiv API error: {response.status_code} - {error_msg}")
+            return jsonify({"error": "Could not subscribe. Please try again."}), 500
+
+    except Exception as e:
+        print(f"Newsletter subscription error: {str(e)}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
@@ -169,8 +405,31 @@ def health_check():
 
 
 # ============================================================
+# SECURITY HEADERS
+# ============================================================
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to every response."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    # Only add HSTS in production
+    if not app.debug:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
+
+# ============================================================
 # ERROR HANDLERS
 # ============================================================
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({"error": "Too many requests. Please wait a few minutes and try again."}), 429
+
 
 @app.errorhandler(413)
 def too_large(e):
@@ -179,7 +438,10 @@ def too_large(e):
 
 @app.errorhandler(404)
 def not_found(e):
-    return jsonify({"error": "Not found."}), 404
+    """Serve branded 404 page for browser requests, JSON for API requests."""
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Not found."}), 404
+    return render_template('404.html'), 404
 
 
 @app.errorhandler(500)

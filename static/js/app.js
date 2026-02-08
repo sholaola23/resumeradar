@@ -42,6 +42,112 @@ document.addEventListener('DOMContentLoaded', () => {
     // Store the last scan data for report generation
     let lastScanData = null;
 
+    // Newsletter popup elements
+    const newsletterPopup = document.getElementById('newsletterPopup');
+    const newsletterForm = document.getElementById('newsletterForm');
+    const newsletterEmail = document.getElementById('newsletterEmail');
+    const newsletterFirstName = document.getElementById('newsletterFirstName');
+
+    // Track if user has already subscribed this session
+    let hasSubscribed = sessionStorage.getItem('resumeradar_subscribed') === 'true';
+
+    // ============================================================
+    // NEWSLETTER POPUP (MANDATORY)
+    // ============================================================
+
+    function showNewsletterPopup(data) {
+        if (!newsletterPopup) {
+            renderResults(data);
+            return;
+        }
+        newsletterPopup.style.display = 'flex';
+        if (newsletterFirstName) newsletterFirstName.focus();
+    }
+
+    function closeNewsletterAfterSubscribe() {
+        if (newsletterPopup) newsletterPopup.style.display = 'none';
+        hasSubscribed = true;
+        sessionStorage.setItem('resumeradar_subscribed', 'true');
+
+        // Now show the results
+        if (lastScanData) {
+            renderResults(lastScanData);
+        }
+    }
+
+    // NO backdrop close — subscription is mandatory
+    // NO skip button — subscription is mandatory
+    // NO close button — subscription is mandatory
+
+    // Newsletter form submission
+    if (newsletterForm) {
+        newsletterForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const firstName = newsletterFirstName ? newsletterFirstName.value.trim() : '';
+            const email = newsletterEmail ? newsletterEmail.value.trim() : '';
+
+            // Validate first name
+            if (!firstName) {
+                if (newsletterFirstName) {
+                    newsletterFirstName.style.borderColor = '#dc2626';
+                    newsletterFirstName.focus();
+                }
+                return;
+            }
+
+            // Validate email
+            if (!email || !email.includes('@')) {
+                if (newsletterEmail) {
+                    newsletterEmail.style.borderColor = '#dc2626';
+                    newsletterEmail.focus();
+                }
+                return;
+            }
+
+            // Reset border colors
+            if (newsletterFirstName) newsletterFirstName.style.borderColor = '';
+            if (newsletterEmail) newsletterEmail.style.borderColor = '';
+
+            const submitBtn = newsletterForm.querySelector('.newsletter-submit-btn');
+            const btnText = submitBtn ? submitBtn.querySelector('.nl-btn-text') : null;
+            const btnLoading = submitBtn ? submitBtn.querySelector('.nl-btn-loading') : null;
+
+            if (btnText) btnText.style.display = 'none';
+            if (btnLoading) btnLoading.style.display = 'inline';
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                // Subscribe via our backend (which calls Beehiiv API)
+                const response = await fetch('/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, first_name: firstName }),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || result.error) {
+                    throw new Error(result.error || 'Subscription failed');
+                }
+
+                showToast(`Welcome, ${firstName}! Check your inbox for a welcome email.`);
+                closeNewsletterAfterSubscribe();
+
+            } catch (err) {
+                console.error('Newsletter signup error:', err);
+                // Fallback: open the newsletter page directly
+                window.open('https://www.sholastechnotes.com/', '_blank');
+                showToast('Opening newsletter page — subscribe there to see results.');
+                closeNewsletterAfterSubscribe();
+            } finally {
+                if (btnText) btnText.style.display = 'inline';
+                if (btnLoading) btnLoading.style.display = 'none';
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        });
+    }
+
     // ============================================================
     // TAB SWITCHING
     // ============================================================
@@ -184,8 +290,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Store data for report generation
             lastScanData = data;
 
-            // Render results
-            renderResults(data);
+            // Show newsletter popup before results (mandatory, but only once per session)
+            if (!hasSubscribed && newsletterPopup) {
+                showNewsletterPopup(data);
+            } else {
+                renderResults(data);
+            }
 
         } catch (err) {
             console.error('Scan error:', err);
@@ -372,25 +482,56 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ============================================================
-    // DOWNLOAD REPORT
+    // DOWNLOAD REPORT (PDF)
     // ============================================================
-    downloadReportBtn.addEventListener('click', () => {
+    downloadReportBtn.addEventListener('click', async () => {
         if (!lastScanData) return;
 
-        const reportText = generateTextReport(lastScanData);
-        const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
+        showToast('Generating PDF...');
+        downloadReportBtn.disabled = true;
 
-        const a = document.createElement('a');
-        a.href = url;
-        const date = new Date().toISOString().split('T')[0];
-        a.download = `ResumeRadar_Report_${date}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        try {
+            const response = await fetch('/api/download-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(lastScanData),
+            });
 
-        showToast('Report downloaded!');
+            if (!response.ok) {
+                throw new Error('PDF generation failed');
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `ResumeRadar_Report_${date}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('PDF report downloaded!');
+        } catch (err) {
+            console.error('PDF download error:', err);
+            showToast('Failed to generate PDF. Downloading text version...', true);
+
+            // Fallback to text download
+            const reportText = generateTextReport(lastScanData);
+            const blob = new Blob([reportText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            a.download = `ResumeRadar_Report_${date}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } finally {
+            downloadReportBtn.disabled = false;
+        }
     });
 
     // ============================================================
@@ -421,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         emailModal.style.display = 'none';
     }
 
-    sendEmailBtn.addEventListener('click', () => {
+    sendEmailBtn.addEventListener('click', async () => {
         const email = emailInput.value.trim();
 
         if (!email || !email.includes('@')) {
@@ -432,27 +573,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!lastScanData) return;
 
-        const reportText = generateTextReport(lastScanData);
-        const score = lastScanData.match_score;
+        // Show loading state
+        const sendText = sendEmailBtn.querySelector('.send-text');
+        const sendLoading = sendEmailBtn.querySelector('.send-loading');
+        sendText.style.display = 'none';
+        sendLoading.style.display = 'inline';
+        sendEmailBtn.disabled = true;
+        emailInput.style.borderColor = '';
 
-        const subject = encodeURIComponent(`ResumeRadar Report — ATS Match Score: ${score}%`);
-        const body = encodeURIComponent(reportText);
+        try {
+            const response = await fetch('/api/email-report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    scan_data: lastScanData,
+                }),
+            });
 
-        // Use mailto with the report content
-        // Truncate if needed (mailto has URL length limits ~2000 chars in some browsers)
-        const maxBodyLength = 1800;
-        let emailBody = reportText;
-        if (emailBody.length > maxBodyLength) {
-            // Send a shorter version via mailto
-            emailBody = generateShortReport(lastScanData);
+            const result = await response.json();
+
+            if (!response.ok || result.error) {
+                throw new Error(result.error || 'Failed to send email');
+            }
+
+            closeModal();
+            showToast(`Report sent to ${email}!`);
+
+        } catch (err) {
+            console.error('Email send error:', err);
+
+            // If the API isn't configured, fallback to mailto
+            if (err.message.includes('not configured')) {
+                showToast('Email service not set up yet. Opening email client...', true);
+                const reportText = generateShortReport(lastScanData);
+                const score = lastScanData.match_score;
+                const subject = encodeURIComponent(`ResumeRadar Report — ATS Match Score: ${score}%`);
+                const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(reportText)}`;
+                window.location.href = mailtoUrl;
+                closeModal();
+            } else {
+                showToast(err.message || 'Failed to send email. Please try again.', true);
+            }
+        } finally {
+            sendText.style.display = 'inline';
+            sendLoading.style.display = 'none';
+            sendEmailBtn.disabled = false;
         }
-
-        const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(emailBody)}`;
-
-        window.location.href = mailtoUrl;
-
-        closeModal();
-        showToast('Opening your email client...');
     });
 
     /**
