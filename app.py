@@ -5,8 +5,10 @@ Built by Olushola Oladipupo
 """
 
 import os
+import json
 import uuid
 import secrets
+import threading
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -56,6 +58,32 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# ============================================================
+# SCAN COUNTER (lightweight file-based)
+# ============================================================
+COUNTER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scan_count.json')
+_counter_lock = threading.Lock()
+
+
+def _read_scan_count():
+    """Read the current scan count from the JSON file."""
+    try:
+        with open(COUNTER_FILE, 'r') as f:
+            data = json.load(f)
+            return data.get('count', 0)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return 0
+
+
+def _increment_scan_count():
+    """Atomically increment the scan count."""
+    with _counter_lock:
+        count = _read_scan_count()
+        count += 1
+        with open(COUNTER_FILE, 'w') as f:
+            json.dump({'count': count}, f)
+        return count
 
 
 def allowed_file(filename):
@@ -151,7 +179,10 @@ def scan_resume():
             match_results
         )
 
-        # 8. Compile final response
+        # 8. Increment scan counter
+        _increment_scan_count()
+
+        # 9. Compile final response
         response = {
             "success": True,
             "match_score": match_results["overall_score"],
@@ -419,6 +450,14 @@ def health_check():
         "status": "healthy",
         "ai_enabled": has_api_key,
     })
+
+
+@app.route('/api/scan-count', methods=['GET'])
+@limiter.exempt
+def get_scan_count():
+    """Return the total number of resumes scanned."""
+    count = _read_scan_count()
+    return jsonify({"count": count})
 
 
 # ============================================================

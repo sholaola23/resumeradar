@@ -55,6 +55,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Store the last scan data for report generation
     let lastScanData = null;
 
+    // ============================================================
+    // SOCIAL PROOF COUNTER
+    // ============================================================
+    const socialProof = document.getElementById('socialProof');
+    const scanCountEl = document.getElementById('scanCount');
+
+    (async function loadScanCount() {
+        try {
+            const resp = await fetch('/api/scan-count');
+            const data = await resp.json();
+            const count = data.count || 0;
+            if (count >= 10 && socialProof && scanCountEl) {
+                scanCountEl.textContent = count.toLocaleString() + '+';
+                socialProof.style.display = 'block';
+            }
+        } catch (e) {
+            // Silently fail — social proof is non-critical
+        }
+    })();
+
     // Newsletter popup elements
     const newsletterPopup = document.getElementById('newsletterPopup');
     const newsletterForm = document.getElementById('newsletterForm');
@@ -335,6 +355,19 @@ document.addEventListener('DOMContentLoaded', () => {
             // Store data for report generation
             lastScanData = data;
 
+            // Update social proof counter after successful scan
+            if (socialProof && scanCountEl) {
+                try {
+                    const countResp = await fetch('/api/scan-count');
+                    const countData = await countResp.json();
+                    const newCount = countData.count || 0;
+                    if (newCount >= 10) {
+                        scanCountEl.textContent = newCount.toLocaleString() + '+';
+                        socialProof.style.display = 'block';
+                    }
+                } catch (e) { /* non-critical */ }
+            }
+
             // Show newsletter popup before results (mandatory, but only once per session)
             if (!hasSubscribed && newsletterPopup) {
                 showNewsletterPopup(data);
@@ -355,6 +388,162 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsSection.style.display = 'none';
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    // ============================================================
+    // DEMO SCAN — "Try a demo scan" feature
+    // ============================================================
+    const demoScanBtn = document.getElementById('demoScanBtn');
+
+    const DEMO_RESUME = `ALEX MORGAN
+London, UK | alex.morgan@email.com | +44 7700 900123 | linkedin.com/in/alexmorgan
+
+PROFESSIONAL SUMMARY
+Cloud Engineer with 4 years of experience designing and deploying scalable infrastructure on AWS. Skilled in CI/CD pipelines, infrastructure as code, and container orchestration. Passionate about automation, cost optimisation, and building reliable cloud-native systems.
+
+EXPERIENCE
+
+Cloud Engineer | TechStream Solutions | Jan 2022 - Present
+- Designed and deployed AWS infrastructure using Terraform across 3 production environments
+- Built CI/CD pipelines with GitHub Actions reducing deployment time by 60%
+- Managed Kubernetes clusters on EKS serving 2M+ daily requests
+- Implemented CloudWatch monitoring and alerting, reducing incident response time by 45%
+- Led migration of 12 legacy applications to containerised microservices on Docker
+
+Junior Cloud Engineer | DataFlow Inc | Jun 2020 - Dec 2021
+- Provisioned and maintained EC2, S3, RDS, and Lambda resources for development teams
+- Automated routine tasks using Python and Bash scripting, saving 15 hours per week
+- Assisted in achieving SOC 2 compliance by implementing IAM best practices
+- Created CloudFormation templates for repeatable environment deployments
+
+EDUCATION
+BSc Computer Science | University of Manchester | 2020
+
+SKILLS
+AWS (EC2, S3, RDS, Lambda, EKS, CloudWatch, IAM, VPC, CloudFormation)
+Terraform, Docker, Kubernetes, GitHub Actions, Linux, Python, Bash
+CI/CD, Infrastructure as Code, Monitoring, Agile
+
+CERTIFICATIONS
+AWS Solutions Architect Associate
+AWS Cloud Practitioner`;
+
+    const DEMO_JOB = `Senior Cloud Engineer
+
+About the Role
+We are looking for a Senior Cloud Engineer to join our Platform team and help scale our cloud infrastructure. You will design, build, and maintain reliable, secure, and cost-effective cloud solutions on AWS.
+
+Responsibilities
+- Design and implement scalable, highly available cloud architectures on AWS
+- Build and maintain CI/CD pipelines for automated deployments
+- Manage container orchestration using Kubernetes and Docker
+- Implement infrastructure as code using Terraform and CloudFormation
+- Monitor system performance and optimise for cost and reliability
+- Collaborate with development teams to improve deployment workflows
+- Implement security best practices including IAM policies, VPC networking, and encryption
+- Participate in on-call rotation and incident response
+- Mentor junior engineers and contribute to engineering standards
+
+Requirements
+- 5+ years of experience in cloud engineering or DevOps
+- Strong expertise with AWS services (EC2, S3, RDS, Lambda, EKS, CloudFront, Route 53, DynamoDB)
+- Proficiency in Infrastructure as Code (Terraform, CloudFormation, or Pulumi)
+- Experience with container technologies (Docker, Kubernetes, ECS)
+- Strong scripting skills (Python, Bash, or Go)
+- Experience with CI/CD tools (Jenkins, GitHub Actions, GitLab CI, or CircleCI)
+- Knowledge of monitoring and observability tools (CloudWatch, Datadog, Prometheus, Grafana)
+- Understanding of networking concepts (VPC, DNS, load balancing, CDN)
+- Excellent communication and collaboration skills
+- Problem-solving mindset with attention to detail
+
+Nice to Have
+- AWS Solutions Architect Professional certification
+- Experience with serverless architectures
+- Knowledge of security frameworks (SOC 2, ISO 27001)
+- Experience with cost optimisation and FinOps practices
+- Familiarity with Ansible or other configuration management tools`;
+
+    if (demoScanBtn) {
+        demoScanBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            // 1. Switch to the "Paste Text" tab
+            const pasteTabBtn = document.querySelector('.tab-btn[data-tab="paste"]');
+            if (pasteTabBtn) {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+                pasteTabBtn.classList.add('active');
+                document.getElementById('tab-paste').classList.add('active');
+            }
+
+            // 2. Fill in the sample resume and job description
+            const resumeTextarea = document.getElementById('resumeText');
+            const jobTextarea = document.getElementById('jobDescription');
+
+            if (resumeTextarea) resumeTextarea.value = DEMO_RESUME;
+            if (jobTextarea) jobTextarea.value = DEMO_JOB;
+
+            // 3. Clear any uploaded file (in case they had one)
+            if (resumeFile) resumeFile.value = '';
+            if (fileSelected) fileSelected.style.display = 'none';
+            if (dropZone) dropZone.style.display = 'block';
+
+            // 4. Scroll up to the form so they see it filled in
+            scanForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // 5. Brief visual pulse on the scan button to draw attention
+            scanBtn.classList.add('pulse-hint');
+            setTimeout(() => scanBtn.classList.remove('pulse-hint'), 1500);
+        });
+    }
+
+    // ============================================================
+    // SHARE BUTTONS
+    // ============================================================
+    const shareLinkedIn = document.getElementById('shareLinkedIn');
+    const shareX = document.getElementById('shareX');
+    const shareCopyLink = document.getElementById('shareCopyLink');
+    const siteUrl = 'https://resumeradar.sholastechnotes.com';
+
+    if (shareLinkedIn) {
+        shareLinkedIn.addEventListener('click', () => {
+            const score = lastScanData ? lastScanData.match_score : '';
+            const text = score
+                ? `I just scanned my resume with ResumeRadar and got a ${score}% ATS match score. If you're job hunting, try it — it shows exactly what keywords you're missing and how to fix your resume.`
+                : `I just used ResumeRadar to check how my resume performs against ATS systems. If you're applying for jobs, this free tool shows exactly what's missing.`;
+            const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(siteUrl)}&summary=${encodeURIComponent(text)}`;
+            window.open(url, '_blank', 'width=600,height=500');
+        });
+    }
+
+    if (shareX) {
+        shareX.addEventListener('click', () => {
+            const score = lastScanData ? lastScanData.match_score : '';
+            const text = score
+                ? `Just scanned my resume with ResumeRadar — ${score}% ATS match score 📡\n\nFree tool that shows exactly what keywords you're missing. Wish I had this earlier.\n\n${siteUrl}`
+                : `Found a free tool that scans your resume against ATS systems and tells you exactly what's missing. Super useful if you're job hunting.\n\n${siteUrl}`;
+            const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank', 'width=600,height=400');
+        });
+    }
+
+    if (shareCopyLink) {
+        shareCopyLink.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(siteUrl);
+                showToast('Link copied to clipboard!');
+            } catch (e) {
+                const textarea = document.createElement('textarea');
+                textarea.value = siteUrl;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast('Link copied to clipboard!');
+            }
+        });
+    }
 
     // ============================================================
     // REPORT GENERATION
