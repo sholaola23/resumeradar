@@ -1170,8 +1170,14 @@ textarea::placeholder {
 }
 
 .newsletter-icon {
-    font-size: 48px;
     margin-bottom: 12px;
+}
+
+.newsletter-logo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
     animation: pulse 2s ease-in-out infinite;
 }
 
@@ -1449,8 +1455,9 @@ textarea::placeholder {
         font-size: 12px;
     }
 
-    .newsletter-icon {
-        font-size: 36px;
+    .newsletter-logo {
+        width: 64px;
+        height: 64px;
     }
 
     .newsletter-body {
