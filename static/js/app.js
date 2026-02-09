@@ -394,8 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     const demoScanBtn = document.getElementById('demoScanBtn');
 
-    const DEMO_RESUME = `ALEX MORGAN
-London, UK | alex.morgan@email.com | +44 7700 900123 | linkedin.com/in/alexmorgan
+    const DEMO_RESUME = `JAMIE SMITH
+London, UK | jamie.smith@example.com | +44 7700 900123 | linkedin.com/in/jamiesmith-demo
 
 PROFESSIONAL SUMMARY
 Cloud Engineer with 4 years of experience designing and deploying scalable infrastructure on AWS. Skilled in CI/CD pipelines, infrastructure as code, and container orchestration. Passionate about automation, cost optimisation, and building reliable cloud-native systems.
