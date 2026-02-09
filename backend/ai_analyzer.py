@@ -55,42 +55,40 @@ KEYWORD ANALYSIS RESULTS:
 - Missing Soft Skills: {', '.join(missing_soft[:10]) if missing_soft else 'None'}
 - Missing Certifications: {', '.join(missing_certs[:5]) if missing_certs else 'None'}
 
-Please provide your analysis in the following JSON format (and ONLY valid JSON, no other text):
+IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:
 {{
-    "summary": "A 2-3 sentence overall assessment of how well the resume matches the job",
-    "strengths": [
-        "List 2-4 specific strengths of this resume for this role"
-    ],
+    "summary": "2-3 sentence overall assessment",
+    "strengths": ["Strength 1", "Strength 2", "Strength 3"],
     "critical_improvements": [
         {{
-            "section": "Which resume section to change (e.g., Summary, Experience, Skills)",
-            "issue": "What's wrong or missing",
-            "suggestion": "Specific text or approach to fix it",
+            "section": "Section name",
+            "issue": "Brief issue",
+            "suggestion": "Brief fix",
             "priority": "high"
         }}
     ],
     "keyword_suggestions": [
         {{
-            "keyword": "The missing keyword",
-            "where_to_add": "Which section to add it to",
-            "how_to_add": "A specific example of how to naturally incorporate it"
+            "keyword": "Missing keyword",
+            "where_to_add": "Section name",
+            "how_to_add": "Brief example"
         }}
     ],
     "rewrite_suggestions": [
         {{
             "section": "Section name",
-            "current_issue": "What's wrong with the current version",
-            "suggested_approach": "How to rewrite it (be specific, give examples)"
+            "current_issue": "Brief issue",
+            "suggested_approach": "Brief suggestion"
         }}
     ],
-    "quick_wins": [
-        "List 3-5 small changes that would have immediate impact"
-    ]
-}}"""
+    "quick_wins": ["Quick win 1", "Quick win 2", "Quick win 3"]
+}}
+
+Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, max 2 rewrite_suggestions, max 4 quick_wins. Keep each value SHORT."""
 
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            max_tokens=3000,
             messages=[
                 {"role": "user", "content": prompt}
             ]
