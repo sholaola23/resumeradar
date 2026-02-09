@@ -82,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const newsletterConfirmation = document.getElementById('newsletterConfirmation');
     const confirmName = document.getElementById('confirmName');
     const viewResultsBtn = document.getElementById('viewResultsBtn');
+    const newsletterHeading = document.getElementById('newsletterHeading');
+    const newsletterSubtitle = document.getElementById('newsletterSubtitle');
 
     function showNewsletterConfirmation(firstName) {
         // Hide the form, show the confirmation
@@ -90,6 +92,10 @@ document.addEventListener('DOMContentLoaded', () => {
             newsletterConfirmation.style.display = 'block';
             if (confirmName) confirmName.textContent = firstName;
         }
+        // Update header text to post-subscribe message
+        if (newsletterHeading) newsletterHeading.textContent = "You're subscribed! 🎉";
+        if (newsletterSubtitle) newsletterSubtitle.textContent = "Welcome to Shola's Tech Notes — you'll get practical tech career tips, certification guides, and AI fundamentals in just 3 minutes a week.";
+
         hasSubscribed = true;
         sessionStorage.setItem('resumeradar_subscribed', 'true');
     }
