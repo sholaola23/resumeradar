@@ -77,15 +77,41 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newsletterFirstName) newsletterFirstName.focus();
     }
 
-    function closeNewsletterAfterSubscribe() {
-        if (newsletterPopup) newsletterPopup.style.display = 'none';
+    // Post-subscribe confirmation elements
+    const newsletterFormWrapper = document.getElementById('newsletterFormWrapper');
+    const newsletterConfirmation = document.getElementById('newsletterConfirmation');
+    const confirmName = document.getElementById('confirmName');
+    const viewResultsBtn = document.getElementById('viewResultsBtn');
+
+    function showNewsletterConfirmation(firstName) {
+        // Hide the form, show the confirmation
+        if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'none';
+        if (newsletterConfirmation) {
+            newsletterConfirmation.style.display = 'block';
+            if (confirmName) confirmName.textContent = firstName;
+        }
         hasSubscribed = true;
         sessionStorage.setItem('resumeradar_subscribed', 'true');
+    }
+
+    function closeNewsletterAfterSubscribe() {
+        if (newsletterPopup) newsletterPopup.style.display = 'none';
+
+        // Reset the popup to form state for next time (shouldn't happen since we track session)
+        if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'block';
+        if (newsletterConfirmation) newsletterConfirmation.style.display = 'none';
 
         // Now show the results
         if (lastScanData) {
             renderResults(lastScanData);
         }
+    }
+
+    // "View My Results" button on confirmation screen
+    if (viewResultsBtn) {
+        viewResultsBtn.addEventListener('click', () => {
+            closeNewsletterAfterSubscribe();
+        });
     }
 
     // NO backdrop close — subscription is mandatory
@@ -144,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(result.error || 'Subscription failed');
                 }
 
-                showToast(`Welcome, ${firstName}! Check your inbox for a welcome email.`);
-                closeNewsletterAfterSubscribe();
+                // Show the confirmation screen with email tip
+                showNewsletterConfirmation(firstName);
 
             } catch (err) {
                 console.error('Newsletter signup error:', err);

@@ -266,21 +266,40 @@ Include the job title, requirements, responsibilities, qualifications — everyt
             </div>
 
             <div class="newsletter-body">
-                <form id="newsletterForm" class="newsletter-form">
-                    <div class="newsletter-input-stack">
-                        <input type="text" id="newsletterFirstName" placeholder="First name" class="newsletter-input" required>
-                        <input type="email" id="newsletterEmail" placeholder="Email address" class="newsletter-input" required>
-                        <button type="submit" class="newsletter-submit-btn newsletter-submit-full">
-                            <span class="nl-btn-text">Subscribe & View My Results</span>
-                            <span class="nl-btn-loading" style="display: none;">
-                                <span class="spinner spinner-sm"></span> Subscribing...
-                            </span>
-                        </button>
-                    </div>
-                </form>
+                <!-- Subscribe Form -->
+                <div id="newsletterFormWrapper">
+                    <form id="newsletterForm" class="newsletter-form">
+                        <div class="newsletter-input-stack">
+                            <input type="text" id="newsletterFirstName" placeholder="First name" class="newsletter-input" required>
+                            <input type="email" id="newsletterEmail" placeholder="Email address" class="newsletter-input" required>
+                            <button type="submit" class="newsletter-submit-btn newsletter-submit-full">
+                                <span class="nl-btn-text">Subscribe & View My Results</span>
+                                <span class="nl-btn-loading" style="display: none;">
+                                    <span class="spinner spinner-sm"></span> Subscribing...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
 
-                <p class="newsletter-trust">Join other tech professionals on Shola's Tech Notes.</p>
-                <p class="newsletter-privacy">Free forever. Unsubscribe anytime. We respect your inbox.</p>
+                    <p class="newsletter-trust">Join other tech professionals on Shola's Tech Notes.</p>
+                    <p class="newsletter-privacy">Free forever. Unsubscribe anytime. We respect your inbox.</p>
+                </div>
+
+                <!-- Post-Subscribe Confirmation (hidden by default) -->
+                <div id="newsletterConfirmation" style="display: none;">
+                    <div class="confirm-icon">🎉</div>
+                    <h3 class="confirm-title">You're in, <span id="confirmName"></span>!</h3>
+                    <p class="confirm-message">A welcome email + a free gift is on its way from <strong>Shola's Tech Notes</strong>.</p>
+                    <div class="confirm-email-tip">
+                        <span class="tip-icon">📬</span>
+                        <div class="tip-content">
+                            <strong>Don't see it?</strong> Check your <strong>Promotions</strong> or <strong>Spam</strong> folder and move it to your Primary inbox so you never miss an issue.
+                        </div>
+                    </div>
+                    <button type="button" class="newsletter-submit-btn newsletter-submit-full" id="viewResultsBtn">
+                        View My Results →
+                    </button>
+                </div>
             </div>
         </div>
     </div>
