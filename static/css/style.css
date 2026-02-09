@@ -210,64 +210,6 @@ body {
     }
 }
 
-/* ---- TESTIMONIALS ---- */
-.testimonials {
-    padding: 32px 0;
-    background: var(--gray-50);
-}
-
-.testimonials-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-}
-
-.testimonial {
-    background: white;
-    border-radius: var(--radius);
-    padding: 24px;
-    box-shadow: var(--shadow);
-    border: 1px solid var(--gray-100);
-    transition: var(--transition);
-}
-
-.testimonial:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-}
-
-.testimonial-stars {
-    color: #f59e0b;
-    font-size: 16px;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-}
-
-.testimonial-text {
-    font-size: 14px;
-    line-height: 1.7;
-    color: var(--gray-600);
-    margin-bottom: 16px;
-    font-style: italic;
-}
-
-.testimonial-author {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.testimonial-name {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--gray-800);
-}
-
-.testimonial-role {
-    font-size: 12px;
-    color: var(--gray-400);
-}
-
 /* ---- SCANNER FORM ---- */
 .scanner-section {
     padding: 40px 0 60px;
@@ -1583,15 +1525,6 @@ textarea::placeholder {
 
     .hero-sub {
         font-size: 0.95rem;
-    }
-
-    .testimonials-grid {
-        grid-template-columns: 1fr;
-        gap: 16px;
-    }
-
-    .testimonials {
-        padding: 24px 0;
     }
 
     .scan-form {

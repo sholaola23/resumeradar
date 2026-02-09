@@ -40,8 +40,8 @@
     <!-- ============ HERO ============ -->
     <section class="hero">
         <div class="container">
-            <h1>Is your resume getting past the <span class="highlight">ATS scan</span>?</h1>
-            <p class="hero-sub">75% of resumes are filtered out before a human ever sees them. Paste your resume and a job description below — we'll show you exactly what's missing and how to fix it.</p>
+            <h1>Your resume is getting <span class="highlight">filtered out</span>. Find out why.</h1>
+            <p class="hero-sub">Most resumes never reach a human — ATS software rejects them first. Upload yours with a job description and get your match score, missing keywords, and AI-powered fixes in 30 seconds.</p>
         </div>
     </section>
 
@@ -80,38 +80,6 @@
                     <div class="step-content">
                         <h3>Get Your Score</h3>
                         <p>Keywords, gaps & fixes</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- ============ TESTIMONIALS ============ -->
-    <section class="testimonials">
-        <div class="container">
-            <div class="testimonials-grid">
-                <div class="testimonial">
-                    <div class="testimonial-stars">★★★★★</div>
-                    <p class="testimonial-text">"I had no idea my resume was missing so many keywords. After fixing what ResumeRadar flagged, I got 3 callbacks in a week."</p>
-                    <div class="testimonial-author">
-                        <span class="testimonial-name">— Priya K.</span>
-                        <span class="testimonial-role">Cloud Engineer</span>
-                    </div>
-                </div>
-                <div class="testimonial">
-                    <div class="testimonial-stars">★★★★★</div>
-                    <p class="testimonial-text">"The AI suggestions were spot-on. It told me exactly which bullet points to rewrite and how. Landed my first DevOps role."</p>
-                    <div class="testimonial-author">
-                        <span class="testimonial-name">— Marcus T.</span>
-                        <span class="testimonial-role">Junior DevOps Engineer</span>
-                    </div>
-                </div>
-                <div class="testimonial">
-                    <div class="testimonial-stars">★★★★★</div>
-                    <p class="testimonial-text">"Went from a 38% match to 81% in one sitting. This is the tool I wish I had when I started job hunting."</p>
-                    <div class="testimonial-author">
-                        <span class="testimonial-name">— Sarah L.</span>
-                        <span class="testimonial-role">Data Analyst</span>
                     </div>
                 </div>
             </div>
@@ -346,6 +314,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <div id="newsletterFormWrapper">
                     <form id="newsletterForm" class="newsletter-form">
                         <div class="newsletter-input-stack">
+                            <input type="text" id="newsletterFirstName" placeholder="First name" class="newsletter-input" required>
                             <input type="email" id="newsletterEmail" placeholder="Email address" class="newsletter-input" required>
                             <button type="submit" class="newsletter-submit-btn newsletter-submit-full">
                                 <span class="nl-btn-text">Subscribe & View My Results</span>
@@ -363,7 +332,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- Post-Subscribe Confirmation (hidden by default) -->
                 <div id="newsletterConfirmation" style="display: none;">
                     <div class="confirm-icon">🎉</div>
-                    <h3 class="confirm-title">You're in!</h3>
+                    <h3 class="confirm-title">You're in, <span id="confirmName"></span>!</h3>
                     <p class="confirm-message">A welcome email + a free gift is on its way from <strong>Shola's Tech Notes</strong>.</p>
                     <div class="confirm-email-tip">
                         <span class="tip-icon">📬</span>

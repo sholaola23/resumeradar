@@ -79,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const newsletterPopup = document.getElementById('newsletterPopup');
     const newsletterForm = document.getElementById('newsletterForm');
     const newsletterEmail = document.getElementById('newsletterEmail');
+    const newsletterFirstName = document.getElementById('newsletterFirstName');
 
     // Track if user has already subscribed this session
     let hasSubscribed = sessionStorage.getItem('resumeradar_subscribed') === 'true';
@@ -130,21 +131,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         newsletterPopup.style.display = 'flex';
-        if (newsletterEmail) newsletterEmail.focus();
+        if (newsletterFirstName) newsletterFirstName.focus();
     }
 
     // Post-subscribe confirmation elements
     const newsletterFormWrapper = document.getElementById('newsletterFormWrapper');
     const newsletterConfirmation = document.getElementById('newsletterConfirmation');
+    const confirmName = document.getElementById('confirmName');
     const viewResultsBtn = document.getElementById('viewResultsBtn');
     const newsletterHeading = document.getElementById('newsletterHeading');
     const newsletterSubtitle = document.getElementById('newsletterSubtitle');
 
-    function showNewsletterConfirmation() {
+    function showNewsletterConfirmation(firstName) {
         // Hide the form, show the confirmation
         if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'none';
         if (newsletterConfirmation) {
             newsletterConfirmation.style.display = 'block';
+            if (confirmName) confirmName.textContent = firstName;
         }
         // Update header text to post-subscribe message
         if (newsletterHeading) newsletterHeading.textContent = "You're subscribed! 🎉";
@@ -183,7 +186,17 @@ document.addEventListener('DOMContentLoaded', () => {
         newsletterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const firstName = newsletterFirstName ? newsletterFirstName.value.trim() : '';
             const email = newsletterEmail ? newsletterEmail.value.trim() : '';
+
+            // Validate first name
+            if (!firstName) {
+                if (newsletterFirstName) {
+                    newsletterFirstName.style.borderColor = '#dc2626';
+                    newsletterFirstName.focus();
+                }
+                return;
+            }
 
             // Validate email
             if (!email || !email.includes('@')) {
@@ -195,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Reset border colors
+            if (newsletterFirstName) newsletterFirstName.style.borderColor = '';
             if (newsletterEmail) newsletterEmail.style.borderColor = '';
 
             const submitBtn = newsletterForm.querySelector('.newsletter-submit-btn');
@@ -210,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch('/api/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email }),
+                    body: JSON.stringify({ email, first_name: firstName }),
                 });
 
                 const result = await response.json();
@@ -220,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Show the confirmation screen with email tip
-                showNewsletterConfirmation();
+                showNewsletterConfirmation(firstName);
 
             } catch (err) {
                 console.error('Newsletter signup error:', err);
@@ -406,9 +420,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Scan Again button
+    // Scan Again button — clear everything so user starts fresh
     scanAgainBtn.addEventListener('click', () => {
         resultsSection.style.display = 'none';
+
+        // Clear form fields
+        const resumeTextarea = document.getElementById('resumeText');
+        const jobTextarea = document.getElementById('jobDescription');
+        if (resumeTextarea) resumeTextarea.value = '';
+        if (jobTextarea) jobTextarea.value = '';
+
+        // Clear file upload
+        if (resumeFile) resumeFile.value = '';
+        if (fileSelected) fileSelected.style.display = 'none';
+        if (dropZone) dropZone.style.display = 'block';
+
+        // Switch back to Upload tab
+        const uploadTabBtn = document.querySelector('.tab-btn[data-tab="upload"]');
+        if (uploadTabBtn) {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            uploadTabBtn.classList.add('active');
+            document.getElementById('tab-upload').classList.add('active');
+        }
+
+        hideError();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
