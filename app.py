@@ -60,27 +60,56 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ============================================================
-# SCAN COUNTER (env var base + in-memory session counter)
+# SCAN COUNTER (Redis-backed, persistent across deploys)
 # ============================================================
-# SCAN_COUNT_BASE: Set in Render env vars to the total count at last deploy.
-#   Before each deploy, check /api/scan-count and update this value.
-#   Between deploys, _session_scans tracks new scans in memory.
-_SCAN_COUNT_BASE = int(os.getenv('SCAN_COUNT_BASE', '150'))
-_session_scans = 0
+# Set REDIS_URL in Render env vars (from Upstash free tier).
+# Falls back to in-memory counting if Redis is unavailable.
+_redis_client = None
+_REDIS_KEY = 'resumeradar:scan_count'
+
+try:
+    _redis_url = os.getenv('REDIS_URL')
+    if _redis_url:
+        import redis
+        _redis_client = redis.from_url(_redis_url, decode_responses=True)
+        _redis_client.ping()  # Verify connection
+        # Seed the counter if it doesn't exist yet
+        if _redis_client.get(_REDIS_KEY) is None:
+            _redis_client.set(_REDIS_KEY, int(os.getenv('SCAN_COUNT_BASE', '150')))
+        print("📊 Scan counter: Redis connected (persistent)")
+    else:
+        print("📊 Scan counter: in-memory fallback (no REDIS_URL)")
+except Exception as e:
+    print(f"📊 Scan counter: in-memory fallback (Redis error: {e})")
+    _redis_client = None
+
+# In-memory fallback
+_fallback_count = int(os.getenv('SCAN_COUNT_BASE', '150'))
 _counter_lock = threading.Lock()
 
 
 def _read_scan_count():
-    """Return total scan count: base (from env var) + scans since this deploy."""
-    return _SCAN_COUNT_BASE + _session_scans
+    """Read the current scan count."""
+    if _redis_client:
+        try:
+            return int(_redis_client.get(_REDIS_KEY) or 0)
+        except Exception:
+            return _fallback_count
+    return _fallback_count
 
 
 def _increment_scan_count():
-    """Increment the session counter. Thread-safe."""
-    global _session_scans
+    """Increment and return the new scan count."""
+    global _fallback_count
+    if _redis_client:
+        try:
+            return _redis_client.incr(_REDIS_KEY)
+        except Exception:
+            pass
+    # Fallback: in-memory
     with _counter_lock:
-        _session_scans += 1
-        return _SCAN_COUNT_BASE + _session_scans
+        _fallback_count += 1
+        return _fallback_count
 
 
 def allowed_file(filename):
