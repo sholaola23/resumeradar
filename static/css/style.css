@@ -210,6 +210,64 @@ body {
     }
 }
 
+/* ---- TESTIMONIALS ---- */
+.testimonials {
+    padding: 32px 0;
+    background: var(--gray-50);
+}
+
+.testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.testimonial {
+    background: white;
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--gray-100);
+    transition: var(--transition);
+}
+
+.testimonial:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.testimonial-stars {
+    color: #f59e0b;
+    font-size: 16px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+}
+
+.testimonial-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--gray-600);
+    margin-bottom: 16px;
+    font-style: italic;
+}
+
+.testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.testimonial-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray-800);
+}
+
+.testimonial-role {
+    font-size: 12px;
+    color: var(--gray-400);
+}
+
 /* ---- SCANNER FORM ---- */
 .scanner-section {
     padding: 40px 0 60px;
@@ -1416,6 +1474,50 @@ textarea::placeholder {
     line-height: 1.5;
 }
 
+/* Score Preview in Newsletter Popup */
+.score-preview {
+    margin-bottom: 12px;
+}
+
+.score-preview-circle {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    margin: 0 auto;
+}
+
+.score-preview-circle svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: 100%;
+}
+
+.score-preview-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 6;
+}
+
+.score-preview-fill {
+    fill: none;
+    stroke: #fbbf24;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 226.195;
+    stroke-dashoffset: 226.195;
+    transition: stroke-dashoffset 1.2s ease, stroke 0.3s ease;
+}
+
+.score-preview-number {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: white;
+}
+
 /* Newsletter Confirmation Screen */
 .confirm-icon {
     font-size: 48px;
@@ -1481,6 +1583,15 @@ textarea::placeholder {
 
     .hero-sub {
         font-size: 0.95rem;
+    }
+
+    .testimonials-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .testimonials {
+        padding: 24px 0;
     }
 
     .scan-form {
@@ -1656,6 +1767,19 @@ textarea::placeholder {
     .newsletter-logo {
         width: 64px;
         height: 64px;
+    }
+
+    .score-preview-circle {
+        width: 72px;
+        height: 72px;
+    }
+
+    .score-preview-number {
+        font-size: 1.15rem;
+    }
+
+    .score-preview {
+        margin-bottom: 8px;
     }
 
     .newsletter-body {

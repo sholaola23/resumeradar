@@ -86,6 +86,38 @@
         </div>
     </section>
 
+    <!-- ============ TESTIMONIALS ============ -->
+    <section class="testimonials">
+        <div class="container">
+            <div class="testimonials-grid">
+                <div class="testimonial">
+                    <div class="testimonial-stars">★★★★★</div>
+                    <p class="testimonial-text">"I had no idea my resume was missing so many keywords. After fixing what ResumeRadar flagged, I got 3 callbacks in a week."</p>
+                    <div class="testimonial-author">
+                        <span class="testimonial-name">— Priya K.</span>
+                        <span class="testimonial-role">Cloud Engineer</span>
+                    </div>
+                </div>
+                <div class="testimonial">
+                    <div class="testimonial-stars">★★★★★</div>
+                    <p class="testimonial-text">"The AI suggestions were spot-on. It told me exactly which bullet points to rewrite and how. Landed my first DevOps role."</p>
+                    <div class="testimonial-author">
+                        <span class="testimonial-name">— Marcus T.</span>
+                        <span class="testimonial-role">Junior DevOps Engineer</span>
+                    </div>
+                </div>
+                <div class="testimonial">
+                    <div class="testimonial-stars">★★★★★</div>
+                    <p class="testimonial-text">"Went from a 38% match to 81% in one sitting. This is the tool I wish I had when I started job hunting."</p>
+                    <div class="testimonial-author">
+                        <span class="testimonial-name">— Sarah L.</span>
+                        <span class="testimonial-role">Data Analyst</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- ============ MAIN SCANNER ============ -->
     <main class="scanner-section">
         <div class="container">
@@ -291,6 +323,17 @@ Include the job title, requirements, responsibilities, qualifications — everyt
         <div class="newsletter-modal">
 
             <div class="newsletter-header">
+                <!-- Score Preview (populated by JS) -->
+                <div class="score-preview" id="scorePreview" style="display: none;">
+                    <div class="score-preview-circle">
+                        <svg viewBox="0 0 80 80">
+                            <circle class="score-preview-bg" cx="40" cy="40" r="36" />
+                            <circle class="score-preview-fill" cx="40" cy="40" r="36" id="scorePreviewFill" />
+                        </svg>
+                        <div class="score-preview-number" id="scorePreviewNumber">0%</div>
+                    </div>
+                </div>
+
                 <div class="newsletter-icon">
                     <img src="{{ url_for('static', filename='images/sholas-tech-notes-logo.png') }}" alt="Shola's Tech Notes" class="newsletter-logo">
                 </div>
@@ -303,7 +346,6 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <div id="newsletterFormWrapper">
                     <form id="newsletterForm" class="newsletter-form">
                         <div class="newsletter-input-stack">
-                            <input type="text" id="newsletterFirstName" placeholder="First name" class="newsletter-input" required>
                             <input type="email" id="newsletterEmail" placeholder="Email address" class="newsletter-input" required>
                             <button type="submit" class="newsletter-submit-btn newsletter-submit-full">
                                 <span class="nl-btn-text">Subscribe & View My Results</span>
@@ -321,7 +363,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- Post-Subscribe Confirmation (hidden by default) -->
                 <div id="newsletterConfirmation" style="display: none;">
                     <div class="confirm-icon">🎉</div>
-                    <h3 class="confirm-title">You're in, <span id="confirmName"></span>!</h3>
+                    <h3 class="confirm-title">You're in!</h3>
                     <p class="confirm-message">A welcome email + a free gift is on its way from <strong>Shola's Tech Notes</strong>.</p>
                     <div class="confirm-email-tip">
                         <span class="tip-icon">📬</span>

@@ -79,7 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const newsletterPopup = document.getElementById('newsletterPopup');
     const newsletterForm = document.getElementById('newsletterForm');
     const newsletterEmail = document.getElementById('newsletterEmail');
-    const newsletterFirstName = document.getElementById('newsletterFirstName');
 
     // Track if user has already subscribed this session
     let hasSubscribed = sessionStorage.getItem('resumeradar_subscribed') === 'true';
@@ -93,24 +92,59 @@ document.addEventListener('DOMContentLoaded', () => {
             renderResults(data);
             return;
         }
+
+        // Show score preview in the popup header
+        const score = data.match_score || 0;
+        const scorePreview = document.getElementById('scorePreview');
+        const scorePreviewNumber = document.getElementById('scorePreviewNumber');
+        const scorePreviewFill = document.getElementById('scorePreviewFill');
+
+        if (scorePreview && scorePreviewNumber && scorePreviewFill) {
+            // Set score text
+            scorePreviewNumber.textContent = `${score}%`;
+
+            // Animate the circle fill
+            const circumference = 226.195; // 2 * π * 36
+            const offset = circumference - (score / 100) * circumference;
+            scorePreviewFill.style.strokeDashoffset = circumference; // reset
+            scorePreview.style.display = 'block';
+
+            // Color based on score
+            let color = '#dc2626';
+            if (score >= 75) color = '#059669';
+            else if (score >= 50) color = '#d97706';
+            scorePreviewFill.style.stroke = color;
+
+            // Animate after a brief delay
+            setTimeout(() => {
+                scorePreviewFill.style.strokeDashoffset = offset;
+            }, 300);
+        }
+
+        // Update heading to include score context
+        if (newsletterHeading) {
+            newsletterHeading.textContent = `Your score: ${score}%`;
+        }
+        if (newsletterSubtitle) {
+            newsletterSubtitle.textContent = 'Subscribe to Shola\'s Tech Notes to unlock your full report — missing keywords, AI suggestions, and ATS fixes. Plus get weekly tech career tips in just 3 minutes.';
+        }
+
         newsletterPopup.style.display = 'flex';
-        if (newsletterFirstName) newsletterFirstName.focus();
+        if (newsletterEmail) newsletterEmail.focus();
     }
 
     // Post-subscribe confirmation elements
     const newsletterFormWrapper = document.getElementById('newsletterFormWrapper');
     const newsletterConfirmation = document.getElementById('newsletterConfirmation');
-    const confirmName = document.getElementById('confirmName');
     const viewResultsBtn = document.getElementById('viewResultsBtn');
     const newsletterHeading = document.getElementById('newsletterHeading');
     const newsletterSubtitle = document.getElementById('newsletterSubtitle');
 
-    function showNewsletterConfirmation(firstName) {
+    function showNewsletterConfirmation() {
         // Hide the form, show the confirmation
         if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'none';
         if (newsletterConfirmation) {
             newsletterConfirmation.style.display = 'block';
-            if (confirmName) confirmName.textContent = firstName;
         }
         // Update header text to post-subscribe message
         if (newsletterHeading) newsletterHeading.textContent = "You're subscribed! 🎉";
@@ -149,17 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         newsletterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const firstName = newsletterFirstName ? newsletterFirstName.value.trim() : '';
             const email = newsletterEmail ? newsletterEmail.value.trim() : '';
-
-            // Validate first name
-            if (!firstName) {
-                if (newsletterFirstName) {
-                    newsletterFirstName.style.borderColor = '#dc2626';
-                    newsletterFirstName.focus();
-                }
-                return;
-            }
 
             // Validate email
             if (!email || !email.includes('@')) {
@@ -171,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Reset border colors
-            if (newsletterFirstName) newsletterFirstName.style.borderColor = '';
             if (newsletterEmail) newsletterEmail.style.borderColor = '';
 
             const submitBtn = newsletterForm.querySelector('.newsletter-submit-btn');
@@ -187,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch('/api/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, first_name: firstName }),
+                    body: JSON.stringify({ email }),
                 });
 
                 const result = await response.json();
@@ -197,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // Show the confirmation screen with email tip
-                showNewsletterConfirmation(firstName);
+                showNewsletterConfirmation();
 
             } catch (err) {
                 console.error('Newsletter signup error:', err);
