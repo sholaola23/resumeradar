@@ -60,30 +60,27 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ============================================================
-# SCAN COUNTER (lightweight file-based)
+# SCAN COUNTER (env var base + in-memory session counter)
 # ============================================================
-COUNTER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scan_count.json')
+# SCAN_COUNT_BASE: Set in Render env vars to the total count at last deploy.
+#   Before each deploy, check /api/scan-count and update this value.
+#   Between deploys, _session_scans tracks new scans in memory.
+_SCAN_COUNT_BASE = int(os.getenv('SCAN_COUNT_BASE', '150'))
+_session_scans = 0
 _counter_lock = threading.Lock()
 
 
 def _read_scan_count():
-    """Read the current scan count from the JSON file."""
-    try:
-        with open(COUNTER_FILE, 'r') as f:
-            data = json.load(f)
-            return data.get('count', 0)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return 0
+    """Return total scan count: base (from env var) + scans since this deploy."""
+    return _SCAN_COUNT_BASE + _session_scans
 
 
 def _increment_scan_count():
-    """Atomically increment the scan count."""
+    """Increment the session counter. Thread-safe."""
+    global _session_scans
     with _counter_lock:
-        count = _read_scan_count()
-        count += 1
-        with open(COUNTER_FILE, 'w') as f:
-            json.dump({'count': count}, f)
-        return count
+        _session_scans += 1
+        return _SCAN_COUNT_BASE + _session_scans
 
 
 def allowed_file(filename):
