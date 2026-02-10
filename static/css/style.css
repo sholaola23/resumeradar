@@ -435,7 +435,9 @@ textarea::placeholder {
 
 /* Remind Me Later */
 .remind-later {
-    margin-top: 10px;
+    margin-top: -20px;
+    margin-bottom: 30px;
+    text-align: center;
 }
 
 .remind-later-toggle {
