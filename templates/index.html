@@ -11,11 +11,16 @@
     <meta property="og:description" content="Free tool: upload your resume + paste a job description = instant ATS match score, missing keywords, and actionable fixes. Stop applying blind.">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_US">
+    <meta property="og:url" content="https://resumeradar.sholastechnotes.com">
+    <meta property="og:image" content="https://resumeradar.sholastechnotes.com/static/images/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="ResumeRadar — Beat the Scan. Land the Interview.">
     <meta name="twitter:description" content="Free tool: See exactly why your resume gets filtered out by ATS systems — and how to fix it in minutes.">
+    <meta name="twitter:image" content="https://resumeradar.sholastechnotes.com/static/images/og-image.png">
 
     <!-- Favicon (emoji-based) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
@@ -155,6 +160,29 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <p class="demo-link-wrapper">
                         No resume handy? <a href="#" class="demo-link" id="demoScanBtn">Try a demo scan →</a>
                     </p>
+
+                    <!-- Remind Me Later -->
+                    <div class="remind-later" id="remindLater">
+                        <p class="remind-later-toggle">
+                            or <a href="#" id="remindLaterToggle">remind me to scan later →</a>
+                        </p>
+                        <div class="remind-later-form" id="remindLaterForm" style="display: none;">
+                            <p class="remind-later-text">We'll send you a one-time reminder to come back and scan your resume.</p>
+                            <div class="remind-later-input-row">
+                                <input type="email" id="remindEmail" placeholder="Email address" class="remind-later-input" required>
+                                <button type="button" class="remind-later-btn" id="remindSubmitBtn">
+                                    <span class="remind-btn-text">Remind Me</span>
+                                    <span class="remind-btn-loading" style="display: none;">
+                                        <span class="spinner spinner-sm"></span>
+                                    </span>
+                                </button>
+                            </div>
+                            <p class="remind-later-privacy">No spam. Just one reminder. Unsubscribe anytime.</p>
+                        </div>
+                        <div class="remind-later-success" id="remindLaterSuccess" style="display: none;">
+                            <p>✅ Got it! We'll remind you to scan your resume.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ERROR MESSAGE -->

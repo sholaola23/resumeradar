@@ -413,11 +413,13 @@ def subscribe_newsletter():
 
         email = data.get('email', '').strip()
         first_name = data.get('first_name', '').strip()
+        utm_source = data.get('utm_source', 'resumeradar').strip()
 
         if not email or '@' not in email:
             return jsonify({"error": "Please provide a valid email address."}), 400
 
-        if not first_name:
+        # First name is required for regular signups, optional for remind-me-later
+        if not first_name and utm_source != 'resumeradar_reminder':
             return jsonify({"error": "Please provide your first name."}), 400
 
         beehiiv_key = os.getenv('BEEHIIV_API_KEY')
@@ -428,19 +430,22 @@ def subscribe_newsletter():
 
         import requests as http_requests
 
-        # Build the subscription payload with first name as custom field
+        # Build the subscription payload
         subscription_data = {
             'email': email,
             'reactivate_existing': True,
-            'send_welcome_email': True,
-            'utm_source': 'resumeradar',
-            'custom_fields': [
+            'send_welcome_email': utm_source != 'resumeradar_reminder',
+            'utm_source': utm_source,
+        }
+
+        # Add first name as custom field if provided
+        if first_name:
+            subscription_data['custom_fields'] = [
                 {
                     'name': 'first_name',
                     'value': first_name,
                 }
-            ],
-        }
+            ]
 
         response = http_requests.post(
             f'https://api.beehiiv.com/v2/publications/{pub_id}/subscriptions',
