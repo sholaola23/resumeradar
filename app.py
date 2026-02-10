@@ -127,6 +127,21 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/favicon.ico')
+@limiter.exempt
+def favicon():
+    """Serve favicon from static folder (browsers request this from root)."""
+    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+
+@app.route('/apple-touch-icon.png')
+@app.route('/apple-touch-icon-precomposed.png')
+@limiter.exempt
+def apple_touch_icon():
+    """Serve apple-touch-icon (iPhones request this from root)."""
+    return send_from_directory(os.path.join(app.static_folder, 'images'), 'apple-touch-icon.png', mimetype='image/png')
+
+
 @app.route('/api/scan', methods=['POST'])
 @limiter.limit("15 per hour")
 def scan_resume():
