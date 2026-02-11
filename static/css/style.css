@@ -1,5 +1,5 @@
 /* ============================================================
-   ATS Scanner — Stylesheet
+   ResumeRadar — Stylesheet
    Clean, professional, mobile-first design
    ============================================================ */
 
@@ -435,25 +435,29 @@ textarea::placeholder {
 
 /* Remind Me Later */
 .remind-later {
-    margin-top: -20px;
+    margin-top: -8px;
     margin-bottom: 30px;
     text-align: center;
+    background: linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 16px 20px;
 }
 
 .remind-later-toggle {
-    font-size: 13px;
-    color: var(--gray-400);
+    font-size: 14px;
+    color: var(--gray-600);
 }
 
 .remind-later-toggle a {
-    color: var(--gray-500);
+    color: var(--primary);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 600;
     transition: var(--transition);
 }
 
 .remind-later-toggle a:hover {
-    color: var(--primary);
+    color: var(--primary-dark);
     text-decoration: underline;
 }
 
@@ -464,7 +468,7 @@ textarea::placeholder {
 
 .remind-later-text {
     font-size: 13px;
-    color: var(--gray-500);
+    color: var(--gray-600);
     margin-bottom: 10px;
 }
 
@@ -496,8 +500,8 @@ textarea::placeholder {
 }
 
 .remind-later-btn {
-    padding: 12px 20px;
-    background: var(--gray-700);
+    padding: 12px 24px;
+    background: var(--primary);
     color: white;
     border: none;
     border-radius: 50px;
@@ -508,10 +512,13 @@ textarea::placeholder {
     transition: var(--transition);
     white-space: nowrap;
     min-height: 44px;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .remind-later-btn:hover {
-    background: var(--gray-800);
+    background: var(--primary-dark);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    transform: translateY(-1px);
 }
 
 .remind-later-btn:disabled {
