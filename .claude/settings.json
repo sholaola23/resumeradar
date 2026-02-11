@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "filepath=\"$TOOL_INPUT_FILE_PATH$TOOL_INPUT_FILEPATH\"; case \"$filepath\" in */app.py|*/index.html|*/app.js|*/style.css) cd \"$(git rev-parse --show-toplevel 2>/dev/null || echo .)\" && if [ -f venv/bin/activate ]; then source venv/bin/activate; fi && python tests/qa_suite.py --quick 2>&1 | tail -8 ;; esac",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}
