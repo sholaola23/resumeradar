@@ -1,0 +1,17 @@
+# ResumeRadar — https://resumeradar.sholastechnotes.com
+# Allow all crawlers to index the site
+
+User-agent: *
+Allow: /
+
+# Static assets
+Allow: /static/
+
+# Sitemap (optional — add when you have one)
+# Sitemap: https://resumeradar.sholastechnotes.com/sitemap.xml
+
+# Block API endpoints from indexing (not useful for crawlers)
+Disallow: /api/
+
+# Block uploaded files directory
+Disallow: /uploads/

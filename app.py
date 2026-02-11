@@ -142,6 +142,13 @@ def apple_touch_icon():
     return send_from_directory(os.path.join(app.static_folder, 'images'), 'apple-touch-icon.png', mimetype='image/png')
 
 
+@app.route('/robots.txt')
+@limiter.exempt
+def robots_txt():
+    """Serve robots.txt for search engine crawlers."""
+    return send_from_directory(app.static_folder, 'robots.txt', mimetype='text/plain')
+
+
 @app.route('/api/scan', methods=['POST'])
 @limiter.limit("15 per hour")
 def scan_resume():
