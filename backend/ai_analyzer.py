@@ -81,10 +81,15 @@ IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences
             "suggested_approach": "Brief suggestion"
         }}
     ],
-    "quick_wins": ["Quick win 1", "Quick win 2", "Quick win 3"]
+    "quick_wins": ["Quick win 1", "Quick win 2", "Quick win 3"],
+    "cover_letter_points": [
+        "Key point 1: a specific talking point for a cover letter, connecting a resume strength to a job requirement",
+        "Key point 2: another angle to highlight in the cover letter",
+        "Key point 3: a third compelling point to mention"
+    ]
 }}
 
-Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, max 2 rewrite_suggestions, max 4 quick_wins. Keep each value SHORT."""
+Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, max 2 rewrite_suggestions, max 4 quick_wins, exactly 3 cover_letter_points. Keep each value SHORT. Cover letter points should be specific and actionable, not generic."""
 
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -171,6 +176,7 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
                 "keyword_suggestions": [],
                 "rewrite_suggestions": [],
                 "quick_wins": [],
+                "cover_letter_points": [],
                 "ai_powered": True,
                 "parse_note": "AI analysis completed but structured parsing had issues."
             }
@@ -197,6 +203,7 @@ def _get_fallback_suggestions(keyword_results):
         "keyword_suggestions": [],
         "rewrite_suggestions": [],
         "quick_wins": [],
+        "cover_letter_points": [],
         "ai_powered": False,
     }
 
@@ -235,5 +242,18 @@ def _get_fallback_suggestions(keyword_results):
     quick_wins.append("Start each experience bullet point with a strong action verb (Led, Built, Improved, Designed).")
 
     suggestions["quick_wins"] = quick_wins
+
+    # Generate basic cover letter points from available data
+    cl_points = []
+    matched_tech = keyword_results.get("matched_keywords", {}).get("technical_skills", [])
+    if matched_tech:
+        top_skills = ', '.join(matched_tech[:3])
+        cl_points.append(f"Highlight your experience with {top_skills}, which directly aligns with the role's technical requirements.")
+    if score >= 50:
+        cl_points.append("Emphasize your strong keyword match — your background shows clear alignment with this position's core needs.")
+    else:
+        cl_points.append("Address the skills gap honestly — mention your eagerness to learn and any related transferable experience.")
+    cl_points.append("Open with a specific reason you're drawn to this company or role, beyond just the job title.")
+    suggestions["cover_letter_points"] = cl_points[:3]
 
     return suggestions

@@ -656,7 +656,7 @@ Nice to Have
     // SHARE BUTTONS (UTM-tracked)
     // ============================================================
     const shareLinkedIn = document.getElementById('shareLinkedIn');
-    const shareX = document.getElementById('shareX');
+    const shareWhatsApp = document.getElementById('shareWhatsApp');
     const shareCopyLink = document.getElementById('shareCopyLink');
     const baseSiteUrl = 'https://resumeradar.sholastechnotes.com';
 
@@ -680,7 +680,7 @@ Nice to Have
 
     /**
      * Get score-tiered share text — works for job seekers AND curious users.
-     * @param {string} platform - 'linkedin' or 'twitter'
+     * @param {string} platform - 'linkedin', 'whatsapp', or other
      */
     function getShareText(platform) {
         const score = lastScanData ? Math.round(lastScanData.match_score) : 0;
@@ -716,12 +716,12 @@ Nice to Have
         });
     }
 
-    if (shareX) {
-        shareX.addEventListener('click', () => {
-            const shareUrl = getShareUrl('twitter');
-            const text = getShareText('twitter') + '\n\n' + shareUrl;
-            const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank', 'width=600,height=400');
+    if (shareWhatsApp) {
+        shareWhatsApp.addEventListener('click', () => {
+            const shareUrl = getShareUrl('whatsapp');
+            const text = getShareText('whatsapp') + '\n\n' + shareUrl;
+            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank', 'width=600,height=500');
         });
     }
 
@@ -1140,8 +1140,15 @@ Nice to Have
         // 5. AI Suggestions
         renderAISuggestions(data.ai_suggestions);
 
-        // 6. ATS Formatting
+        // 6. Cover Letter Key Points
+        renderCoverLetterPoints(data.ai_suggestions);
+
+        // 7. ATS Formatting
         renderATSFormatting(data.ats_formatting);
+
+        // 8. Scan History
+        saveScanToHistory(data);
+        renderScanHistory();
 
         // Scroll to results
         setTimeout(() => {
@@ -1208,6 +1215,68 @@ Nice to Have
                 <span class="stat-label">Total Job Keywords</span>
             </div>
         `;
+
+        // === Role Fit Meter ===
+        renderRoleFitMeter(data);
+    }
+
+    function renderRoleFitMeter(data) {
+        const meter = document.getElementById('roleFitMeter');
+        const fill = document.getElementById('fitMeterFill');
+        const marker = document.getElementById('fitMeterMarker');
+        const verdict = document.getElementById('fitVerdict');
+        if (!meter || !fill || !marker || !verdict) return;
+
+        const score = data.match_score;
+
+        // Determine fit tier and messaging
+        let tier, tierColor, tierBg, tierIcon, tierMsg;
+        if (score >= 75) {
+            tier = 'Strong Fit';
+            tierColor = '#059669';
+            tierBg = '#d1fae5';
+            tierIcon = '🎯';
+            tierMsg = 'Your skills closely match this role. Focus on tailoring your experience bullets and you\'re in great shape.';
+        } else if (score >= 50) {
+            tier = 'Good Fit';
+            tierColor = '#d97706';
+            tierBg = '#fef3c7';
+            tierIcon = '👍';
+            tierMsg = 'Solid foundation for this role. Adding the missing keywords to your resume could move you into the strong fit zone.';
+        } else if (score >= 30) {
+            tier = 'Stretch';
+            tierColor = '#ea580c';
+            tierBg = '#fff7ed';
+            tierIcon = '🔄';
+            tierMsg = 'This role is a stretch right now. You\'d need to close some skill gaps — check the missing keywords for your roadmap.';
+        } else {
+            tier = 'Long Shot';
+            tierColor = '#dc2626';
+            tierBg = '#fee2e2';
+            tierIcon = '📈';
+            tierMsg = 'Significant gaps for this role. Consider using the missing keywords as a learning path before applying.';
+        }
+
+        // Fill width = score percentage
+        const fillPercent = Math.min(100, Math.max(2, score));
+
+        // Animate
+        setTimeout(() => {
+            fill.style.width = fillPercent + '%';
+            fill.style.background = `linear-gradient(90deg, ${tierColor}88, ${tierColor})`;
+            marker.style.left = fillPercent + '%';
+            marker.style.borderColor = tierColor;
+        }, 300);
+
+        verdict.innerHTML = `
+            <div class="fit-verdict-badge" style="background: ${tierBg}; color: ${tierColor};">
+                <span class="fit-icon">${tierIcon}</span>
+                <span class="fit-tier">${tier}</span>
+            </div>
+            <p class="fit-msg">${tierMsg}</p>
+        `;
+
+        meter.style.display = 'block';
     }
 
     function animateNumber(element, target) {
@@ -1396,6 +1465,40 @@ Nice to Have
         }
     }
 
+    function renderCoverLetterPoints(suggestions) {
+        const card = document.getElementById('coverLetterCard');
+        const container = document.getElementById('coverLetterPoints');
+        const copyBtn = document.getElementById('copyCoverLetterBtn');
+        if (!card || !container) return;
+
+        const points = (suggestions && suggestions.cover_letter_points) || [];
+        if (!points.length) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+        container.innerHTML = points.map((point, i) => `
+            <div class="cover-point">
+                <span class="cover-point-num">${i + 1}</span>
+                <p class="cover-point-text">${point}</p>
+            </div>
+        `).join('');
+
+        // Copy handler
+        if (copyBtn) {
+            copyBtn.onclick = function () {
+                const text = points.map((p, i) => `${i + 1}. ${p}`).join('\n\n');
+                const fullText = 'Cover Letter Key Points (from ResumeRadar)\n' + '='.repeat(45) + '\n\n' + text;
+                navigator.clipboard.writeText(fullText).then(() => {
+                    showToast('Cover letter points copied!');
+                }).catch(() => {
+                    showToast('Could not copy — try selecting the text manually', true);
+                });
+            };
+        }
+    }
+
     function renderATSFormatting(ats) {
         const container = document.getElementById('atsFormatting');
         container.innerHTML = '';
@@ -1455,6 +1558,130 @@ Nice to Have
             `;
             container.appendChild(tipsDiv);
         }
+    }
+
+    // ============================================================
+    // SCAN HISTORY (localStorage)
+    // ============================================================
+    const HISTORY_KEY = 'resumeradar_scan_history';
+    const MAX_HISTORY = 20;
+
+    function saveScanToHistory(data) {
+        try {
+            const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+
+            // Extract first ~60 chars of job description for label
+            const jdEl = document.getElementById('jobDescription');
+            const jdSnippet = jdEl ? jdEl.value.trim().substring(0, 80).replace(/\s+/g, ' ') : 'Job scan';
+
+            const entry = {
+                id: Date.now(),
+                date: new Date().toISOString(),
+                score: Math.round(data.match_score),
+                matched: data.total_matched,
+                missing: data.total_missing,
+                total: data.total_job_keywords,
+                jdSnippet: jdSnippet,
+            };
+
+            history.unshift(entry); // newest first
+            if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        } catch (e) {
+            // localStorage might be full or disabled — silently ignore
+        }
+    }
+
+    function getScanHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function renderScanHistory() {
+        const card = document.getElementById('scanHistoryCard');
+        const chart = document.getElementById('historyChart');
+        const list = document.getElementById('historyList');
+        const clearBtn = document.getElementById('clearHistoryBtn');
+        if (!card || !chart || !list) return;
+
+        const history = getScanHistory();
+
+        if (history.length < 2) {
+            // Need at least 2 scans to show progress
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+
+        // --- Mini bar chart (last 10 scans, oldest to newest) ---
+        const chartData = history.slice(0, 10).reverse();
+        const maxScore = 100;
+        chart.innerHTML = `
+            <div class="history-bars">
+                ${chartData.map((entry, i) => {
+                    const height = Math.max(4, (entry.score / maxScore) * 100);
+                    let barColor = entry.score >= 75 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--danger)';
+                    const isLatest = i === chartData.length - 1;
+                    return `
+                        <div class="history-bar-wrap ${isLatest ? 'latest' : ''}" title="${entry.score}% — ${new Date(entry.date).toLocaleDateString()}">
+                            <span class="history-bar-score">${entry.score}%</span>
+                            <div class="history-bar" style="height: ${height}%; background: ${barColor};"></div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            ${_trendIndicator(chartData)}
+        `;
+
+        // --- History list (last 5) ---
+        const recent = history.slice(0, 5);
+        list.innerHTML = recent.map((entry, i) => {
+            const date = new Date(entry.date);
+            const timeStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const snippet = entry.jdSnippet.length > 50 ? entry.jdSnippet.substring(0, 50) + '...' : entry.jdSnippet;
+            let scoreColor = entry.score >= 75 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--danger)';
+
+            // Show delta from previous scan
+            let delta = '';
+            if (i < recent.length - 1) {
+                const diff = entry.score - recent[i + 1].score;
+                if (diff > 0) delta = `<span class="history-delta positive">+${diff}%</span>`;
+                else if (diff < 0) delta = `<span class="history-delta negative">${diff}%</span>`;
+            }
+
+            return `
+                <div class="history-entry">
+                    <div class="history-entry-score" style="color: ${scoreColor};">${entry.score}% ${delta}</div>
+                    <div class="history-entry-detail">
+                        <span class="history-entry-snippet">${snippet}</span>
+                        <span class="history-entry-time">${timeStr}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Clear button handler
+        if (clearBtn) {
+            clearBtn.onclick = function () {
+                localStorage.removeItem(HISTORY_KEY);
+                card.style.display = 'none';
+                showToast('Scan history cleared');
+            };
+        }
+    }
+
+    function _trendIndicator(chartData) {
+        if (chartData.length < 2) return '';
+        const first = chartData[0].score;
+        const last = chartData[chartData.length - 1].score;
+        const diff = last - first;
+        if (diff > 5) return `<div class="history-trend positive">📈 Up ${diff}% since your first scan — great progress!</div>`;
+        if (diff < -5) return `<div class="history-trend negative">📉 Down ${Math.abs(diff)}% — try matching more keywords from the job description.</div>`;
+        return `<div class="history-trend neutral">➡️ Score is holding steady. Check the missing keywords for your next optimization.</div>`;
     }
 
     // ============================================================
