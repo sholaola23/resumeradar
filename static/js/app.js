@@ -806,7 +806,8 @@ Nice to Have
         const missingEntries = Object.entries(data.missing_keywords || {}).filter(([, v]) => v && v.length > 0);
         if (missingEntries.length > 0) {
             report.push('───────────────────────────────────────────');
-            report.push('  MISSING KEYWORDS');
+            report.push('  KEYWORDS NOT FOUND ON YOUR RESUME');
+            report.push('  (Already have these? Add them. Don\'t? Consider learning them.)');
             report.push('───────────────────────────────────────────');
             for (const [cat, words] of missingEntries) {
                 report.push(`  ${catLabels[cat] || cat}: ${words.join(', ')}`);
@@ -1353,7 +1354,7 @@ Nice to Have
         if (suggestions.keyword_suggestions && suggestions.keyword_suggestions.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>🔑 How to Add Missing Keywords</h3>`;
+            section.innerHTML = `<h3>🔑 How to Add These Keywords to Your Resume</h3>`;
             suggestions.keyword_suggestions.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'ai-item';
