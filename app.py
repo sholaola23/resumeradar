@@ -9,6 +9,7 @@ import json
 import uuid
 import secrets
 import threading
+from datetime import datetime, timezone
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -99,17 +100,33 @@ def _read_scan_count():
 
 
 def _increment_scan_count():
-    """Increment and return the new scan count."""
+    """Increment and return the new scan count, plus track hourly velocity."""
     global _fallback_count
     if _redis_client:
         try:
-            return _redis_client.incr(_REDIS_KEY)
+            count = _redis_client.incr(_REDIS_KEY)
+            # Track hourly scan velocity for social proof
+            hour_key = f'resumeradar:scans_hour:{datetime.now(timezone.utc).strftime("%Y%m%d%H")}'
+            _redis_client.incr(hour_key)
+            _redis_client.expire(hour_key, 7200)  # expire after 2 hours
+            return count
         except Exception:
             pass
     # Fallback: in-memory
     with _counter_lock:
         _fallback_count += 1
         return _fallback_count
+
+
+def _read_scan_velocity():
+    """Read the number of scans in the current hour."""
+    if _redis_client:
+        try:
+            hour_key = f'resumeradar:scans_hour:{datetime.now(timezone.utc).strftime("%Y%m%d%H")}'
+            return int(_redis_client.get(hour_key) or 0)
+        except Exception:
+            return 0
+    return 0
 
 
 def allowed_file(filename):
@@ -123,8 +140,15 @@ def allowed_file(filename):
 @app.route('/')
 @limiter.exempt
 def index():
-    """Serve the main application page."""
-    return render_template('index.html')
+    """Serve the main application page with dynamic OG image based on score tier."""
+    score_tier = request.args.get('score_tier', '')
+    og_images = {
+        'low': 'og-score-low.png',
+        'mid': 'og-score-mid.png',
+        'high': 'og-score-high.png',
+    }
+    og_image = og_images.get(score_tier, 'og-image.png')
+    return render_template('index.html', og_image=og_image)
 
 
 @app.route('/favicon.ico')
@@ -508,9 +532,10 @@ def health_check():
 @app.route('/api/scan-count', methods=['GET'])
 @limiter.exempt
 def get_scan_count():
-    """Return the total number of resumes scanned."""
+    """Return the total number of resumes scanned and hourly velocity."""
     count = _read_scan_count()
-    return jsonify({"count": count})
+    velocity = _read_scan_velocity()
+    return jsonify({"count": count, "velocity": velocity})
 
 
 # ============================================================

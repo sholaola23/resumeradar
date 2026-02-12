@@ -66,8 +66,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const resp = await fetch('/api/scan-count');
             const data = await resp.json();
             const count = data.count || 0;
+            const velocity = data.velocity || 0;
             if (count >= 10 && socialProof && scanCountEl) {
-                scanCountEl.textContent = count.toLocaleString() + '+';
+                // Milestone-aware copy
+                const num = count.toLocaleString();
+                let text = `${num}+ resumes scanned`;
+                if (count >= 1000) text = `${num}+ resumes scanned — join the movement`;
+                else if (count >= 750) text = `${num}+ job seekers have scanned their resumes`;
+                else if (count >= 500) text = `${num}+ resumes scanned and counting`;
+                else if (count >= 250) text = `${num}+ resumes scanned — are you next?`;
+
+                scanCountEl.textContent = text;
+
+                // Show velocity badge when traffic is active
+                const velocityEl = document.getElementById('scanVelocity');
+                if (velocity >= 5 && velocityEl) {
+                    velocityEl.textContent = `${velocity} scans this hour`;
+                    velocityEl.style.display = 'inline';
+                }
+
                 socialProof.style.display = 'block';
             }
         } catch (e) {
@@ -221,10 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 // Subscribe via our backend (which calls Beehiiv API)
+                // Thread incoming UTM source so Beehiiv tracks where this subscriber came from
+                const incomingUtm = new URLSearchParams(window.location.search).get('utm_source') || 'resumeradar';
                 const response = await fetch('/api/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, first_name: firstName }),
+                    body: JSON.stringify({ email, first_name: firstName, utm_source: incomingUtm }),
                 });
 
                 const result = await response.json();
@@ -634,30 +653,73 @@ Nice to Have
     }
 
     // ============================================================
-    // SHARE BUTTONS
+    // SHARE BUTTONS (UTM-tracked)
     // ============================================================
     const shareLinkedIn = document.getElementById('shareLinkedIn');
     const shareX = document.getElementById('shareX');
     const shareCopyLink = document.getElementById('shareCopyLink');
-    const siteUrl = 'https://resumeradar.sholastechnotes.com';
+    const baseSiteUrl = 'https://resumeradar.sholastechnotes.com';
+
+    /**
+     * Build a share URL with UTM parameters for tracking in Beehiiv.
+     * @param {string} source - e.g. 'linkedin', 'twitter', 'whatsapp', 'copy'
+     * @param {string} campaign - e.g. 'user_share', 'post_subscribe'
+     */
+    function getShareUrl(source, campaign) {
+        campaign = campaign || 'user_share';
+        const score = lastScanData ? lastScanData.match_score : 0;
+        const tier = score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
+        const params = new URLSearchParams({
+            utm_source: source,
+            utm_medium: 'social',
+            utm_campaign: campaign,
+            score_tier: tier,
+        });
+        return `${baseSiteUrl}?${params.toString()}`;
+    }
+
+    /**
+     * Get score-tiered share text — works for job seekers AND curious users.
+     * @param {string} platform - 'linkedin' or 'twitter'
+     */
+    function getShareText(platform) {
+        const score = lastScanData ? Math.round(lastScanData.match_score) : 0;
+        const missing = lastScanData ? lastScanData.total_missing : 0;
+
+        if (!score) {
+            return platform === 'linkedin'
+                ? 'Free tool that scans your resume against job descriptions and shows your ATS match score. Interesting to see what keywords you might be missing.'
+                : 'Free tool that shows your ATS resume match score — interesting to see what keywords you might be missing 📡';
+        }
+
+        if (score >= 70) {
+            return platform === 'linkedin'
+                ? `Just scored ${score}% on ResumeRadar's ATS scanner. Useful free tool if you want to check how your resume stacks up against any job description.`
+                : `Scored ${score}% on ResumeRadar 📡 Free ATS resume scanner — check how yours stacks up.`;
+        } else if (score >= 45) {
+            return platform === 'linkedin'
+                ? `Scored ${score}% on an ATS resume scanner. Interesting to see the ${missing} keywords I was missing that hiring systems actually look for. Free tool worth checking.`
+                : `${score}% ATS match — found ${missing} keywords I was missing 📡 Free resume scanner worth checking out.`;
+        } else {
+            return platform === 'linkedin'
+                ? `I just found out my resume only matches ${score}% of what ATS systems look for. This free tool shows exactly what's missing — wish I'd used it earlier.`
+                : `My resume only matches ${score}% of ATS keywords 😅 This free scanner shows exactly what to fix 📡`;
+        }
+    }
 
     if (shareLinkedIn) {
         shareLinkedIn.addEventListener('click', () => {
-            const score = lastScanData ? lastScanData.match_score : '';
-            const text = score
-                ? `I just scanned my resume with ResumeRadar and got a ${score}% ATS match score. If you're job hunting, try it — it shows exactly what keywords you're missing and how to fix your resume.`
-                : `I just used ResumeRadar to check how my resume performs against ATS systems. If you're applying for jobs, this free tool shows exactly what's missing.`;
-            const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(siteUrl)}&summary=${encodeURIComponent(text)}`;
+            const shareUrl = getShareUrl('linkedin');
+            const text = getShareText('linkedin');
+            const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(text)}`;
             window.open(url, '_blank', 'width=600,height=500');
         });
     }
 
     if (shareX) {
         shareX.addEventListener('click', () => {
-            const score = lastScanData ? lastScanData.match_score : '';
-            const text = score
-                ? `Just scanned my resume with ResumeRadar — ${score}% ATS match score 📡\n\nFree tool that shows exactly what keywords you're missing. Wish I had this earlier.\n\n${siteUrl}`
-                : `Found a free tool that scans your resume against ATS systems and tells you exactly what's missing. Super useful if you're job hunting.\n\n${siteUrl}`;
+            const shareUrl = getShareUrl('twitter');
+            const text = getShareText('twitter') + '\n\n' + shareUrl;
             const url = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
             window.open(url, '_blank', 'width=600,height=400');
         });
@@ -665,19 +727,20 @@ Nice to Have
 
     if (shareCopyLink) {
         shareCopyLink.addEventListener('click', async () => {
+            const shareUrl = getShareUrl('copy');
             try {
-                await navigator.clipboard.writeText(siteUrl);
-                showToast('Link copied to clipboard!');
+                await navigator.clipboard.writeText(shareUrl);
+                showToast('Link copied! Share it with someone who could use it.');
             } catch (e) {
                 const textarea = document.createElement('textarea');
-                textarea.value = siteUrl;
+                textarea.value = shareUrl;
                 textarea.style.position = 'fixed';
                 textarea.style.opacity = '0';
                 document.body.appendChild(textarea);
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showToast('Link copied to clipboard!');
+                showToast('Link copied! Share it with someone who could use it.');
             }
         });
     }
