@@ -464,8 +464,7 @@ def subscribe_newsletter():
         if not email or '@' not in email:
             return jsonify({"error": "Please provide a valid email address."}), 400
 
-        # First name is required for regular signups, optional for remind-me-later
-        if not first_name and utm_source != 'resumeradar_reminder':
+        if not first_name:
             return jsonify({"error": "Please provide your first name."}), 400
 
         beehiiv_key = os.getenv('BEEHIIV_API_KEY')
@@ -480,7 +479,7 @@ def subscribe_newsletter():
         subscription_data = {
             'email': email,
             'reactivate_existing': True,
-            'send_welcome_email': utm_source != 'resumeradar_reminder',
+            'send_welcome_email': True,
             'utm_source': utm_source,
         }
 

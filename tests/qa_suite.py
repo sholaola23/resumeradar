@@ -106,12 +106,6 @@ def run_tests():
         else:
             check("Scan form found in HTML", False, "Could not find scanForm")
 
-        # 10. Remind-me-later is OUTSIDE the form
-        form_end = html.find('</form>')
-        remind_pos = html.find('id="remindLater"')
-        check("Remind-me-later outside form", remind_pos > form_end,
-              f"form_end={form_end} remind_pos={remind_pos}")
-
         # ---- SECTION 3: SECURITY HEADERS ----
         r = c.get('/')
         check("X-Content-Type-Options header", r.headers.get('X-Content-Type-Options') == 'nosniff')
@@ -126,8 +120,6 @@ def run_tests():
             ('scanForm', 'Scan form'),
             ('scanBtn', 'Scan button'),
             ('demoScanBtn', 'Demo scan button'),
-            ('remindLaterToggle', 'Remind me later toggle'),
-            ('remindSubmitBtn', 'Remind submit button'),
             ('results', 'Results section'),
             ('copyReportBtn', 'Copy report button'),
             ('downloadReportBtn', 'Download PDF button'),
@@ -162,14 +154,9 @@ def run_tests():
         r = c.post('/api/subscribe', json={'email': '', 'first_name': 'Test'})
         check("Subscribe rejects empty email", r.status_code == 400)
 
-        # Subscribe without first name (regular)
+        # Subscribe without first name
         r = c.post('/api/subscribe', json={'email': 'a@b.com', 'first_name': '', 'utm_source': 'resumeradar'})
-        check("Subscribe rejects missing name (regular)", r.status_code == 400)
-
-        # Subscribe without first name (reminder) — should be ALLOWED
-        r = c.post('/api/subscribe', json={'email': 'a@b.com', 'first_name': '', 'utm_source': 'resumeradar_reminder'})
-        check("Subscribe allows no name (reminder)", r.status_code in [200, 201, 503],
-              f"Status: {r.status_code}")
+        check("Subscribe rejects missing name", r.status_code == 400)
 
         # ---- SECTION 7: FULL SCAN (skip in quick mode) ----
         if not QUICK_MODE:

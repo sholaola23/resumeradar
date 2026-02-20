@@ -33,12 +33,11 @@ Use full mode before any deploy or after backend changes.
 
 - **Routes**: All pages and API endpoints return correct status codes
 - **Scan form integrity**: Only `jobDescription` is required (prevents the scan button bug)
-- **Remind-me-later placement**: Confirms it's outside `</form>` tag
 - **Security headers**: X-Content-Type-Options, X-Frame-Options, XSS protection, etc.
-- **HTML elements**: All critical UI elements present (11 checked)
+- **HTML elements**: All critical UI elements present
 - **Meta tags**: OG image, Twitter card, favicon, apple-touch-icon
 - **API validation**: Proper error handling for bad inputs
-- **Subscribe logic**: Regular vs reminder signup validation
+- **Subscribe logic**: Signup validation
 - **Full scan**: End-to-end scan with score verification
 - **PDF generation**: Report downloads successfully
 - **JS integrity**: File exists, not empty, has key functions
