@@ -61,6 +61,9 @@
     const builderError = document.getElementById('builderError');
     const prefillBanner = document.getElementById('prefillBanner');
 
+    // Preview wrapper (top-level section, separate from manualFormSection)
+    const previewWrapper = document.getElementById('previewWrapper');
+
     // Upload section DOM references
     const uploadSection = document.getElementById('uploadSection');
     const manualFormSection = document.getElementById('manualFormSection');
@@ -131,6 +134,7 @@
 
             // Hide the form, show a generating state
             builderForm.style.display = 'none';
+            if (previewWrapper) previewWrapper.style.display = 'block';
             previewSection.style.display = 'block';
             previewContent.innerHTML = `
                 <div class="scan-generating">
@@ -474,6 +478,7 @@
 
                 // Hide upload section, show preview
                 if (uploadSection) uploadSection.style.display = 'none';
+                if (previewWrapper) previewWrapper.style.display = 'block';
                 previewSection.style.display = 'block';
                 renderPreview(result.polished);
 
@@ -630,6 +635,7 @@
             if (uploadSection) uploadSection.style.display = 'none';
             if (manualFormSection) manualFormSection.style.display = 'none';
             builderForm.style.display = 'none';
+            if (previewWrapper) previewWrapper.style.display = 'block';
             previewSection.style.display = 'block';
             window.scrollTo({ top: previewSection.offsetTop - 20, behavior: 'smooth' });
 
@@ -881,6 +887,7 @@
         // Hide upload section, show manual form (pre-populated)
         if (uploadSection) uploadSection.style.display = 'none';
         if (manualFormSection) manualFormSection.style.display = 'block';
+        if (previewWrapper) previewWrapper.style.display = 'none';
         previewSection.style.display = 'none';
         builderForm.style.display = 'block';
         window.scrollTo({ top: manualFormSection.offsetTop - 20, behavior: 'smooth' });
@@ -1000,6 +1007,7 @@
 
         // Show a download status
         builderForm.style.display = 'none';
+        if (previewWrapper) previewWrapper.style.display = 'block';
         previewSection.style.display = 'block';
         previewContent.innerHTML = '<div class="download-status"><span class="spinner"></span> Preparing your PDF download...</div>';
 

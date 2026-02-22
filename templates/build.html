@@ -277,8 +277,12 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 <!-- Error -->
                 <div class="error-message" id="builderError" style="display: none;"></div>
             </form>
+        </div>
+    </main>
 
-            <!-- ============ PREVIEW SECTION ============ -->
+    <!-- ============ PREVIEW SECTION (outside manualFormSection so it's always accessible) ============ -->
+    <section class="builder-section" id="previewWrapper" style="display: none;">
+        <div class="container">
             <div class="preview-section" id="previewSection" style="display: none;">
                 <div class="builder-card">
                     <div class="preview-header">
@@ -380,7 +384,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 </div>
             </div>
         </div>
-    </main>
+    </section>
 
     <!-- ============ FOOTER ============ -->
     <footer class="footer">
