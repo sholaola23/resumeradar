@@ -27,6 +27,26 @@
     let loadingInterval = null;
     let loadingMsgIndex = 0;
 
+    // ============================================================
+    // PAYSTACK: PROVIDER DETECTION (Stripe default, Nigeria opt-in)
+    // ============================================================
+    function shouldShowPaystackOption() {
+        try {
+            var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            return tz === 'Africa/Lagos';  // Nigeria only — not all of Africa
+        } catch (e) { return false; }
+    }
+
+    // Stripe is ALWAYS the default. Paystack requires explicit opt-in.
+    // If NOT in a Paystack-eligible timezone, force Stripe and clear stale storage
+    // (prevents non-Nigeria users from being silently routed to Paystack via leftover sessionStorage).
+    var detectedProvider = 'stripe';
+    if (shouldShowPaystackOption() && sessionStorage.getItem('resumeradar_force_paystack')) {
+        detectedProvider = 'paystack';
+    } else {
+        sessionStorage.removeItem('resumeradar_force_paystack');
+    }
+
     function startLoadingRotation(el) {
         if (!el) return;
         loadingMsgIndex = 0;
@@ -90,19 +110,70 @@
             autoGenerateFromScan();
         }
 
-        // Post-payment download — hide upload section
+        // Post-payment download — hide upload section (supports Stripe + Paystack)
         if (params.get('payment') === 'success') {
             if (uploadSection) uploadSection.style.display = 'none';
-            const token = params.get('token');
-            const sessionId = params.get('session_id');
-            if (token && sessionId) {
-                handlePostPayment(token, sessionId);
+            var token = params.get('token');
+            var sessionId = params.get('session_id');
+            var provider = params.get('provider') || sessionStorage.getItem('resumeradar_payment_provider') || 'stripe';
+            // Paystack appends ?trxref=REF&reference=REF to callback URL
+            var paystackRef = params.get('reference') || params.get('trxref') || sessionStorage.getItem('resumeradar_paystack_ref');
+
+            if (token && (sessionId || paystackRef)) {
+                handlePostPayment(token, sessionId, provider, paystackRef);
             }
         }
 
         // Payment cancelled — hide upload, show form so they can see their preview
         if (params.get('payment') === 'cancelled') {
             showPaymentCancelledMessage();
+        }
+
+        // ---- PAYSTACK: Provider toggle setup ----
+        var providerToggle = document.getElementById('providerToggle');
+        var providerRow = document.getElementById('providerRow');
+        var paymentPriceEl = document.getElementById('paymentPrice');
+        var paymentCard = document.querySelector('.payment-card');
+        var emailRequiredHint = document.getElementById('emailRequiredHint');
+
+        // Read server-side capability + price from data attributes
+        var paystackEnabled = paymentCard ? paymentCard.dataset.paystackEnabled === 'true' : false;
+        var paystackPrice = paymentCard ? (paymentCard.dataset.paystackPrice || '\u20a63,500') : '\u20a63,500';
+
+        // Only show toggle if BOTH: server has Paystack key AND user is in Nigeria timezone
+        if (paystackEnabled && shouldShowPaystackOption() && providerRow) {
+            providerRow.style.display = 'block';
+        }
+
+        // If user previously chose Paystack AND still eligible, reflect that
+        if (detectedProvider === 'paystack' && paystackEnabled && paymentPriceEl) {
+            paymentPriceEl.textContent = paystackPrice;
+            if (providerToggle) providerToggle.textContent = 'Pay with card (GBP) instead';
+            if (providerRow) providerRow.style.display = 'block';
+            if (emailRequiredHint) emailRequiredHint.textContent = '(required for Naira payments)';
+        } else if (detectedProvider === 'paystack' && !paystackEnabled) {
+            // Server doesn't have Paystack key — force back to Stripe
+            detectedProvider = 'stripe';
+            sessionStorage.removeItem('resumeradar_force_paystack');
+        }
+
+        if (providerToggle) {
+            providerToggle.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (detectedProvider === 'paystack') {
+                    detectedProvider = 'stripe';
+                    sessionStorage.removeItem('resumeradar_force_paystack');
+                    providerToggle.textContent = 'Pay with Naira instead';
+                    if (paymentPriceEl) paymentPriceEl.textContent = '\u00a32';
+                    if (emailRequiredHint) emailRequiredHint.textContent = '(optional)';
+                } else {
+                    detectedProvider = 'paystack';
+                    sessionStorage.setItem('resumeradar_force_paystack', '1');
+                    providerToggle.textContent = 'Pay with card (GBP) instead';
+                    if (paymentPriceEl) paymentPriceEl.textContent = paystackPrice;
+                    if (emailRequiredHint) emailRequiredHint.textContent = '(required for Naira payments)';
+                }
+            });
         }
     });
 
@@ -903,11 +974,17 @@
         }
 
         const selectedTemplate = document.querySelector('input[name="template"]:checked').value;
+        const deliveryEmail = (document.getElementById('deliveryEmail') || {}).value || '';
+
+        // Paystack requires email — validate before proceeding
+        if (detectedProvider === 'paystack' && !deliveryEmail.trim()) {
+            showError('Email address is required for Naira payments. Please enter your email above.');
+            return;
+        }
 
         setPaymentLoading(true);
 
         try {
-            const deliveryEmail = (document.getElementById('deliveryEmail') || {}).value || '';
             const response = await fetch('/api/build/create-checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -915,6 +992,7 @@
                     token: currentToken,
                     template: selectedTemplate,
                     delivery_email: deliveryEmail.trim(),
+                    provider: detectedProvider,
                 }),
             });
 
@@ -947,10 +1025,18 @@
                 return;
             }
 
-            // Store template choice and token for post-payment
+            // Store template choice for post-payment
             sessionStorage.setItem('resumeradar_cv_template', selectedTemplate);
 
-            // Redirect to Stripe Checkout
+            // Store provider + reference for Paystack post-payment handling
+            if (result.provider === 'paystack') {
+                sessionStorage.setItem('resumeradar_payment_provider', 'paystack');
+                sessionStorage.setItem('resumeradar_paystack_ref', result.reference || '');
+            } else {
+                sessionStorage.setItem('resumeradar_payment_provider', 'stripe');
+            }
+
+            // Redirect to checkout (both providers return checkout_url)
             window.location.href = result.checkout_url;
 
         } catch (err) {
@@ -1001,9 +1087,12 @@
     // ============================================================
     // POST-PAYMENT DOWNLOAD
     // ============================================================
-    async function handlePostPayment(token, sessionId) {
+    async function handlePostPayment(token, sessionId, provider, paystackRef) {
         const template = sessionStorage.getItem('resumeradar_cv_template') || 'classic';
         sessionStorage.removeItem('resumeradar_cv_template');
+        // Clean up provider storage
+        sessionStorage.removeItem('resumeradar_payment_provider');
+        sessionStorage.removeItem('resumeradar_paystack_ref');
 
         // Show a download status
         builderForm.style.display = 'none';
@@ -1016,25 +1105,45 @@
 
             // Check if CV data is stored in sessionStorage (client fallback)
             const storedCvData = sessionStorage.getItem(`resumeradar_cv_${token}`);
-            if (storedCvData) {
-                // POST the CV data to the server for PDF generation
-                response = await fetch(`/api/build/download/${token}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        template: template,
-                        cv_data: JSON.parse(storedCvData),
-                    }),
-                });
-                // Clean up after successful download
-                if (response.ok) {
-                    sessionStorage.removeItem(`resumeradar_cv_${token}`);
+
+            if (provider === 'paystack' && paystackRef) {
+                // ---- PAYSTACK: verify by reference ----
+                if (storedCvData) {
+                    response = await fetch(`/api/build/download/${token}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            reference: paystackRef,
+                            provider: 'paystack',
+                            template: template,
+                            cv_data: JSON.parse(storedCvData),
+                        }),
+                    });
+                } else {
+                    const downloadUrl = `/api/build/download/${token}?reference=${encodeURIComponent(paystackRef)}&provider=paystack&template=${encodeURIComponent(template)}`;
+                    response = await fetch(downloadUrl);
                 }
             } else {
-                // Server has the data (Redis) — use GET
-                const downloadUrl = `/api/build/download/${token}?session_id=${encodeURIComponent(sessionId)}&template=${encodeURIComponent(template)}`;
-                response = await fetch(downloadUrl);
+                // ---- STRIPE: verify by session_id (existing flow) ----
+                if (storedCvData) {
+                    response = await fetch(`/api/build/download/${token}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            session_id: sessionId,
+                            template: template,
+                            cv_data: JSON.parse(storedCvData),
+                        }),
+                    });
+                } else {
+                    const downloadUrl = `/api/build/download/${token}?session_id=${encodeURIComponent(sessionId)}&template=${encodeURIComponent(template)}`;
+                    response = await fetch(downloadUrl);
+                }
+            }
+
+            // Clean up client storage after successful download
+            if (response.ok && storedCvData) {
+                sessionStorage.removeItem(`resumeradar_cv_${token}`);
             }
 
             if (!response.ok) {

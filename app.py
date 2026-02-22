@@ -25,6 +25,12 @@ from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.cv_pdf_generator import generate_cv_pdf
 from backend.stripe_utils import create_checkout_session, verify_checkout_payment, verify_webhook_signature
+from backend.paystack_utils import (
+    create_paystack_transaction,
+    verify_paystack_payment,
+    verify_paystack_webhook,
+    format_naira_price,
+)
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -150,6 +156,16 @@ def _read_scan_velocity():
         except Exception:
             return 0
     return 0
+
+
+# Public base URL for payment callbacks — env var preferred over request.host_url
+# which can be unreliable behind proxies/CDNs
+_public_base_url = os.getenv('PUBLIC_BASE_URL', '').rstrip('/')
+
+
+def _get_base_url():
+    """Return trusted base URL for payment callbacks. Env var preferred over request.host_url."""
+    return _public_base_url or request.host_url.rstrip('/')
 
 
 def allowed_file(filename):
@@ -569,7 +585,14 @@ def get_scan_count():
 @limiter.exempt
 def build_page():
     """Serve the CV Builder page."""
-    return render_template('build.html')
+    # Pass Paystack config to template so JS can check server capability
+    paystack_enabled = bool(os.getenv('PAYSTACK_SECRET_KEY'))
+    paystack_price = format_naira_price() if paystack_enabled else ''
+    return render_template(
+        'build.html',
+        paystack_enabled=paystack_enabled,
+        paystack_price=paystack_price,
+    )
 
 
 @app.route('/api/build/generate', methods=['POST'])
@@ -803,10 +826,10 @@ def build_generate_from_upload():
 @limiter.limit("30 per hour")
 def build_create_checkout():
     """
-    Create a Stripe Checkout session for CV download payment.
+    Create a payment session (Stripe or Paystack) for CV download.
 
     Accepts:
-        JSON with token and template.
+        JSON with token, template, delivery_email, and provider ('stripe'|'paystack').
 
     Returns:
         JSON with checkout_url to redirect to.
@@ -818,6 +841,7 @@ def build_create_checkout():
 
         token = data.get("token", "").strip()
         template = data.get("template", "classic").strip()
+        provider = data.get("provider", "stripe").strip().lower()
 
         if not token:
             return jsonify({"error": "Missing CV token."}), 400
@@ -846,8 +870,36 @@ def build_create_checkout():
                 if "@" not in delivery_email or "." not in delivery_email.split("@")[-1]:
                     return jsonify({"error": "Please enter a valid email address."}), 400
 
-        # Build success/cancel URLs
-        base_url = request.host_url.rstrip('/')
+        base_url = _get_base_url()
+
+        # ---- PAYSTACK PATH (Nigeria — explicit opt-in) ----
+        if provider == "paystack" and os.getenv("PAYSTACK_SECRET_KEY"):
+            # Paystack requires real email — no placeholder
+            if not delivery_email:
+                return jsonify({"error": "Email address is required for Naira payments."}), 400
+
+            callback_url = f"{base_url}/build?payment=success&token={token}&provider=paystack"
+            result = create_paystack_transaction(token, template, callback_url, delivery_email)
+
+            if result.get("error"):
+                return jsonify({"error": result["error"]}), 500
+
+            # Store auxiliary data in Redis — 72h TTL matching cv data
+            if _redis_client:
+                try:
+                    _redis_client.setex(f"resumeradar:cv_template:{token}", 259200, template)
+                    _redis_client.setex(f"resumeradar:cv_email:{token}", 259200, delivery_email)
+                except Exception:
+                    pass
+
+            return jsonify({
+                "success": True,
+                "checkout_url": result["authorization_url"],
+                "reference": result["reference"],
+                "provider": "paystack",
+            })
+
+        # ---- STRIPE PATH (default — existing flow) ----
         success_url = f"{base_url}/build?payment=success&token={token}&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{base_url}/build?payment=cancelled"
 
@@ -860,6 +912,7 @@ def build_create_checkout():
             "success": True,
             "checkout_url": result["checkout_url"],
             "session_id": result["session_id"],
+            "provider": "stripe",
         })
 
     except Exception as e:
@@ -885,16 +938,22 @@ def build_download(token):
             session_id = body.get("session_id", "").strip()
             template = body.get("template", "classic").strip()
             client_cv_data = body.get("cv_data")
+            provider = body.get("provider", "").strip()
+            paystack_ref = body.get("reference", "").strip()
         else:
             session_id = request.args.get("session_id", "").strip()
             template = request.args.get("template", "classic").strip()
             client_cv_data = None
+            provider = request.args.get("provider", "").strip()
+            paystack_ref = request.args.get("reference", "").strip()
 
-        if not session_id:
-            return jsonify({"error": "Missing payment session."}), 400
-
-        # Verify payment
-        payment = verify_checkout_payment(session_id, token)
+        # Verify payment based on provider
+        if provider == "paystack" and paystack_ref:
+            payment = verify_paystack_payment(paystack_ref, token)
+        else:
+            if not session_id:
+                return jsonify({"error": "Missing payment session."}), 400
+            payment = verify_checkout_payment(session_id, token)
         if not payment.get("verified"):
             return jsonify({"error": payment.get("reason", "Payment verification failed.")}), 403
 
@@ -1077,6 +1136,69 @@ def build_webhook():
         return jsonify({"error": "Webhook processing failed."}), 500
 
 
+@app.route('/api/build/webhook/paystack', methods=['POST'])
+@limiter.exempt
+def build_webhook_paystack():
+    """
+    Paystack webhook handler. Same post-payment flow as Stripe webhook.
+    Uses SETNX on reference for event-level idempotency BEFORE any side effects.
+    Email delivery uses its own dedup via _send_cv_email (separate from webhook dedup).
+    """
+    try:
+        payload = request.get_data()
+        signature = request.headers.get('X-Paystack-Signature', '')
+
+        if not verify_paystack_webhook(payload, signature):
+            return jsonify({"error": "Invalid signature."}), 400
+
+        event = request.get_json()
+
+        if event.get('event') == 'charge.success':
+            data = event.get('data', {})
+            reference = data.get('reference', '')
+            metadata = data.get('metadata', {})
+            cv_token = metadata.get('cv_token', '')
+            template = metadata.get('template', 'classic')
+            delivery_email = metadata.get('delivery_email', '')
+
+            if cv_token and reference and _redis_client:
+                try:
+                    # SETNX idempotency — prevent duplicate Redis writes on Paystack retries
+                    dedup_key = f"resumeradar:paystack_processed:{reference}"
+                    was_set = _redis_client.set(dedup_key, "1", nx=True, ex=259200)  # 72h
+                    if not was_set:
+                        # Already processed this reference — return 200 to stop retries
+                        return jsonify({"received": True}), 200
+
+                    # Mark as paid (72h TTL matching cv data)
+                    paid_key = f"resumeradar:cv_paid:{cv_token}"
+                    _redis_client.setex(paid_key, 259200, "1")
+                    # Extend CV data TTL to survive retry window (72h)
+                    _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                    # Store reference for callback verification
+                    _redis_client.setex(f"resumeradar:cv_paystack_ref:{cv_token}", 259200, reference)
+                except Exception as redis_err:
+                    print(f"Paystack webhook Redis error: {redis_err}")
+                    # Release dedup on failure so retries can succeed
+                    try:
+                        _redis_client.delete(f"resumeradar:paystack_processed:{reference}")
+                    except Exception:
+                        pass
+
+            # Send email if requested — _send_cv_email has its own dedup
+            # (resumeradar:cv_emailed:{event_id} with delete-on-failure),
+            # separate from webhook dedup so email failures can be retried.
+            # Signature: _send_cv_email(email, token, template, event_id)
+            if delivery_email and cv_token:
+                _send_cv_email(delivery_email, cv_token, template, f"paystack_{reference}")
+
+        return jsonify({"received": True}), 200
+
+    except Exception as e:
+        print(f"Paystack webhook error: {str(e)}")
+        return jsonify({"error": "Webhook processing failed."}), 500
+
+
 @app.route('/api/build/check-payment/<token>', methods=['GET'])
 @limiter.limit("30 per hour")
 def build_check_payment(token):
@@ -1157,6 +1279,7 @@ print(f"   AI Suggestions: {'✅ Enabled' if os.getenv('ANTHROPIC_API_KEY') else
 print(f"   Stripe Checkout: {'✅ Enabled' if os.getenv('STRIPE_PRICE_ID') else '❌ Not configured'}")
 print(f"   Rate Limiter: {'Redis' if os.getenv('REDIS_URL') else 'In-memory'}")
 print(f"   Email Delivery: {'✅ Enabled' if os.getenv('RESEND_API_KEY') else '❌ Not configured'}")
+print(f"   Paystack: {'✅ Enabled' if os.getenv('PAYSTACK_SECRET_KEY') else '❌ Not configured'}")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))

@@ -530,6 +530,24 @@
     gap: 6px;
 }
 
+/* ---- Payment Provider Toggle ---- */
+.payment-provider-row {
+    width: 100%;
+    text-align: center;
+    margin-top: 10px;
+}
+.payment-provider-row a {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.82rem;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+.payment-provider-row a:hover {
+    color: #fff;
+}
+
 /* ---- Payment Email Input ---- */
 .payment-email-row {
     width: 100%;

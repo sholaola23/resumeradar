@@ -359,14 +359,16 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 </div>
 
                 <!-- Payment CTA -->
-                <div class="builder-card payment-card">
+                <div class="builder-card payment-card"
+                     data-paystack-enabled="{{ 'true' if paystack_enabled else 'false' }}"
+                     data-paystack-price="{{ paystack_price }}">
                     <div class="payment-content">
                         <div class="payment-info">
                             <h2>Download Your CV</h2>
                             <p>Get a clean, ATS-optimized PDF resume ready to submit.</p>
                         </div>
                         <div class="payment-action">
-                            <div class="payment-price">£2</div>
+                            <div class="payment-price" id="paymentPrice">£2</div>
                             <button type="button" class="payment-btn" id="paymentBtn">
                                 <span class="pay-btn-text">Download PDF</span>
                                 <span class="pay-btn-loading" style="display: none;">
@@ -374,8 +376,12 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                                 </span>
                             </button>
                         </div>
+                        <!-- Provider toggle (shown by JS for Nigeria timezone + server Paystack enabled) -->
+                        <div class="payment-provider-row" id="providerRow" style="display: none;">
+                            <a href="#" id="providerToggle">Pay with Naira instead</a>
+                        </div>
                         <div class="payment-email-row">
-                            <label for="deliveryEmail">Email a copy to yourself (optional)</label>
+                            <label for="deliveryEmail">Email a copy to yourself <span id="emailRequiredHint">(optional)</span></label>
                             <input type="email" id="deliveryEmail" class="payment-email-input"
                                    placeholder="your@email.com" maxlength="254">
                             <small class="payment-email-hint">PDF downloads instantly + we send a backup to your inbox</small>

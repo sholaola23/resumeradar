@@ -659,6 +659,154 @@ def run_tests():
     check(".env.example includes REDIS_URL",
           'REDIS_URL' in env_example)
 
+    # ---- SECTION 15: PAYSTACK INTEGRATION (Nigeria) ----
+    print("\n-- Section 15: Paystack Integration (Nigeria) --")
+
+    # Read Paystack source files
+    paystack_utils_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backend', 'paystack_utils.py')
+    with open(paystack_utils_path, 'r') as f:
+        paystack_source = f.read()
+
+    # -- Structure --
+    check("paystack_utils.py exists and has create_paystack_transaction",
+          'def create_paystack_transaction' in paystack_source)
+    check("paystack_utils.py has verify_paystack_payment",
+          'def verify_paystack_payment' in paystack_source)
+    check("paystack_utils.py has verify_paystack_webhook",
+          'def verify_paystack_webhook' in paystack_source)
+    check("paystack_utils.py has format_naira_price",
+          'def format_naira_price' in paystack_source)
+    check("HMAC SHA512 verification logic present",
+          'hmac.new' in paystack_source and 'sha512' in paystack_source)
+    check("HMAC uses compare_digest for timing-safe comparison",
+          'hmac.compare_digest' in paystack_source)
+
+    # -- Payment Integrity (P0) --
+    check("verify_paystack_payment checks amount == PAYSTACK_AMOUNT_KOBO",
+          'PAYSTACK_AMOUNT_KOBO' in paystack_source and 'amount' in paystack_source and 'mismatch' in paystack_source)
+    check("verify_paystack_payment checks currency == NGN",
+          'PAYSTACK_CURRENCY' in paystack_source and 'currency' in paystack_source)
+    check("verify_paystack_payment rejects wrong amount",
+          'Payment amount mismatch' in paystack_source)
+    check("verify_paystack_payment rejects wrong currency",
+          'Payment currency mismatch' in paystack_source)
+    check("create_paystack_transaction returns error without key",
+          'Paystack not configured' in paystack_source)
+    check("create_paystack_transaction requires email",
+          'Email is required' in paystack_source)
+
+    # -- Webhook Idempotency (P0) --
+    check("Webhook uses SETNX dedup on reference before side effects",
+          'paystack_processed' in app_source and 'nx=True' in app_source)
+    check("Webhook releases dedup key on failure",
+          'delete' in app_source and 'paystack_processed' in app_source)
+    check("Webhook returns 200 on duplicate reference (early return)",
+          'Already processed this reference' in app_source)
+
+    # -- Email dedup separation (P1) --
+    check("Email uses separate dedup via _send_cv_email (not webhook dedup)",
+          '_send_cv_email' in app_source and 'cv_emailed' in app_source)
+    check("_send_cv_email releases dedup on failure for retry",
+          'delete(dedup_key)' in app_source or 'delete(f"resumeradar:cv_emailed' in app_source)
+
+    # -- App.py integration --
+    check("app.py imports paystack_utils",
+          'from backend.paystack_utils import' in app_source)
+    check("app.py has _get_base_url using PUBLIC_BASE_URL",
+          'PUBLIC_BASE_URL' in app_source and '_get_base_url' in app_source)
+    check("create-checkout accepts provider param",
+          'provider' in app_source and '"paystack"' in app_source)
+    check("create-checkout Paystack path requires delivery_email",
+          'Email address is required for Naira payments' in app_source)
+    check("download endpoint supports Paystack verification",
+          'verify_paystack_payment' in app_source and 'paystack_ref' in app_source)
+    check("Startup log shows Paystack status",
+          'Paystack' in app_source and 'PAYSTACK_SECRET_KEY' in app_source)
+
+    # -- TTL Alignment (P1) --
+    check("Auxiliary Redis keys use 259200 TTL (72h)",
+          app_source.count('259200') >= 4)
+
+    # -- Frontend: builder.js --
+    check("builder.js has shouldShowPaystackOption function",
+          'shouldShowPaystackOption' in builder_js)
+    check("builder.js checks Africa/Lagos timezone only",
+          "Africa/Lagos" in builder_js)
+    check("builder.js default provider is stripe",
+          "detectedProvider = 'stripe'" in builder_js)
+    check("builder.js clears stale sessionStorage for non-Nigeria users",
+          "removeItem('resumeradar_force_paystack')" in builder_js)
+    check("builder.js requires email for Paystack before checkout",
+          'required for Naira payments' in builder_js)
+    check("builder.js sends provider in checkout request body",
+          'provider: detectedProvider' in builder_js)
+    check("builder.js handles Paystack callback (reference/trxref params)",
+          'trxref' in builder_js and 'resumeradar_paystack_ref' in builder_js)
+    check("builder.js handlePostPayment accepts provider + paystackRef",
+          'handlePostPayment(token, sessionId, provider, paystackRef)' in builder_js)
+
+    # -- Frontend: build.html --
+    check("build.html has providerToggle element",
+          'id="providerToggle"' in build_html)
+    check("build.html has paymentPrice element with id",
+          'id="paymentPrice"' in build_html)
+    check("build.html has providerRow element",
+          'id="providerRow"' in build_html)
+    check("build.html has data-paystack-enabled attribute",
+          'data-paystack-enabled' in build_html)
+    check("build.html has data-paystack-price attribute",
+          'data-paystack-price' in build_html)
+    check("build.html has emailRequiredHint element",
+          'id="emailRequiredHint"' in build_html)
+
+    # -- Frontend: builder.css --
+    check("builder.css has payment-provider-row styles",
+          'payment-provider-row' in builder_css)
+
+    # -- Config --
+    check(".env.example includes PAYSTACK_SECRET_KEY",
+          'PAYSTACK_SECRET_KEY' in env_example)
+    check(".env.example includes PAYSTACK_AMOUNT_KOBO",
+          'PAYSTACK_AMOUNT_KOBO' in env_example)
+    check(".env.example includes PUBLIC_BASE_URL",
+          'PUBLIC_BASE_URL' in env_example)
+    check("render.yaml includes PAYSTACK_SECRET_KEY",
+          'PAYSTACK_SECRET_KEY' in render_yaml)
+    check("render.yaml includes PUBLIC_BASE_URL",
+          'PUBLIC_BASE_URL' in render_yaml)
+
+    # -- Behavioral Endpoint Tests --
+    with app.test_client() as c:
+        # Paystack webhook endpoint exists
+        r = c.post('/api/build/webhook/paystack',
+                    data=b'{}',
+                    content_type='application/json')
+        check("Paystack webhook endpoint exists (not 404)",
+              r.status_code != 404)
+
+        # Paystack webhook rejects unsigned request
+        r = c.post('/api/build/webhook/paystack',
+                    data=b'{"event": "charge.success"}',
+                    content_type='application/json')
+        check("Paystack webhook rejects unsigned request (400)",
+              r.status_code == 400)
+
+        # create-checkout with provider=paystack: if PAYSTACK_SECRET_KEY is set, requires email.
+        # If not set, falls through to Stripe. Check source for the validation.
+        check("create-checkout Paystack email validation in source",
+              'Email address is required for Naira payments' in app_source and
+              'provider == "paystack"' in app_source)
+
+        # create-checkout default provider is stripe (no provider param)
+        r = c.post('/api/build/create-checkout',
+                    json={"token": "test123", "template": "classic"},
+                    content_type='application/json')
+        # Without a valid token it may return 400 (token expired) or 500 (stripe error)
+        # Key: it should NOT try Paystack path
+        result = r.get_json() or {}
+        check("create-checkout defaults to stripe when no provider given",
+              'Naira' not in result.get('error', ''))
+
     elapsed = time.time() - start
 
     # ============================================================
