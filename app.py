@@ -7,6 +7,7 @@ Built by Olushola Oladipupo
 import os
 import json
 import uuid
+import hmac as hmac_module
 import secrets
 import threading
 import html as html_module
@@ -32,6 +33,7 @@ from backend.paystack_utils import (
     verify_paystack_webhook,
     format_naira_price,
 )
+from backend import audit_log
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -113,6 +115,9 @@ try:
 except Exception as e:
     print(f"📊 Scan counter: in-memory fallback (Redis error: {e})")
     _redis_client = None
+
+# Initialize audit log module with Redis client
+audit_log.init(_redis_client)
 
 # In-memory fallback
 _fallback_count = int(os.getenv('SCAN_COUNT_BASE', '150'))
@@ -1012,6 +1017,21 @@ def build_download(token):
         # Check if email delivery was requested (from payment metadata)
         delivery_email = payment.get("delivery_email", "")
 
+        # AUDIT: payment verified via download endpoint
+        try:
+            audit_log.log_event(
+                "payment_verified",
+                token=token,
+                email=delivery_email if delivery_email else None,
+                provider="paystack" if (provider == "paystack" and paystack_ref) else "stripe",
+                session_id=session_id if session_id else None,
+                reference=paystack_ref if paystack_ref else None,
+                format=dl_format,
+                source="download_verify",
+            )
+        except Exception:
+            pass
+
         # Generate files based on format
         if dl_format == "docx":
             docx_bytes = bytes(generate_cv_docx(cv_data, template))
@@ -1056,11 +1076,34 @@ def build_download(token):
                 }
             )
 
+        # AUDIT: successful download
+        try:
+            audit_log.log_event(
+                "download_200",
+                token=token,
+                format=dl_format,
+                content_length=response.headers.get('Content-Length', '0'),
+                status_code=200,
+                filename=filename,
+            )
+        except Exception:
+            pass
+
         response.headers['X-Email-Requested'] = 'true' if delivery_email else 'false'
         return response
 
     except Exception as e:
         print(f"CV Builder download error: {str(e)}")
+        # AUDIT: download error (error class name only — no raw exception text)
+        try:
+            audit_log.log_event(
+                "download_error",
+                token=token,
+                error=type(e).__name__,
+                status_code=500,
+            )
+        except Exception:
+            pass
         return jsonify({"error": "Failed to generate CV."}), 500
 
 
@@ -1143,7 +1186,7 @@ def _send_cv_email(email, token, template, event_id):
             </div>
         </div>"""
 
-        resend.Emails.send({
+        send_result = resend.Emails.send({
             "from": "ResumeRadar <reports@sholastechnotes.com>",
             "to": [email],
             "subject": f"Your ResumeRadar CV is ready, {first_name}",
@@ -1151,8 +1194,31 @@ def _send_cv_email(email, token, template, event_id):
             "attachments": attachments,
         })
 
+        # AUDIT: email accepted by Resend (capture message ID for webhook correlation)
+        resend_message_id = getattr(send_result, 'id', None) or (
+            send_result.get('id') if isinstance(send_result, dict) else None)
+        try:
+            audit_log.log_event(
+                "email_accepted",
+                token=token,
+                email=email,
+                resend_message_id=resend_message_id,
+            )
+        except Exception:
+            pass
+
     except Exception as e:
         print(f"CV email error (best-effort): {e}")
+        # AUDIT: email send failure (error class name only)
+        try:
+            audit_log.log_event(
+                "email_send_error",
+                token=token,
+                email=email,
+                error=type(e).__name__,
+            )
+        except Exception:
+            pass
         # Release dedup flag on failure so Stripe retries can succeed
         try:
             if _redis_client:
@@ -1189,6 +1255,20 @@ def build_webhook():
                     _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
                 except Exception:
                     pass
+
+            # AUDIT: payment confirmed via Stripe webhook (independent of download)
+            try:
+                audit_log.log_event(
+                    "payment_verified",
+                    token=cv_token,
+                    email=delivery_email,
+                    provider="stripe",
+                    session_id=session.get('id', ''),
+                    payment_intent_id=session.get('payment_intent', ''),
+                    source="webhook",
+                )
+            except Exception:
+                pass
 
             # Send email if requested (best-effort, synchronous ~3-4s)
             if delivery_email and cv_token:
@@ -1250,6 +1330,19 @@ def build_webhook_paystack():
                     except Exception:
                         pass
 
+            # AUDIT: payment confirmed via Paystack webhook (independent of download)
+            try:
+                audit_log.log_event(
+                    "payment_verified",
+                    token=cv_token,
+                    email=delivery_email,
+                    provider="paystack",
+                    reference=reference,
+                    source="webhook",
+                )
+            except Exception:
+                pass
+
             # Send email if requested — _send_cv_email has its own dedup
             # (resumeradar:cv_emailed:{event_id} with delete-on-failure),
             # separate from webhook dedup so email failures can be retried.
@@ -1262,6 +1355,133 @@ def build_webhook_paystack():
     except Exception as e:
         print(f"Paystack webhook error: {str(e)}")
         return jsonify({"error": "Webhook processing failed."}), 500
+
+
+@app.route('/api/build/webhook/resend', methods=['POST'])
+@limiter.exempt
+def build_webhook_resend():
+    """
+    Resend webhook handler. Records email delivery events in the audit trail.
+    Uses Svix signature verification (Resend's webhook infrastructure).
+    """
+    # Check secret BEFORE importing svix (fail-closed even if svix not installed)
+    resend_secret = os.getenv('RESEND_WEBHOOK_SECRET', '')
+    if not resend_secret:
+        return jsonify({"error": "Webhook not configured."}), 503
+
+    try:
+        from svix.webhooks import Webhook, WebhookVerificationError
+
+        # Use raw bytes exactly as received for signature verification
+        payload_bytes = request.get_data()
+        headers = {
+            "svix-id": request.headers.get("svix-id", ""),
+            "svix-timestamp": request.headers.get("svix-timestamp", ""),
+            "svix-signature": request.headers.get("svix-signature", ""),
+        }
+
+        try:
+            wh = Webhook(resend_secret)
+            event_data = wh.verify(payload_bytes, headers)
+        except WebhookVerificationError:
+            return jsonify({"error": "Invalid signature."}), 400
+
+        # Map Resend event types to audit event names
+        event_map = {
+            "email.delivered": "email_delivered",
+            "email.bounced": "email_bounced",
+            "email.delivery_delayed": "email_delivery_delayed",
+            "email.complained": "email_complained",
+        }
+
+        resend_event_type = event_data.get("type", "")
+        audit_event = event_map.get(resend_event_type)
+        if not audit_event:
+            # Unhandled event type — acknowledge to stop retries
+            return jsonify({"received": True}), 200
+
+        # Extract email_id from payload data for reverse index lookup
+        email_data = event_data.get("data", {})
+        email_id = email_data.get("email_id", "")
+
+        if not email_id or not _redis_client:
+            print(f"Resend webhook: no email_id or Redis unavailable for {resend_event_type}")
+            return jsonify({"received": True}), 200
+
+        # Look up token_hash via reverse index
+        idx_key = f"resumeradar:audit_idx:resend:{email_id}"
+        token_hash = _redis_client.get(idx_key)
+
+        if not token_hash:
+            # Index miss — email_id was not tracked (e.g., sent before audit was enabled)
+            print(f"Resend webhook: no audit index for email_id={email_id} event={resend_event_type}")
+            return jsonify({"received": True}), 200
+
+        # Write event directly to sorted set (we only have token_hash, not raw token)
+        now = datetime.now(timezone.utc)
+        ts_ms = now.timestamp()
+        event_record = {
+            "id": str(uuid.uuid4()),
+            "event": audit_event,
+            "ts": now.isoformat(),
+            "ts_ms": ts_ms,
+            "resend_message_id": email_id,
+        }
+
+        audit_key = f"resumeradar:audit:{token_hash}"
+        _redis_client.zadd(audit_key, {json.dumps(event_record, separators=(',', ':')): ts_ms})
+        _redis_client.expire(audit_key, 10_368_000)  # 120 days
+
+        return jsonify({"received": True}), 200
+
+    except Exception as e:
+        print(f"Resend webhook error: {type(e).__name__}")
+        return jsonify({"received": True}), 200  # Always 200 to prevent infinite retries
+
+
+@app.route('/api/admin/audit/lookup', methods=['GET'])
+@limiter.exempt
+def admin_audit_lookup():
+    """
+    Admin endpoint to look up audit trails by provider identifier.
+    Requires Bearer token auth. Fail-closed: 503 if AUDIT_ADMIN_TOKEN not configured.
+
+    Usage: GET /api/admin/audit/lookup?type=session&id=cs_live_xxx
+    Types: session, paystack_ref, pi, resend, token
+    """
+    # Fail closed — if admin token not configured, deny all access
+    admin_token = os.getenv('AUDIT_ADMIN_TOKEN', '')
+    if not admin_token:
+        return jsonify({"error": "Audit lookup not configured."}), 503
+
+    # Bearer token auth with timing-safe comparison
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Unauthorized."}), 401
+
+    provided_token = auth_header[7:]  # Strip "Bearer "
+    if not hmac_module.compare_digest(provided_token, admin_token):
+        return jsonify({"error": "Unauthorized."}), 401
+
+    # Parse query parameters
+    lookup_type = request.args.get('type', '')
+    lookup_id = request.args.get('id', '')
+
+    if not lookup_type or not lookup_id:
+        return jsonify({"error": "Missing 'type' and 'id' query parameters."}), 400
+
+    # Route to the appropriate lookup method
+    if lookup_type == 'token':
+        result = audit_log.lookup_by_raw_token(lookup_id)
+    elif lookup_type in ('session', 'paystack_ref', 'pi', 'resend'):
+        result = audit_log.lookup_by_id(lookup_type, lookup_id)
+    else:
+        return jsonify({"error": f"Invalid type '{lookup_type}'. Use: session, paystack_ref, pi, resend, token"}), 400
+
+    if not result:
+        return jsonify({"error": "No audit trail found."}), 404
+
+    return jsonify(result), 200
 
 
 @app.route('/api/build/check-payment/<token>', methods=['GET'])
@@ -1345,6 +1565,7 @@ print(f"   Stripe Checkout: {'✅ Enabled' if os.getenv('STRIPE_PRICE_ID') else 
 print(f"   Rate Limiter: {'Redis' if os.getenv('REDIS_URL') else 'In-memory'}")
 print(f"   Email Delivery: {'✅ Enabled' if os.getenv('RESEND_API_KEY') else '❌ Not configured'}")
 print(f"   Paystack: {'✅ Enabled' if os.getenv('PAYSTACK_SECRET_KEY') else '❌ Not configured'}")
+print(f"   Audit Log: {'✅ Enabled' if (os.getenv('AUDIT_HMAC_SECRET') and _redis_client) else '❌ Disabled (needs AUDIT_HMAC_SECRET + Redis)'}")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))

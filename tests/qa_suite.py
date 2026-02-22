@@ -1415,6 +1415,258 @@ MSc Data Science, Imperial, 2018
     check("DOCX: format-hint CSS in builder.css",
           'format-hint' in builder_css_17)
 
+    # ---- SECTION 18: PRIVACY-PRESERVING AUDIT LOG ----
+    print("\n-- Section 18: Privacy-Preserving Audit Log --")
+
+    # -- Source pattern checks (audit_log.py) --
+    audit_src_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                  'backend', 'audit_log.py')
+    with open(audit_src_path, 'r') as f:
+        audit_src = f.read()
+
+    check("Audit: audit_log.py exists", os.path.isfile(audit_src_path))
+    check("Audit: _hmac_hash function exists", 'def _hmac_hash(' in audit_src)
+    check("Audit: log_event function exists", 'def log_event(' in audit_src)
+    check("Audit: lookup_by_id function exists", 'def lookup_by_id(' in audit_src)
+    check("Audit: lookup_by_token_hash function exists", 'def lookup_by_token_hash(' in audit_src)
+    check("Audit: lookup_by_raw_token function exists", 'def lookup_by_raw_token(' in audit_src)
+    check("Audit: init function exists", 'def init(' in audit_src)
+    check("Audit: uses HMAC-SHA256", 'sha256' in audit_src.lower())
+    check("Audit: reads AUDIT_HMAC_SECRET", 'AUDIT_HMAC_SECRET' in audit_src)
+    check("Audit: 120-day TTL (10368000)", '10_368_000' in audit_src or '10368000' in audit_src)
+    check("Audit: valid event types defined",
+          'payment_verified' in audit_src and 'download_200' in audit_src
+          and 'download_error' in audit_src and 'email_accepted' in audit_src
+          and 'email_delivered' in audit_src and 'email_bounced' in audit_src
+          and 'email_send_error' in audit_src)
+    check("Audit: best-effort pattern (except pass)",
+          'except Exception:' in audit_src and 'pass' in audit_src)
+    check("Audit: field length cap (_cap or _MAX_FIELD_LEN)",
+          '_cap(' in audit_src or '_MAX_FIELD_LEN' in audit_src)
+    check("Audit: millisecond timestamps (ts_ms)",
+          'ts_ms' in audit_src)
+    check("Audit: UUID for event ID",
+          'uuid.uuid4()' in audit_src or 'uuid4()' in audit_src)
+
+    # Privacy: no CV content fields in audit source
+    check("Audit: no cv_content in source",
+          'cv_content' not in audit_src.lower() or 'cv_content' in audit_src.split('"""')[0])
+    check("Audit: no job_description in source",
+          'job_description' not in audit_src.lower())
+
+    # -- Source pattern checks (app.py integration) --
+    app_src_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app.py')
+    with open(app_src_path, 'r') as f:
+        app_src_18 = f.read()
+
+    check("Audit: app.py imports audit_log",
+          'from backend import audit_log' in app_src_18 or 'import audit_log' in app_src_18)
+    check("Audit: app.py calls audit_log.init",
+          'audit_log.init(' in app_src_18)
+    # Note: log_event calls are multi-line, so check function name + event name separately
+    check("Audit: app.py logs payment_verified",
+          'audit_log.log_event' in app_src_18 and '"payment_verified"' in app_src_18)
+    check("Audit: app.py logs download_200",
+          'audit_log.log_event' in app_src_18 and '"download_200"' in app_src_18)
+    check("Audit: app.py logs download_error",
+          'audit_log.log_event' in app_src_18 and '"download_error"' in app_src_18)
+    check("Audit: app.py logs email_accepted",
+          'audit_log.log_event' in app_src_18 and '"email_accepted"' in app_src_18)
+    check("Audit: app.py logs email_send_error",
+          'audit_log.log_event' in app_src_18 and '"email_send_error"' in app_src_18)
+    check("Audit: app.py has source=webhook for webhook events",
+          'source="webhook"' in app_src_18 or "source='webhook'" in app_src_18)
+    check("Audit: app.py has source=download_verify",
+          'source="download_verify"' in app_src_18 or "source='download_verify'" in app_src_18)
+    check("Audit: Resend webhook route exists",
+          '/api/build/webhook/resend' in app_src_18)
+    check("Audit: Resend webhook uses Svix verification",
+          'svix' in app_src_18.lower())
+    check("Audit: admin lookup endpoint exists",
+          '/api/admin/audit/lookup' in app_src_18)
+    check("Audit: admin endpoint uses hmac.compare_digest",
+          'compare_digest' in app_src_18)
+    check("Audit: admin endpoint fail-closed (503 if no token)",
+          'AUDIT_ADMIN_TOKEN' in app_src_18)
+    check("Audit: download_error uses type(e).__name__",
+          'type(e).__name__' in app_src_18)
+    check("Audit: startup banner includes audit status",
+          'Audit Log' in app_src_18)
+
+    # -- Config file checks --
+    req_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'requirements.txt')
+    with open(req_path, 'r') as f:
+        req_src_18 = f.read()
+    check("Audit: requirements.txt includes svix", 'svix' in req_src_18)
+
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env.example')
+    with open(env_path, 'r') as f:
+        env_src_18 = f.read()
+    check("Audit: .env.example has AUDIT_HMAC_SECRET", 'AUDIT_HMAC_SECRET' in env_src_18)
+    check("Audit: .env.example has RESEND_WEBHOOK_SECRET", 'RESEND_WEBHOOK_SECRET' in env_src_18)
+    check("Audit: .env.example has AUDIT_ADMIN_TOKEN", 'AUDIT_ADMIN_TOKEN' in env_src_18)
+
+    render_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'render.yaml')
+    with open(render_path, 'r') as f:
+        render_src_18 = f.read()
+    check("Audit: render.yaml has AUDIT_HMAC_SECRET", 'AUDIT_HMAC_SECRET' in render_src_18)
+    check("Audit: render.yaml has RESEND_WEBHOOK_SECRET", 'RESEND_WEBHOOK_SECRET' in render_src_18)
+    check("Audit: render.yaml has AUDIT_ADMIN_TOKEN", 'AUDIT_ADMIN_TOKEN' in render_src_18)
+
+    # -- Behavioral tests (audit_log module) --
+    from backend import audit_log as audit_mod
+
+    # _hmac_hash tests
+    os.environ['AUDIT_HMAC_SECRET'] = 'test-secret-for-qa-suite-only'
+    h1 = audit_mod._hmac_hash("test-token-123")
+    check("Audit _hmac_hash: returns 64-char hex string",
+          h1 is not None and len(h1) == 64 and all(c in '0123456789abcdef' for c in h1))
+    h2 = audit_mod._hmac_hash("test-token-123")
+    check("Audit _hmac_hash: deterministic (same input → same output)", h1 == h2)
+    h3 = audit_mod._hmac_hash("different-token")
+    check("Audit _hmac_hash: different inputs → different hashes", h1 != h3)
+    check("Audit _hmac_hash: None for empty input", audit_mod._hmac_hash("") is None)
+    check("Audit _hmac_hash: None for None input", audit_mod._hmac_hash(None) is None)
+
+    # _cap tests
+    check("Audit _cap: short string unchanged", audit_mod._cap("hello") == "hello")
+    check("Audit _cap: long string truncated", len(audit_mod._cap("x" * 300)) == 200)
+
+    # log_event with mock Redis
+    import unittest.mock as mock_18
+    mock_redis_18 = mock_18.MagicMock()
+    mock_redis_18.zadd = mock_18.MagicMock()
+    mock_redis_18.expire = mock_18.MagicMock()
+    mock_redis_18.set = mock_18.MagicMock()
+
+    # Save original and replace with mock
+    orig_redis = audit_mod._redis
+    audit_mod._redis = mock_redis_18
+
+    audit_mod.log_event("payment_verified", token="tok_abc", email="test@example.com",
+                        provider="stripe", session_id="cs_test_123", source="webhook")
+
+    check("Audit log_event: calls zadd on Redis",
+          mock_redis_18.zadd.called)
+    check("Audit log_event: calls expire on Redis",
+          mock_redis_18.expire.called)
+
+    # Verify the stored event has correct structure
+    if mock_redis_18.zadd.called:
+        zadd_args = mock_redis_18.zadd.call_args
+        zadd_key = zadd_args[0][0]  # First positional arg = key
+        zadd_mapping = zadd_args[0][1]  # Second positional arg = {json: score}
+        stored_json = list(zadd_mapping.keys())[0]
+        stored_event = json.loads(stored_json)
+
+        check("Audit log_event: key uses hashed token (not raw)",
+              'tok_abc' not in zadd_key and 'resumeradar:audit:' in zadd_key)
+        check("Audit log_event: event has 'event' field",
+              stored_event.get('event') == 'payment_verified')
+        check("Audit log_event: event has 'ts' timestamp",
+              'ts' in stored_event)
+        check("Audit log_event: event has 'ts_ms' millisecond timestamp",
+              'ts_ms' in stored_event)
+        check("Audit log_event: event has 'id' (UUID)",
+              'id' in stored_event and len(stored_event['id']) == 36)
+        check("Audit log_event: event has email_hash (not raw email)",
+              'email_hash' in stored_event and 'test@example.com' not in stored_json)
+        check("Audit log_event: event has session_id",
+              stored_event.get('session_id') == 'cs_test_123')
+        check("Audit log_event: event has source field",
+              stored_event.get('source') == 'webhook')
+    else:
+        # Fail all dependent checks if zadd wasn't called
+        for name in ["key uses hashed token", "event field", "ts timestamp",
+                      "ts_ms timestamp", "UUID id", "email_hash", "session_id", "source field"]:
+            check(f"Audit log_event: {name}", False, "zadd not called")
+
+    # Invalid event type should be silently dropped
+    mock_redis_18.reset_mock()
+    audit_mod.log_event("invalid_event_type", token="tok_abc")
+    check("Audit log_event: invalid event type silently dropped",
+          not mock_redis_18.zadd.called)
+
+    # Redis failure should not raise
+    mock_redis_18.zadd.side_effect = ConnectionError("Redis down")
+    try:
+        audit_mod.log_event("download_200", token="tok_abc", format="pdf")
+        check("Audit log_event: Redis failure does not raise", True)
+    except Exception as e:
+        check("Audit log_event: Redis failure does not raise", False, str(e))
+
+    # Restore original Redis ref
+    mock_redis_18.zadd.side_effect = None
+    audit_mod._redis = orig_redis
+
+    # lookup_by_id test with mock
+    mock_redis_lookup = mock_18.MagicMock()
+    mock_redis_lookup.get = mock_18.MagicMock(return_value="fake_token_hash")
+    test_event_json = json.dumps({"id": "test-id", "event": "payment_verified",
+                                  "ts": "2025-01-01T00:00:00+00:00", "ts_ms": 1735689600.0})
+    mock_redis_lookup.zrangebyscore = mock_18.MagicMock(return_value=[test_event_json])
+    audit_mod._redis = mock_redis_lookup
+
+    result = audit_mod.lookup_by_id("session", "cs_test_123")
+    check("Audit lookup_by_id: returns dict with events",
+          result is not None and 'events' in result and len(result['events']) > 0)
+    check("Audit lookup_by_id: result has token_hash",
+          result is not None and 'token_hash' in result)
+
+    # lookup_by_raw_token test
+    result2 = audit_mod.lookup_by_raw_token("some-raw-token")
+    check("Audit lookup_by_raw_token: resolves correctly",
+          result2 is not None and 'events' in result2)
+
+    audit_mod._redis = orig_redis
+
+    # Clean up env var
+    del os.environ['AUDIT_HMAC_SECRET']
+
+    # -- Endpoint tests (Flask test client) --
+    # Resend webhook route exists (not 404)
+    resp_resend = c.post('/api/build/webhook/resend',
+                         data=b'{}',
+                         content_type='application/json')
+    check("Audit endpoint: Resend webhook route exists (not 404)",
+          resp_resend.status_code != 404,
+          f"Status: {resp_resend.status_code}")
+
+    # Resend webhook rejects unsigned request
+    check("Audit endpoint: Resend webhook rejects unsigned (400 or 503)",
+          resp_resend.status_code in (400, 503),
+          f"Status: {resp_resend.status_code}")
+
+    # Admin lookup without auth → 401
+    resp_no_auth = c.get('/api/admin/audit/lookup?type=session&id=test')
+    check("Audit endpoint: admin lookup without auth → 401 or 503",
+          resp_no_auth.status_code in (401, 503),
+          f"Status: {resp_no_auth.status_code}")
+
+    # Admin lookup with bad token → 401
+    resp_bad_auth = c.get('/api/admin/audit/lookup?type=session&id=test',
+                          headers={'Authorization': 'Bearer wrong-token'})
+    check("Audit endpoint: admin lookup with bad token → 401 or 503",
+          resp_bad_auth.status_code in (401, 503),
+          f"Status: {resp_bad_auth.status_code}")
+
+    # Admin lookup missing params → 400 (only testable if AUDIT_ADMIN_TOKEN is set)
+    resp_no_params = c.get('/api/admin/audit/lookup',
+                           headers={'Authorization': 'Bearer wrong-token'})
+    check("Audit endpoint: admin lookup missing params → 400 or 401 or 503",
+          resp_no_params.status_code in (400, 401, 503),
+          f"Status: {resp_no_params.status_code}")
+
+    # Admin endpoint fail-closed: if AUDIT_ADMIN_TOKEN not set → 503
+    # (This test works in test env where AUDIT_ADMIN_TOKEN is typically not set)
+    if not os.getenv('AUDIT_ADMIN_TOKEN'):
+        check("Audit endpoint: AUDIT_ADMIN_TOKEN missing → 503 (fail-closed)",
+              resp_no_auth.status_code == 503,
+              f"Status: {resp_no_auth.status_code}")
+    else:
+        check("Audit endpoint: AUDIT_ADMIN_TOKEN missing → 503 (fail-closed)",
+              True, "AUDIT_ADMIN_TOKEN is set, skipping")
+
     elapsed = time.time() - start
 
     # ============================================================
