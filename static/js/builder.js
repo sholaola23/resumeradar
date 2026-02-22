@@ -272,6 +272,9 @@
             }
             renderPreview(result.polished);
 
+            // Show extraction quality warnings if any
+            showExtractionWarnings(result.polished);
+
             // Show the edit button (leads to form for manual tweaks)
             if (editBtn) editBtn.style.display = 'inline-block';
 
@@ -552,6 +555,9 @@
                 if (previewWrapper) previewWrapper.style.display = 'block';
                 previewSection.style.display = 'block';
                 renderPreview(result.polished);
+
+                // Show extraction quality warnings if any
+                showExtractionWarnings(result.polished);
 
                 if (editBtn) editBtn.style.display = 'inline-block';
                 window.scrollTo({ top: previewSection.offsetTop - 20, behavior: 'smooth' });
@@ -982,6 +988,17 @@
             return;
         }
 
+        // Block checkout if critical sections are missing (education or certs only)
+        // Experience warnings are advisory-only — date-range signals can false-trigger
+        // from education/training dates, and partial experience is still usable.
+        var storedWarnings = (currentPolished && currentPolished.extraction_warnings) || [];
+        var blockers = ['education_missing', 'certifications_missing'];
+        var activeBlockers = blockers.filter(function(w) { return storedWarnings.indexOf(w) >= 0; });
+        if (activeBlockers.length > 0) {
+            showError('Your CV appears to be missing Education or Certifications that we detected in your upload. Please use "Edit & Regenerate" to add them before downloading.');
+            return;
+        }
+
         setPaymentLoading(true);
 
         try {
@@ -1222,6 +1239,36 @@
         setTimeout(function () {
             container.querySelectorAll('.confetti-piece').forEach(function (p) { p.remove(); });
         }, 4000);
+    }
+
+    // ============================================================
+    // EXTRACTION QUALITY WARNINGS
+    // ============================================================
+    function showExtractionWarnings(polished) {
+        var extractionWarning = document.getElementById('extractionWarning');
+        var extractionWarningText = document.getElementById('extractionWarningText');
+        if (!extractionWarning) return;
+
+        if (polished && polished.extraction_warnings && polished.extraction_warnings.length > 0) {
+            var warnings = polished.extraction_warnings;
+            var messages = [];
+            if (warnings.indexOf('education_missing') >= 0 || warnings.indexOf('education_partial') >= 0)
+                messages.push('Education/Qualifications');
+            if (warnings.indexOf('certifications_missing') >= 0 || warnings.indexOf('certifications_partial') >= 0)
+                messages.push('Certifications/Training');
+            if (warnings.indexOf('experience_missing') >= 0 || warnings.indexOf('experience_partial') >= 0)
+                messages.push('Work Experience');
+
+            if (messages.length > 0 && extractionWarningText) {
+                extractionWarningText.textContent =
+                    'We detected ' + messages.join(', ') +
+                    ' in your CV that may not have been fully captured. ' +
+                    'Please review the preview and use "Edit & Regenerate" to add any missing entries before downloading.';
+            }
+            extractionWarning.style.display = 'block';
+        } else {
+            extractionWarning.style.display = 'none';
+        }
     }
 
     // ============================================================

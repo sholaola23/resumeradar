@@ -807,6 +807,253 @@ def run_tests():
         check("create-checkout defaults to stripe when no provider given",
               'Naira' not in result.get('error', ''))
 
+    # ---- SECTION 16: CV EXTRACTION COMPLETENESS (Education/Certs Fix) ----
+    print("\n-- Section 16: CV Extraction Completeness --")
+
+    from backend.cv_builder import (
+        _smart_truncate_resume, _fallback_extract_education_certs,
+        _assess_extraction_quality, _EDU_HEADING_RE, _CERT_HEADING_RE,
+        _SECTION_HEADING_RE, _EDU_CERT_HEADING_RE
+    )
+
+    # -- Source pattern checks --
+    cv_builder_path = os.path.join(project_root, 'backend', 'cv_builder.py')
+    with open(cv_builder_path, 'r') as f:
+        cv_builder_source = f.read()
+
+    check("_smart_truncate_resume function exists",
+          'def _smart_truncate_resume' in cv_builder_source)
+    check("_smart_truncate_resume called in extract_and_polish prompt",
+          '_smart_truncate_resume(resume_text)' in cv_builder_source)
+    check("_EDU_HEADING_RE and _CERT_HEADING_RE are separate regexes",
+          '_EDU_HEADING_RE = re.compile' in cv_builder_source and
+          '_CERT_HEADING_RE = re.compile' in cv_builder_source)
+    check("Heading regexes are line-anchored",
+          "r'^\\s*(?:EDUCATION" in cv_builder_source or
+          "r'^\\s*(?:CERTIF" in cv_builder_source)
+    check("_SECTION_HEADING_RE matches UPPERCASE and Title Case",
+          '_SECTION_HEADING_RE' in cv_builder_source and
+          '[A-Z][a-z]+' in cv_builder_source)
+    check("Section heading synonyms in prompt",
+          'ACADEMIC QUALIFICATIONS' in cv_builder_source and
+          'PROFESSIONAL TRAINING' in cv_builder_source)
+    check("_fallback_extract_education_certs function exists",
+          'def _fallback_extract_education_certs' in cv_builder_source)
+    check("_assess_extraction_quality function exists",
+          'def _assess_extraction_quality' in cv_builder_source)
+    check("Quality assessment checks education + certs + experience",
+          'education_missing' in cv_builder_source and
+          'certifications_missing' in cv_builder_source and
+          'experience_missing' in cv_builder_source)
+    check("max_tokens >= 5000 in extract_and_polish",
+          'max_tokens=5000' in cv_builder_source)
+    check("No resume_text[:5000] in source",
+          'resume_text[:5000]' not in cv_builder_source)
+    check("Strict rule: NEVER omit any entries",
+          'NEVER omit any entries' in cv_builder_source)
+
+    # -- Frontend checks --
+    check("extractionWarning element in build.html",
+          'id="extractionWarning"' in build_html)
+    check("extractionWarningText element in build.html",
+          'id="extractionWarningText"' in build_html)
+    check("extraction_warnings handling in builder.js",
+          'extraction_warnings' in builder_js)
+    check("showExtractionWarnings function in builder.js",
+          'showExtractionWarnings' in builder_js)
+    check("Payment gate blocks education_missing in builder.js",
+          'education_missing' in builder_js and 'certifications_missing' in builder_js)
+    check("Payment gate calls showError and returns",
+          'missing Education or Certifications' in builder_js)
+    check("Extraction warning banner CSS exists",
+          'extraction-warning-banner' in builder_css)
+
+    # -- Behavioral: smart truncation --
+    # Short input passes through unchanged
+    short_text = "A" * 5000
+    result_trunc = _smart_truncate_resume(short_text, max_chars=12000)
+    check("Smart truncation: short input unchanged",
+          result_trunc == short_text)
+
+    # Long input with edu heading at end preserves it
+    long_text = ("X " * 7000 + "\nACADEMIC QUALIFICATIONS\nBSc Computer Science, UCL, 2019\n"
+                 "MSc Data Science, Imperial, 2021\n")
+    result_trunc = _smart_truncate_resume(long_text, max_chars=12000)
+    check("Smart truncation: preserves ACADEMIC QUALIFICATIONS",
+          'ACADEMIC QUALIFICATIONS' in result_trunc)
+    check("Smart truncation: contains splice marker",
+          '[... some' in result_trunc)
+
+    # Hard cap enforced
+    huge_text = "A" * 20000
+    result_trunc = _smart_truncate_resume(huge_text, max_chars=12000)
+    check("Smart truncation: hard cap enforced",
+          len(result_trunc) <= 12000, f"Got {len(result_trunc)}")
+
+    # Hard cap with edu heading
+    huge_with_edu = "B " * 10000 + "\nEDUCATION\nBSc test\n" + "C " * 5000
+    result_trunc = _smart_truncate_resume(huge_with_edu, max_chars=12000)
+    check("Smart truncation: hard cap with edu heading",
+          len(result_trunc) <= 12000, f"Got {len(result_trunc)}")
+
+    # -- Behavioral: fallback extractor --
+    # Education extraction from section
+    synth_text = """PROFESSIONAL EXPERIENCE
+Senior Engineer at Acme Corp
+Jan 2020 - Present
+Built APIs
+
+ACADEMIC QUALIFICATIONS
+BSc Computer Science, University of Lagos, 2015
+MSc Information Systems, University of Ibadan, 2018
+
+PROFESSIONAL TRAINING
+PMP Certification, PMI, 2020
+AWS Solutions Architect Associate, Amazon, 2021
+ITIL Foundation, Axelos, 2019
+"""
+    # Test with empty AI arrays
+    test_result = {"education": [], "certifications": [], "experience": []}
+    counts = _fallback_extract_education_certs(synth_text, test_result)
+    check("Fallback extractor: finds education entries",
+          len(test_result["education"]) >= 1,
+          f"Found {len(test_result['education'])} entries")
+    check("Fallback extractor: finds certification entries",
+          len(test_result["certifications"]) >= 1,
+          f"Found {len(test_result['certifications'])} entries")
+    check("Fallback extractor: raw_edu_count > 0",
+          counts.get("raw_edu_count", 0) >= 1,
+          f"raw_edu_count={counts.get('raw_edu_count', 0)}")
+    check("Fallback extractor: raw_cert_count > 0",
+          counts.get("raw_cert_count", 0) >= 1,
+          f"raw_cert_count={counts.get('raw_cert_count', 0)}")
+
+    # No education signals = empty (no false positives)
+    no_edu_text = "PROFESSIONAL EXPERIENCE\nSenior Engineer\nBuilt APIs\n"
+    no_edu_result = {"education": [], "certifications": []}
+    no_edu_counts = _fallback_extract_education_certs(no_edu_text, no_edu_result)
+    check("Fallback extractor: no false positives without edu heading",
+          len(no_edu_result["education"]) == 0)
+    check("Fallback extractor: raw_edu_count is 0 without heading",
+          no_edu_counts.get("raw_edu_count", 0) == 0)
+
+    # Partial miss: AI has 1, resume has 2 → adds 1
+    partial_text = """EDUCATION
+BSc Computer Science, UCL, 2015
+MSc Data Science, Imperial, 2018
+"""
+    partial_result = {
+        "education": [{"degree": "BSc Computer Science", "institution": "UCL",
+                        "graduation_date": "2015", "details": ""}],
+        "certifications": []
+    }
+    partial_counts = _fallback_extract_education_certs(partial_text, partial_result)
+    check("Fallback extractor: partial miss detection",
+          len(partial_result["education"]) >= 2,
+          f"Got {len(partial_result['education'])} entries")
+
+    # -- Behavioral: quality assessment --
+    # Education missing: heading + section entries + empty result
+    qtext_edu = "Some text\nACADEMIC QUALIFICATIONS\nBSc CS, UCL, 2019\n"
+    qresult_edu = {"education": [], "certifications": [], "experience": []}
+    qcounts_edu = {"raw_edu_count": 1, "raw_cert_count": 0}
+    warnings = _assess_extraction_quality(qtext_edu, qresult_edu, qcounts_edu)
+    check("Quality assessment: education_missing when heading + entries + empty",
+          'education_missing' in warnings, f"Got: {warnings}")
+
+    # Cert missing: heading + section entries + empty result
+    qtext_cert = "Some text\nCERTIFICATIONS\nAWS SA, Amazon, 2021\n"
+    qresult_cert = {"education": [], "certifications": [], "experience": []}
+    qcounts_cert = {"raw_edu_count": 0, "raw_cert_count": 1}
+    warnings = _assess_extraction_quality(qtext_cert, qresult_cert, qcounts_cert)
+    check("Quality assessment: certifications_missing when heading + entries + empty",
+          'certifications_missing' in warnings, f"Got: {warnings}")
+
+    # Experience partial: many date ranges, few extracted
+    qtext_exp = "Some text\n" + "Jan 2020 - Present\n" * 5
+    qresult_exp = {"education": [], "certifications": [], "experience": [{"title": "Eng"}]}
+    warnings = _assess_extraction_quality(qtext_exp, qresult_exp)
+    check("Quality assessment: experience advisory warning",
+          'experience_missing' in warnings or 'experience_partial' in warnings,
+          f"Got: {warnings}")
+
+    # Complete result = no warnings
+    qtext_complete = "No headings here. Just plain text."
+    qresult_complete = {"education": [{"degree": "BSc"}], "certifications": [{"name": "AWS"}],
+                        "experience": [{"title": "Eng"}]}
+    warnings = _assess_extraction_quality(qtext_complete, qresult_complete)
+    check("Quality assessment: complete result has no warnings",
+          len(warnings) == 0, f"Got: {warnings}")
+
+    # False-positive: "certified" in bullet but NO cert heading
+    qtext_fp = "PROFESSIONAL EXPERIENCE\nCertified engineer who built systems.\nJan 2020 - Present\n"
+    qresult_fp = {"education": [], "certifications": [], "experience": [{"title": "Eng"}]}
+    qcounts_fp = {"raw_edu_count": 0, "raw_cert_count": 0}
+    warnings = _assess_extraction_quality(qtext_fp, qresult_fp, qcounts_fp)
+    check("Quality assessment: no false positive from 'certified' in bullet",
+          'certifications_missing' not in warnings, f"Got: {warnings}")
+
+    # False-positive: cert heading should NOT trigger education_missing
+    qtext_cross = "Some text\nPROFESSIONAL TRAINING\nPMP, PMI, 2020\n"
+    qresult_cross = {"education": [], "certifications": [], "experience": []}
+    qcounts_cross = {"raw_edu_count": 0, "raw_cert_count": 1}
+    warnings = _assess_extraction_quality(qtext_cross, qresult_cross, qcounts_cross)
+    check("Quality assessment: cert heading does NOT trigger education_missing",
+          'education_missing' not in warnings, f"Got: {warnings}")
+
+    # Partial warnings
+    qtext_partial = "Some text\nEDUCATION\nBSc CS\nMSc DS\n"
+    qresult_partial = {"education": [{"degree": "BSc CS"}], "certifications": [], "experience": []}
+    qcounts_partial = {"raw_edu_count": 2, "raw_cert_count": 0}
+    warnings = _assess_extraction_quality(qtext_partial, qresult_partial, qcounts_partial)
+    check("Quality assessment: education_partial when raw > ai",
+          'education_partial' in warnings, f"Got: {warnings}")
+
+    # -- End-to-end fixture: synthetic long CV --
+    e2e_experience = "\n".join([
+        f"Software Engineer at Company{i}\nJan {2015+i} - Dec {2016+i}\n- Built systems\n- Led team\n"
+        for i in range(5)
+    ])
+    e2e_edu = "\nACADEMIC QUALIFICATIONS\nBSc Computer Science, University of Lagos, 2012\nMSc IT, University of Ibadan, 2014\n"
+    e2e_certs = "\nPROFESSIONAL TRAINING\nPMP, PMI, 2018\nAWS SA, Amazon, 2019\nITIL Foundation, Axelos, 2020\n"
+    e2e_resume = ("X " * 5000) + e2e_experience + e2e_edu + e2e_certs
+    check("E2E fixture: resume > 10000 chars",
+          len(e2e_resume) > 10000, f"Length: {len(e2e_resume)}")
+
+    # Smart truncation preserves edu/cert
+    e2e_truncated = _smart_truncate_resume(e2e_resume, max_chars=12000)
+    check("E2E: truncated text contains ACADEMIC QUALIFICATIONS",
+          'ACADEMIC QUALIFICATIONS' in e2e_truncated)
+    check("E2E: truncated text contains PROFESSIONAL TRAINING",
+          'PROFESSIONAL TRAINING' in e2e_truncated)
+    check("E2E: truncated text within hard cap",
+          len(e2e_truncated) <= 12000, f"Length: {len(e2e_truncated)}")
+
+    # Fallback extracts from full text
+    e2e_result = {"education": [], "certifications": [], "experience": []}
+    e2e_counts = _fallback_extract_education_certs(e2e_resume, e2e_result)
+    check("E2E: fallback finds education entries",
+          len(e2e_result["education"]) >= 1,
+          f"Found {len(e2e_result['education'])}")
+    check("E2E: fallback finds certification entries",
+          len(e2e_result["certifications"]) >= 1,
+          f"Found {len(e2e_result['certifications'])}")
+
+    # Quality assessment on incomplete result
+    e2e_incomplete = {"education": [], "certifications": [], "experience": []}
+    e2e_warnings = _assess_extraction_quality(e2e_resume, e2e_incomplete, e2e_counts)
+    check("E2E: quality warns on incomplete result",
+          len(e2e_warnings) > 0, f"Warnings: {e2e_warnings}")
+
+    # Quality assessment on complete result (post-fallback)
+    e2e_complete_counts = {"raw_edu_count": len(e2e_result["education"]),
+                           "raw_cert_count": len(e2e_result["certifications"])}
+    e2e_warnings_complete = _assess_extraction_quality(e2e_resume, e2e_result, e2e_complete_counts)
+    check("E2E: no warnings on complete post-fallback result",
+          'education_missing' not in e2e_warnings_complete and
+          'certifications_missing' not in e2e_warnings_complete,
+          f"Warnings: {e2e_warnings_complete}")
+
     elapsed = time.time() - start
 
     # ============================================================
