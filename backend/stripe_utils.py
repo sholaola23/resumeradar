@@ -13,7 +13,7 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 def create_checkout_session(cv_token, template, success_url, cancel_url, delivery_email=None):
     """
-    Create a Stripe Checkout session for a $2 CV download.
+    Create a Stripe Checkout session for a £2 CV download.
 
     Args:
         cv_token: UUID token identifying the generated CV in Redis

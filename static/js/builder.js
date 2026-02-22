@@ -751,7 +751,7 @@
         // Close the blurred section and add lock overlay
         html += `</div>`; // close .preview-blurred
         html += `<div class="preview-locked-overlay">`;
-        html += `<p>🔒 Download the full ATS-optimized CV for $2</p>`;
+        html += `<p>🔒 Download the full ATS-optimized CV for £2</p>`;
         html += `<small>Pick a template below and click Download PDF</small>`;
         html += `</div>`;
         html += `</div>`; // close .preview-locked-section
