@@ -553,6 +553,112 @@ def run_tests():
         check("Cancel URL renders builder page with form",
               r.status_code == 200 and 'builderForm' in cancelled_page)
 
+    # ---- SECTION 14: UPLOAD-FIRST BUILD + RATE LIMIT HARDENING ----
+    print("\n-- Section 14: Upload-First Build + Rate Limit Hardening --")
+
+    # --- HTML structure checks ---
+    check("Upload section exists on build page",
+          'id="uploadSection"' in build_html)
+    check("Upload drop zone exists",
+          'id="buildDropZone"' in build_html)
+    check("Upload target JD textarea exists",
+          'id="uploadTargetJD"' in build_html)
+    check("Upload generate button exists",
+          'id="uploadGenerateBtn"' in build_html)
+    check("Manual form toggle link exists",
+          'id="showManualForm"' in build_html)
+    check("Back-to-upload link exists",
+          'id="showUploadSection"' in build_html)
+    check("Manual form hidden by default",
+          'id="manualFormSection"' in build_html and 'style="display: none;"' in build_html)
+
+    # --- JS source checks (multi-indicator) ---
+    check("Upload file handler + endpoint call",
+          'handleBuildFileSelect' in builder_js and 'generate-from-upload' in builder_js)
+    check("Toggle handlers for both directions",
+          'showManualFormLink' in builder_js and 'showUploadLink' in builder_js)
+    check("Scan fallback shows upload section when data missing",
+          'uploadSection.style.display' in builder_js and 'show upload section' in builder_js.lower())
+    check("Retry-After parsing handles seconds and HTTP-date",
+          'parseInt(retryAfter' in builder_js and 'new Date(retryAfter)' in builder_js)
+    check("Edit & Regenerate hides upload section",
+          'uploadSection' in builder_js and 'manualFormSection' in builder_js)
+
+    # --- Rate limit config checks (app.py source) ---
+    check("Limiter uses REDIS_URL with memory fallback",
+          'REDIS_URL' in app_source and "memory://" in app_source)
+    check("Checkout limit raised to 30/hour",
+          app_source.count('"30 per hour"') >= 2)
+    check("get_real_ip uses second-to-last for multi-proxy chains",
+          'len(parts) - 2' in app_source)
+    check("get_real_ip validates IP format with regex",
+          "re_module.match" in app_source and r"[\d.:a-fA-F]" in app_source)
+
+    # --- Startup logging (module-level, visible under Gunicorn) ---
+    check("Startup logs Stripe Checkout status",
+          'STRIPE_PRICE_ID' in app_source and 'Stripe Checkout' in app_source)
+    check("Startup logs Rate Limiter backend",
+          'Rate Limiter' in app_source)
+    check("Startup logs outside __main__ (Gunicorn-visible)",
+          app_source.index('Stripe Checkout') < app_source.index("if __name__"))
+
+    # --- render.yaml completeness ---
+    render_yaml_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'render.yaml')
+    with open(render_yaml_path, 'r') as f:
+        render_yaml = f.read()
+    check("render.yaml includes STRIPE_PRICE_ID",
+          'STRIPE_PRICE_ID' in render_yaml)
+
+    # --- CSS checks ---
+    check("Upload toggle row CSS exists",
+          'upload-toggle-row' in builder_css)
+
+    # --- Behavioral endpoint tests ---
+    import io
+
+    with app.test_client() as c:
+        # Upload-generate rejects missing file
+        r = c.post('/api/build/generate-from-upload',
+                    data={'job_description': 'Senior software engineer with Python experience and cloud infrastructure knowledge for a fast-paced startup environment'},
+                    content_type='multipart/form-data')
+        check("Upload-generate rejects missing file (400)",
+              r.status_code == 400)
+
+        # Upload-generate rejects empty JD
+        fake_pdf = (io.BytesIO(b'%PDF-1.4 fake pdf content'), 'test.pdf')
+        r = c.post('/api/build/generate-from-upload',
+                    data={'resume_file': fake_pdf, 'job_description': ''},
+                    content_type='multipart/form-data')
+        check("Upload-generate rejects empty JD (400)",
+              r.status_code == 400)
+
+        # Upload-generate rejects wrong file type
+        fake_txt = (io.BytesIO(b'plain text content'), 'resume.txt')
+        r = c.post('/api/build/generate-from-upload',
+                    data={'resume_file': fake_txt,
+                          'job_description': 'Senior software engineer with Python experience and cloud infrastructure knowledge for a fast-paced startup environment'},
+                    content_type='multipart/form-data')
+        check("Upload-generate rejects non-PDF/DOCX file (400)",
+              r.status_code == 400)
+
+        # Upload-generate rejects short JD
+        fake_pdf2 = (io.BytesIO(b'%PDF-1.4 fake content'), 'resume.pdf')
+        r = c.post('/api/build/generate-from-upload',
+                    data={'resume_file': fake_pdf2,
+                          'job_description': 'too short'},
+                    content_type='multipart/form-data')
+        check("Upload-generate rejects short JD (400)",
+              r.status_code == 400)
+
+    # --- .env.example completeness ---
+    env_example_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env.example')
+    with open(env_example_path, 'r') as f:
+        env_example = f.read()
+    check(".env.example includes STRIPE_PRICE_ID",
+          'STRIPE_PRICE_ID' in env_example)
+    check(".env.example includes REDIS_URL",
+          'REDIS_URL' in env_example)
+
     elapsed = time.time() - start
 
     # ============================================================

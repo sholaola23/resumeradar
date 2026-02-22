@@ -61,19 +61,35 @@
     const builderError = document.getElementById('builderError');
     const prefillBanner = document.getElementById('prefillBanner');
 
+    // Upload section DOM references
+    const uploadSection = document.getElementById('uploadSection');
+    const manualFormSection = document.getElementById('manualFormSection');
+    const buildDropZone = document.getElementById('buildDropZone');
+    const buildResumeFile = document.getElementById('buildResumeFile');
+    const buildFileSelected = document.getElementById('buildFileSelected');
+    const buildFileName = document.getElementById('buildFileName');
+    const buildRemoveFile = document.getElementById('buildRemoveFile');
+    const uploadTargetJD = document.getElementById('uploadTargetJD');
+    const uploadGenerateBtn = document.getElementById('uploadGenerateBtn');
+    const uploadError = document.getElementById('uploadError');
+    const showManualFormLink = document.getElementById('showManualForm');
+    const showUploadLink = document.getElementById('showUploadSection');
+
     // ============================================================
     // INIT: CHECK FOR POST-SCAN OR POST-PAYMENT
     // ============================================================
     document.addEventListener('DOMContentLoaded', function () {
         const params = new URLSearchParams(window.location.search);
 
-        // Post-scan: skip form, auto-generate CV from scan data
+        // Post-scan: hide upload section, auto-generate CV from scan data
         if (params.get('from') === 'scan') {
+            if (uploadSection) uploadSection.style.display = 'none';
             autoGenerateFromScan();
         }
 
-        // Post-payment download
+        // Post-payment download — hide upload section
         if (params.get('payment') === 'success') {
+            if (uploadSection) uploadSection.style.display = 'none';
             const token = params.get('token');
             const sessionId = params.get('session_id');
             if (token && sessionId) {
@@ -81,7 +97,7 @@
             }
         }
 
-        // Payment cancelled — show user-friendly feedback
+        // Payment cancelled — hide upload, show form so they can see their preview
         if (params.get('payment') === 'cancelled') {
             showPaymentCancelledMessage();
         }
@@ -94,7 +110,8 @@
         try {
             const scanDataRaw = sessionStorage.getItem('resumeradar_scan_for_builder');
             if (!scanDataRaw) {
-                // No scan data — show the form as fallback
+                // No scan data — show upload section as fallback
+                if (uploadSection) uploadSection.style.display = 'block';
                 return;
             }
 
@@ -107,7 +124,8 @@
             lastTargetJD = jobDescription; // Store for form pre-populate
 
             if (!resumeText || !jobDescription) {
-                // Missing data — fall back to form
+                // Missing data — show upload section as fallback
+                if (uploadSection) uploadSection.style.display = 'block';
                 return;
             }
 
@@ -270,6 +288,208 @@
     }
 
     // ============================================================
+    // UPLOAD SECTION: TOGGLE, FILE HANDLING, SUBMIT
+    // ============================================================
+
+    // Toggle: show manual form, hide upload section
+    if (showManualFormLink) {
+        showManualFormLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (uploadSection) uploadSection.style.display = 'none';
+            if (manualFormSection) manualFormSection.style.display = 'block';
+            window.scrollTo({ top: manualFormSection.offsetTop - 20, behavior: 'smooth' });
+        });
+    }
+
+    // Toggle: show upload section, hide manual form
+    if (showUploadLink) {
+        showUploadLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (manualFormSection) manualFormSection.style.display = 'none';
+            if (uploadSection) uploadSection.style.display = 'block';
+            window.scrollTo({ top: uploadSection.offsetTop - 20, behavior: 'smooth' });
+        });
+    }
+
+    // --- File upload handling for build drop zone ---
+    if (buildDropZone) {
+        buildDropZone.addEventListener('click', function () { buildResumeFile.click(); });
+
+        buildDropZone.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            buildDropZone.classList.add('dragover');
+        });
+        buildDropZone.addEventListener('dragleave', function () {
+            buildDropZone.classList.remove('dragover');
+        });
+        buildDropZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            buildDropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleBuildFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        buildResumeFile.addEventListener('change', function (e) {
+            if (e.target.files.length > 0) {
+                handleBuildFileSelect(e.target.files[0]);
+            }
+        });
+
+        if (buildRemoveFile) {
+            buildRemoveFile.addEventListener('click', function () {
+                buildResumeFile.value = '';
+                buildFileSelected.style.display = 'none';
+                buildDropZone.style.display = 'block';
+            });
+        }
+    }
+
+    function handleBuildFileSelect(file) {
+        var allowedTypes = [
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ];
+        var ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!allowedTypes.includes(file.type) && ext !== '.pdf' && ext !== '.docx') {
+            showUploadError('Please upload a PDF or DOCX file.');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            showUploadError('File too large. Maximum size is 5MB.');
+            return;
+        }
+        // Assign file to the hidden input
+        var dt = new DataTransfer();
+        dt.items.add(file);
+        buildResumeFile.files = dt.files;
+        // Show selected file indicator
+        buildFileName.textContent = file.name;
+        buildFileSelected.style.display = 'flex';
+        buildDropZone.style.display = 'none';
+        hideUploadError();
+    }
+
+    function showUploadError(msg) {
+        if (uploadError) {
+            uploadError.textContent = msg;
+            uploadError.style.display = 'block';
+            uploadError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function hideUploadError() {
+        if (uploadError) {
+            uploadError.style.display = 'none';
+        }
+    }
+
+    function setUploadGenerateLoading(loading) {
+        if (!uploadGenerateBtn) return;
+        var textEl = uploadGenerateBtn.querySelector('.gen-btn-text');
+        var loadEl = uploadGenerateBtn.querySelector('.gen-btn-loading');
+        var loadingTextEl = uploadGenerateBtn.querySelector('.gen-loading-text');
+        if (loading) {
+            textEl.style.display = 'none';
+            loadEl.style.display = 'inline-flex';
+            uploadGenerateBtn.disabled = true;
+            if (loadingTextEl) startLoadingRotation(loadingTextEl);
+        } else {
+            textEl.style.display = 'inline';
+            loadEl.style.display = 'none';
+            uploadGenerateBtn.disabled = false;
+            stopLoadingRotation();
+        }
+    }
+
+    // --- Upload + Generate submit ---
+    if (uploadGenerateBtn) {
+        uploadGenerateBtn.addEventListener('click', async function () {
+            hideUploadError();
+
+            // Validation
+            if (!buildResumeFile || !buildResumeFile.files.length) {
+                showUploadError('Please upload your CV file.');
+                return;
+            }
+            var jd = uploadTargetJD ? uploadTargetJD.value.trim() : '';
+            if (!jd) {
+                showUploadError('Please paste the target job description.');
+                return;
+            }
+
+            lastTargetJD = jd;
+            setUploadGenerateLoading(true);
+
+            try {
+                var formData = new FormData();
+                formData.append('resume_file', buildResumeFile.files[0]);
+                formData.append('job_description', jd);
+
+                var response = await fetch('/api/build/generate-from-upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                // Handle rate limiting
+                if (response.status === 429) {
+                    var retryAfter = response.headers.get('Retry-After');
+                    var mins = 5;
+                    if (retryAfter) {
+                        var secs = parseInt(retryAfter, 10);
+                        if (!isNaN(secs)) {
+                            mins = Math.max(1, Math.ceil(secs / 60));
+                        } else {
+                            var retryDate = new Date(retryAfter);
+                            if (!isNaN(retryDate.getTime())) {
+                                mins = Math.max(1, Math.ceil((retryDate - Date.now()) / 60000));
+                            }
+                        }
+                    }
+                    showUploadError('Too many requests. Please wait ' + mins + ' minute' + (mins > 1 ? 's' : '') + ' and try again.');
+                    setUploadGenerateLoading(false);
+                    return;
+                }
+
+                var result = await response.json();
+
+                if (!response.ok || result.error) {
+                    showUploadError(result.error || 'Something went wrong. Please try again.');
+                    setUploadGenerateLoading(false);
+                    return;
+                }
+
+                // Success — same post-processing as autoGenerateFromScan
+                currentToken = result.token;
+                currentPolished = result.polished;
+                storageMode = result.storage || 'server';
+
+                if (storageMode === 'client' && currentToken) {
+                    sessionStorage.setItem('resumeradar_cv_' + currentToken, JSON.stringify(currentPolished));
+                }
+
+                if (result.polished.ai_polished && aiPolishBadge) {
+                    aiPolishBadge.style.display = 'inline-block';
+                }
+
+                // Hide upload section, show preview
+                if (uploadSection) uploadSection.style.display = 'none';
+                previewSection.style.display = 'block';
+                renderPreview(result.polished);
+
+                if (editBtn) editBtn.style.display = 'inline-block';
+                window.scrollTo({ top: previewSection.offsetTop - 20, behavior: 'smooth' });
+
+            } catch (e) {
+                console.error('Upload generate error:', e);
+                showUploadError('Network error. Please check your connection and try again.');
+            }
+
+            setUploadGenerateLoading(false);
+        });
+    }
+
+    // ============================================================
     // COLLECT FORM DATA
     // ============================================================
     function collectFormData() {
@@ -406,7 +626,9 @@
             // Render preview
             renderPreview(currentPolished);
 
-            // Show preview section, hide form
+            // Show preview section, hide form + upload
+            if (uploadSection) uploadSection.style.display = 'none';
+            if (manualFormSection) manualFormSection.style.display = 'none';
             builderForm.style.display = 'none';
             previewSection.style.display = 'block';
             window.scrollTo({ top: previewSection.offsetTop - 20, behavior: 'smooth' });
@@ -656,9 +878,12 @@
             }
         }
 
+        // Hide upload section, show manual form (pre-populated)
+        if (uploadSection) uploadSection.style.display = 'none';
+        if (manualFormSection) manualFormSection.style.display = 'block';
         previewSection.style.display = 'none';
         builderForm.style.display = 'block';
-        window.scrollTo({ top: builderForm.offsetTop - 20, behavior: 'smooth' });
+        window.scrollTo({ top: manualFormSection.offsetTop - 20, behavior: 'smooth' });
     });
 
     // ============================================================
@@ -685,6 +910,27 @@
                     delivery_email: deliveryEmail.trim(),
                 }),
             });
+
+            // Handle rate limiting with Retry-After guidance
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                let mins = 5; // safe default
+                if (retryAfter) {
+                    const secs = parseInt(retryAfter, 10);
+                    if (!isNaN(secs)) {
+                        mins = Math.max(1, Math.ceil(secs / 60));
+                    } else {
+                        // HTTP-date format: try to parse as Date
+                        const retryDate = new Date(retryAfter);
+                        if (!isNaN(retryDate.getTime())) {
+                            mins = Math.max(1, Math.ceil((retryDate - Date.now()) / 60000));
+                        }
+                    }
+                }
+                showError('Too many requests. Please wait ' + mins + ' minute' + (mins > 1 ? 's' : '') + ' and try again.');
+                setPaymentLoading(false);
+                return;
+            }
 
             const result = await response.json();
 

@@ -41,17 +41,35 @@ CORS(app)
 # Rate limiting — protect API credits and prevent abuse
 # Use X-Forwarded-For header behind Render's proxy to get real client IP
 def get_real_ip():
-    """Get the real client IP, handling Render's reverse proxy."""
+    """Get the real client IP behind Render's single reverse proxy.
+
+    Render's proxy sets X-Forwarded-For to: <client_ip>[, <cdn_ip>, ...].
+    With one trusted proxy (Render), the second-to-last entry is the real
+    client IP. If there's only one entry, that IS the client IP (set by
+    Render). We never trust the first entry in a multi-hop chain because
+    a client can prepend spoofed values.
+
+    Falls back to remote_addr if X-Forwarded-For is missing or invalid.
+    """
     forwarded = request.headers.get('X-Forwarded-For', '')
     if forwarded:
-        return forwarded.split(',')[0].strip()
+        parts = [p.strip() for p in forwarded.split(',') if p.strip()]
+        if parts:
+            # Single trusted proxy (Render): client IP is second-to-last.
+            # If only 1 entry, Render set it directly — that's the client.
+            idx = max(0, len(parts) - 1) if len(parts) <= 1 else len(parts) - 2
+            ip = parts[idx]
+            # Basic validation: must look like an IP (IPv4 or IPv6), not garbage
+            if re_module.match(r'^[\d.:a-fA-F]+$', ip):
+                return ip
     return request.remote_addr or '127.0.0.1'
 
+_redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
     key_func=get_real_ip,
     default_limits=["2000 per day", "500 per hour"],
-    storage_uri="memory://",
+    storage_uri=_redis_limiter_uri,
 )
 
 # File upload configuration
@@ -689,8 +707,100 @@ def build_generate_from_scan():
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
+@app.route('/api/build/generate-from-upload', methods=['POST'])
+@limiter.limit("5 per hour")
+def build_generate_from_upload():
+    """
+    Accept a resume file upload + job description, parse the file,
+    extract structured data, and polish for ATS.
+
+    Accepts:
+        multipart/form-data with resume_file (PDF/DOCX) and job_description (text)
+
+    Returns:
+        JSON with polished CV data and a token for payment/download.
+    """
+    file_path = None
+    try:
+        job_description = request.form.get('job_description', '').strip()
+        if not job_description:
+            return jsonify({"error": "Please provide a target job description."}), 400
+
+        if len(job_description.split()) < 10:
+            return jsonify({"error": "The job description seems too short. Please paste the full job posting."}), 400
+
+        resume_file = request.files.get('resume_file')
+        if not resume_file or not resume_file.filename:
+            return jsonify({"error": "Please upload a resume file (PDF or DOCX)."}), 400
+
+        if not allowed_file(resume_file.filename):
+            return jsonify({"error": "Please upload a PDF or DOCX file."}), 400
+
+        # Save file temporarily
+        filename = secure_filename(resume_file.filename)
+        unique_filename = f"{uuid.uuid4().hex}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+
+        # Ensure uploads directory exists
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        resume_file.save(file_path)
+        file_type = filename.rsplit('.', 1)[1].lower()
+
+        # Parse the resume file — try/finally guarantees cleanup
+        try:
+            parse_result = parse_resume(file_path=file_path, file_type=file_type)
+        finally:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+                file_path = None  # Prevent double-delete in outer except
+
+        if parse_result.get("error"):
+            return jsonify({"error": parse_result["error"]}), 400
+
+        resume_text = parse_result.get("text", "")
+        if not resume_text or len(resume_text.strip()) < 50:
+            return jsonify({"error": "Could not extract enough text from your resume. Please try a different file or use the manual form."}), 400
+
+        # One AI call: extract structure + polish for ATS (same as scan flow)
+        polished = extract_and_polish(resume_text, job_description)
+
+        if polished.get("error"):
+            return jsonify({"error": polished["error"]}), 500
+
+        # Generate token and store (same pattern as generate-from-scan)
+        token = uuid.uuid4().hex
+        cv_redis_key = f"resumeradar:cv:{token}"
+
+        if _redis_client:
+            try:
+                _redis_client.setex(cv_redis_key, 7200, json.dumps(polished))
+                return jsonify({
+                    "success": True,
+                    "token": token,
+                    "polished": polished,
+                    "storage": "server",
+                })
+            except Exception as redis_err:
+                print(f"Redis store error (upload): {redis_err}")
+
+        # Fallback: client-side storage
+        return jsonify({
+            "success": True,
+            "token": token,
+            "polished": polished,
+            "storage": "client",
+        })
+
+    except Exception as e:
+        # Clean up file on unexpected error
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+        print(f"CV Builder upload-generate error: {str(e)}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
 @app.route('/api/build/create-checkout', methods=['POST'])
-@limiter.limit("10 per hour")
+@limiter.limit("30 per hour")
 def build_create_checkout():
     """
     Create a Stripe Checkout session for CV download payment.
@@ -758,7 +868,7 @@ def build_create_checkout():
 
 
 @app.route('/api/build/download/<token>', methods=['GET', 'POST'])
-@limiter.limit("10 per hour")
+@limiter.limit("30 per hour")
 def build_download(token):
     """
     Verify payment, generate PDF with chosen template, return download.
@@ -1041,10 +1151,16 @@ def server_error(e):
 # RUN
 # ============================================================
 
+# Startup banner — runs under both Gunicorn and python app.py
+print(f"\n📡 ResumeRadar starting up...")
+print(f"   AI Suggestions: {'✅ Enabled' if os.getenv('ANTHROPIC_API_KEY') else '❌ No API key found'}")
+print(f"   Stripe Checkout: {'✅ Enabled' if os.getenv('STRIPE_PRICE_ID') else '❌ Not configured'}")
+print(f"   Rate Limiter: {'Redis' if os.getenv('REDIS_URL') else 'In-memory'}")
+print(f"   Email Delivery: {'✅ Enabled' if os.getenv('RESEND_API_KEY') else '❌ Not configured'}")
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     debug = os.getenv('FLASK_ENV', 'development') == 'development'
-    print(f"\n📡 ResumeRadar running at http://localhost:{port}")
-    print(f"   AI Suggestions: {'✅ Enabled' if os.getenv('ANTHROPIC_API_KEY') else '❌ No API key found'}")
-    print(f"   Debug mode: {'On' if debug else 'Off'}\n")
+    print(f"   Debug mode: {'On' if debug else 'Off'}")
+    print(f"   URL: http://localhost:{port}\n")
     app.run(host='0.0.0.0', port=port, debug=debug)

@@ -886,6 +886,25 @@
     color: #dc2626;
 }
 
+/* ---- Upload Toggle Row ---- */
+.upload-toggle-row {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: #6b7280;
+}
+.upload-toggle-row p {
+    margin: 0;
+}
+.upload-toggle-row a {
+    color: var(--primary, #2563eb);
+    font-weight: 600;
+    text-decoration: none;
+}
+.upload-toggle-row a:hover {
+    text-decoration: underline;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
     .form-row {
