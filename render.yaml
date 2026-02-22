@@ -3,7 +3,7 @@ services:
     name: resumeradar
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --threads 4
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -11,3 +11,11 @@ services:
         generateValue: true
       - key: FLASK_ENV
         value: production
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false

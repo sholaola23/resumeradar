@@ -9,6 +9,8 @@ import json
 import uuid
 import secrets
 import threading
+import html as html_module
+import re as re_module
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
@@ -20,6 +22,9 @@ from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting
 from backend.ai_analyzer import get_ai_suggestions
 from backend.report_generator import generate_pdf_report
+from backend.cv_builder import polish_cv_sections, extract_and_polish
+from backend.cv_pdf_generator import generate_cv_pdf
+from backend.stripe_utils import create_checkout_session, verify_checkout_payment, verify_webhook_signature
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -268,6 +273,7 @@ def scan_resume():
             "ats_formatting": ats_check,
             "ai_suggestions": ai_suggestions,
             "resume_word_count": parse_result["word_count"],
+            "resume_text": extracted_resume_text,
         }
 
         return jsonify(response)
@@ -538,6 +544,446 @@ def get_scan_count():
 
 
 # ============================================================
+# CV BUILDER ROUTES
+# ============================================================
+
+@app.route('/build')
+@limiter.exempt
+def build_page():
+    """Serve the CV Builder page."""
+    return render_template('build.html')
+
+
+@app.route('/api/build/generate', methods=['POST'])
+@limiter.limit("5 per hour")
+def build_generate():
+    """
+    Accept CV form data, polish with AI, store in Redis, return preview + token.
+
+    Accepts:
+        JSON body with personal, summary, experience, education, skills,
+        certifications, target_job_description.
+
+    Returns:
+        JSON with polished CV data and a token for later PDF download.
+    """
+    try:
+        cv_data = request.get_json()
+        if not cv_data:
+            return jsonify({"error": "No CV data provided."}), 400
+
+        if not cv_data.get("target_job_description", "").strip():
+            return jsonify({"error": "Please provide a target job description."}), 400
+
+        personal = cv_data.get("personal", {})
+        if not personal.get("full_name", "").strip():
+            return jsonify({"error": "Please provide your full name."}), 400
+
+        # Polish with AI
+        polished = polish_cv_sections(cv_data)
+
+        # Generate a token and store in Redis
+        token = uuid.uuid4().hex
+        cv_redis_key = f"resumeradar:cv:{token}"
+
+        if _redis_client:
+            try:
+                import json as _json
+                _redis_client.setex(cv_redis_key, 7200, _json.dumps(polished))  # 2hr TTL
+            except Exception as redis_err:
+                print(f"Redis store error: {redis_err}")
+                # Fallback: return data to frontend to store in sessionStorage
+                return jsonify({
+                    "success": True,
+                    "token": token,
+                    "polished": polished,
+                    "storage": "client",
+                })
+        else:
+            # No Redis: return data to frontend
+            return jsonify({
+                "success": True,
+                "token": token,
+                "polished": polished,
+                "storage": "client",
+            })
+
+        return jsonify({
+            "success": True,
+            "token": token,
+            "polished": polished,
+            "storage": "server",
+        })
+
+    except Exception as e:
+        print(f"CV Builder generate error: {str(e)}")
+        return jsonify({"error": "Something went wrong generating your CV. Please try again."}), 500
+
+
+@app.route('/api/build/generate-from-scan', methods=['POST'])
+@limiter.limit("5 per hour")
+def build_generate_from_scan():
+    """
+    One-shot scan-to-CV: extract structured data from raw resume text
+    and polish for ATS — no form needed.
+
+    Accepts:
+        JSON body with resume_text, job_description, and optional scan_keywords
+
+    Returns:
+        JSON with polished CV data and a token for payment/download.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided."}), 400
+
+        resume_text = data.get("resume_text", "").strip()
+        job_description = data.get("job_description", "").strip()
+        scan_keywords = data.get("scan_keywords")
+
+        if not resume_text:
+            return jsonify({"error": "Resume text is missing."}), 400
+        if not job_description:
+            return jsonify({"error": "Job description is missing."}), 400
+
+        # One AI call: extract structure + polish for ATS
+        polished = extract_and_polish(resume_text, job_description, scan_keywords)
+
+        if polished.get("error"):
+            return jsonify({"error": polished["error"]}), 500
+
+        # Generate token and store
+        token = uuid.uuid4().hex
+        cv_redis_key = f"resumeradar:cv:{token}"
+
+        if _redis_client:
+            try:
+                import json as _json
+                _redis_client.setex(cv_redis_key, 7200, _json.dumps(polished))
+            except Exception as redis_err:
+                print(f"Redis store error: {redis_err}")
+                return jsonify({
+                    "success": True,
+                    "token": token,
+                    "polished": polished,
+                    "storage": "client",
+                })
+        else:
+            return jsonify({
+                "success": True,
+                "token": token,
+                "polished": polished,
+                "storage": "client",
+            })
+
+        return jsonify({
+            "success": True,
+            "token": token,
+            "polished": polished,
+            "storage": "server",
+        })
+
+    except Exception as e:
+        print(f"CV Builder scan-generate error: {str(e)}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+@app.route('/api/build/create-checkout', methods=['POST'])
+@limiter.limit("10 per hour")
+def build_create_checkout():
+    """
+    Create a Stripe Checkout session for CV download payment.
+
+    Accepts:
+        JSON with token and template.
+
+    Returns:
+        JSON with checkout_url to redirect to.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided."}), 400
+
+        token = data.get("token", "").strip()
+        template = data.get("template", "classic").strip()
+
+        if not token:
+            return jsonify({"error": "Missing CV token."}), 400
+
+        # Verify the token exists in Redis
+        if _redis_client:
+            try:
+                cv_redis_key = f"resumeradar:cv:{token}"
+                if not _redis_client.exists(cv_redis_key):
+                    return jsonify({"error": "CV session expired. Please regenerate your CV."}), 400
+            except Exception:
+                pass  # Proceed anyway if Redis check fails
+
+        # Validate optional delivery email
+        delivery_email = data.get("delivery_email", "").strip()
+        if delivery_email:
+            try:
+                from email_validator import validate_email, EmailNotValidError
+                valid = validate_email(delivery_email, check_deliverability=False)
+                delivery_email = valid.normalized
+            except EmailNotValidError:
+                return jsonify({"error": "Please enter a valid email address."}), 400
+            except ImportError:
+                # email-validator not installed — basic sanity check as fallback
+                print("WARNING: email-validator not installed. Using basic email check.")
+                if "@" not in delivery_email or "." not in delivery_email.split("@")[-1]:
+                    return jsonify({"error": "Please enter a valid email address."}), 400
+
+        # Build success/cancel URLs
+        base_url = request.host_url.rstrip('/')
+        success_url = f"{base_url}/build?payment=success&token={token}&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{base_url}/build?payment=cancelled"
+
+        result = create_checkout_session(token, template, success_url, cancel_url, delivery_email)
+
+        if result.get("error"):
+            return jsonify({"error": result["error"]}), 500
+
+        return jsonify({
+            "success": True,
+            "checkout_url": result["checkout_url"],
+            "session_id": result["session_id"],
+        })
+
+    except Exception as e:
+        print(f"CV Builder checkout error: {str(e)}")
+        return jsonify({"error": "Could not create payment session."}), 500
+
+
+@app.route('/api/build/download/<token>', methods=['GET', 'POST'])
+@limiter.limit("10 per hour")
+def build_download(token):
+    """
+    Verify payment, generate PDF with chosen template, return download.
+
+    GET (server storage / Redis):
+        Query params: session_id, template
+    POST (client storage fallback):
+        JSON body: { session_id, template, cv_data }
+    """
+    try:
+        # Parse params from GET query string or POST body
+        if request.method == 'POST':
+            body = request.get_json() or {}
+            session_id = body.get("session_id", "").strip()
+            template = body.get("template", "classic").strip()
+            client_cv_data = body.get("cv_data")
+        else:
+            session_id = request.args.get("session_id", "").strip()
+            template = request.args.get("template", "classic").strip()
+            client_cv_data = None
+
+        if not session_id:
+            return jsonify({"error": "Missing payment session."}), 400
+
+        # Verify payment
+        payment = verify_checkout_payment(session_id, token)
+        if not payment.get("verified"):
+            return jsonify({"error": payment.get("reason", "Payment verification failed.")}), 403
+
+        # Use template from payment metadata if available
+        template = payment.get("template", template)
+
+        # Get CV data: try Redis first, fall back to client-provided data
+        cv_data = None
+        if _redis_client:
+            try:
+                cv_redis_key = f"resumeradar:cv:{token}"
+                stored = _redis_client.get(cv_redis_key)
+                if stored:
+                    cv_data = json.loads(stored)
+
+                    # Check download limit (max 3)
+                    dl_key = f"resumeradar:cv_downloads:{token}"
+                    dl_count = int(_redis_client.get(dl_key) or 0)
+                    if dl_count >= 3:
+                        return jsonify({"error": "Download limit reached (3 downloads max)."}), 403
+                    _redis_client.incr(dl_key)
+                    _redis_client.expire(dl_key, 7200)
+            except Exception as redis_err:
+                print(f"Redis retrieve error: {redis_err}")
+
+        # Fallback: use CV data from client (sessionStorage)
+        if not cv_data and client_cv_data:
+            cv_data = client_cv_data
+
+        if not cv_data:
+            return jsonify({"error": "CV data not found. It may have expired. Please regenerate."}), 404
+
+        # Generate PDF
+        pdf_bytes = bytes(generate_cv_pdf(cv_data, template))
+
+        raw_name = cv_data.get("personal", {}).get("full_name", "Resume")
+        safe_name = re_module.sub(r'[^\w.-]', '_', raw_name)
+        filename = f"{safe_name}_CV.pdf"
+
+        # Check if email delivery was requested (from Stripe metadata)
+        delivery_email = payment.get("delivery_email", "")
+
+        response = Response(
+            pdf_bytes,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename={filename}',
+                'Content-Type': 'application/pdf',
+                'Content-Length': str(len(pdf_bytes))
+            }
+        )
+        response.headers['X-Email-Requested'] = 'true' if delivery_email else 'false'
+        return response
+
+    except Exception as e:
+        print(f"CV Builder download error: {str(e)}")
+        return jsonify({"error": "Failed to generate PDF."}), 500
+
+
+def _send_cv_email(email, token, template, event_id):
+    """
+    Send CV PDF via email. Uses SETNX on Stripe event.id for strict idempotency.
+    Best-effort: if this fails, Stripe retries the webhook and we try again.
+    Synchronous: ~3-4s total (SETNX + Redis GET + fpdf2 + Resend API).
+    """
+    try:
+        if not _redis_client:
+            return
+
+        # Strict idempotency: SETNX on event.id, 72h TTL matches Stripe retry window
+        dedup_key = f"resumeradar:cv_emailed:{event_id}"
+        was_set = _redis_client.set(dedup_key, "1", nx=True, ex=259200)
+        if not was_set:
+            return  # Already sent or being sent by this event
+
+        # Read CV data (TTL extended to 72h by webhook caller)
+        cv_data_raw = _redis_client.get(f"resumeradar:cv:{token}")
+        if not cv_data_raw:
+            _redis_client.delete(dedup_key)  # Release so retry can try again
+            return
+
+        cv_data = json.loads(cv_data_raw)
+        resend_key = os.getenv('RESEND_API_KEY')
+        if not resend_key or resend_key == 'your-resend-api-key-here':
+            _redis_client.delete(dedup_key)
+            return
+
+        import resend
+        import base64
+        resend.api_key = resend_key
+
+        pdf_bytes = bytes(generate_cv_pdf(cv_data, template))
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+        # Sanitize user-derived values
+        raw_name = cv_data.get('personal', {}).get('full_name', 'there')
+        first_name = html_module.escape(
+            raw_name.split()[0] if raw_name and raw_name != 'there' else 'there'
+        )
+        safe_name = re_module.sub(r'[^\w.-]', '_', raw_name) if raw_name != 'there' else 'ResumeRadar'
+        filename = f"{safe_name}_CV.pdf"
+
+        html_body = f"""<div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
+            <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">ResumeRadar</h1>
+                <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 14px;">Your ATS-optimized CV is ready.</p>
+            </div>
+            <div style="background: white; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
+                <h2 style="margin: 0 0 12px; font-size: 20px;">Hi {first_name},</h2>
+                <p style="font-size: 15px; line-height: 1.6; color: #4b5563;">Your polished CV is attached. It has been tailored for ATS systems.</p>
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                    <p style="margin: 0; font-size: 14px; color: #166534; font-weight: 600;">Next steps:</p>
+                    <ul style="margin: 8px 0 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
+                        <li>Submit your CV to the target job posting</li>
+                        <li>Scan another resume at resumeradar.sholastechnotes.com</li>
+                        <li>Tailor a new CV for each different role</li>
+                    </ul>
+                </div>
+            </div>
+            <div style="background: #1f2937; padding: 24px; border-radius: 0 0 12px 12px; text-align: center;">
+                <p style="color: #9ca3af; margin: 0; font-size: 11px;">Your resume was processed in real-time and not stored.</p>
+            </div>
+        </div>"""
+
+        resend.Emails.send({
+            "from": "ResumeRadar <reports@sholastechnotes.com>",
+            "to": [email],
+            "subject": f"Your ResumeRadar CV is ready, {first_name}",
+            "html": html_body,
+            "attachments": [{"filename": filename, "content": pdf_base64}],
+        })
+
+    except Exception as e:
+        print(f"CV email error (best-effort): {e}")
+        # Release dedup flag on failure so Stripe retries can succeed
+        try:
+            if _redis_client:
+                _redis_client.delete(f"resumeradar:cv_emailed:{event_id}")
+        except Exception:
+            pass
+
+
+@app.route('/api/build/webhook', methods=['POST'])
+@limiter.exempt
+def build_webhook():
+    """
+    Stripe webhook handler. Marks CV token as paid in Redis.
+    """
+    try:
+        payload = request.get_data()
+        sig_header = request.headers.get('Stripe-Signature', '')
+
+        event = verify_webhook_signature(payload, sig_header)
+        if not event:
+            return jsonify({"error": "Invalid signature."}), 400
+
+        if event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            cv_token = session.get('metadata', {}).get('cv_token', '')
+            template = session.get('metadata', {}).get('template', 'classic')
+            delivery_email = session.get('metadata', {}).get('delivery_email', '')
+
+            if cv_token and _redis_client:
+                try:
+                    paid_key = f"resumeradar:cv_paid:{cv_token}"
+                    _redis_client.setex(paid_key, 7200, "1")
+                    # Extend CV data TTL to survive Stripe retry window (72h)
+                    _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                except Exception:
+                    pass
+
+            # Send email if requested (best-effort, synchronous ~3-4s)
+            if delivery_email and cv_token:
+                _send_cv_email(delivery_email, cv_token, template, event['id'])
+
+        return jsonify({"received": True}), 200
+
+    except Exception as e:
+        print(f"Webhook error: {str(e)}")
+        return jsonify({"error": "Webhook processing failed."}), 500
+
+
+@app.route('/api/build/check-payment/<token>', methods=['GET'])
+@limiter.limit("30 per hour")
+def build_check_payment(token):
+    """
+    Check if payment has been confirmed for a CV token (frontend polls this).
+    """
+    try:
+        if _redis_client:
+            paid_key = f"resumeradar:cv_paid:{token}"
+            is_paid = _redis_client.get(paid_key)
+            return jsonify({"paid": bool(is_paid)})
+        return jsonify({"paid": False})
+    except Exception:
+        return jsonify({"paid": False})
+
+
+# ============================================================
 # SECURITY HEADERS
 # ============================================================
 
@@ -549,6 +995,10 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    # Prevent browser caching of CV builder API responses (PII protection)
+    if request.path.startswith('/api/build/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
     # Only add HSTS in production
     if not app.debug:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'

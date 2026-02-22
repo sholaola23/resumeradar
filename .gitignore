@@ -5,3 +5,5 @@ uploads/
 venv/
 .DS_Store
 node_modules/
+CV Templates/
+*.docx

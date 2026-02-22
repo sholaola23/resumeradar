@@ -89,6 +89,11 @@ IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences
     ]
 }}
 
+IMPORTANT COACHING FOCUS:
+- In quick_wins and rewrite_suggestions, actively coach the user to ADD MEASURABLE IMPACT to their experience bullets. Advise them to think about: numbers, percentages, team sizes, time saved, cost reduced, revenue generated, uptime improved, users served, projects delivered. For example: "Your bullet about CI/CD pipelines would be stronger with a metric — how much did deployment time improve? Add the number."
+- Do NOT invent numbers for them. Ask them to recall and add their own real figures.
+- Emphasize: recruiters and ATS systems favor bullets with quantified results.
+
 Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, max 2 rewrite_suggestions, max 4 quick_wins, exactly 3 cover_letter_points. Keep each value SHORT. Cover letter points should be specific and actionable, not generic."""
 
         message = client.messages.create(

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Build Your CV — ResumeRadar</title>
+    <meta name="description" content="Build an ATS-optimized CV tailored to your target job. AI polishes every section, you download a clean PDF. $2 per download.">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Build Your CV — ResumeRadar">
+    <meta property="og:description" content="AI-powered CV builder. Fill in your details, we polish it for ATS, you download a clean PDF resume.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://resumeradar.sholastechnotes.com/build">
+
+    <!-- Favicon -->
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/builder.css">
+</head>
+<body>
+    <!-- ============ HEADER ============ -->
+    <header class="header">
+        <div class="container">
+            <div class="header-inner">
+                <div class="logo">
+                    <span class="logo-icon">📡</span>
+                    <span class="logo-text">ResumeRadar</span>
+                </div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link">Scan Resume</a>
+                    <a href="/build" class="nav-link nav-link-active">Build CV <span class="nav-badge">$2</span></a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+        <div class="container">
+            <h1>Build an <span class="highlight">ATS-optimized</span> CV in minutes.</h1>
+            <p class="hero-sub">Fill in your details, paste the target job description, and our AI polishes every section for ATS systems. Pick a template, download a clean PDF.</p>
+            <div class="privacy-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Your data is never stored. We don't see, save, or share your resume — everything is processed in real time and discarded.
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ SCAN BANNER (hidden, shown when ?from=scan) ============ -->
+    <div class="prefill-banner" id="prefillBanner" style="display: none;">
+        <div class="container">
+            <p>✨ Generating your ATS-optimized CV from your scan — no forms needed!</p>
+        </div>
+    </div>
+
+    <!-- ============ CV BUILDER FORM ============ -->
+    <main class="builder-section">
+        <div class="container">
+            <form id="builderForm" class="builder-form">
+
+                <!-- Personal Information -->
+                <div class="builder-card">
+                    <h2>Personal Information</h2>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="fullName">Full Name *</label>
+                            <input type="text" id="fullName" placeholder="John Doe" required>
+                        </div>
+                        <div class="form-field">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" placeholder="john@example.com">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="phone">Phone</label>
+                            <input type="tel" id="phone" placeholder="+1 (555) 123-4567">
+                        </div>
+                        <div class="form-field">
+                            <label for="location">Location</label>
+                            <input type="text" id="location" placeholder="New York, NY">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="linkedin">LinkedIn URL</label>
+                            <input type="url" id="linkedin" placeholder="https://linkedin.com/in/johndoe">
+                        </div>
+                        <div class="form-field">
+                            <label for="portfolio">Portfolio / Website</label>
+                            <input type="url" id="portfolio" placeholder="https://johndoe.com">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Professional Summary -->
+                <div class="builder-card">
+                    <h2>Professional Summary</h2>
+                    <p class="card-hint">Write a brief summary or leave blank — our AI will generate one tailored to the job.</p>
+                    <textarea id="summary" rows="4" placeholder="Experienced software engineer with 5+ years building scalable web applications..."></textarea>
+                </div>
+
+                <!-- Experience -->
+                <div class="builder-card">
+                    <h2>Work Experience</h2>
+                    <div id="experienceEntries">
+                        <div class="experience-entry" data-index="0">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Job Title *</label>
+                                    <input type="text" class="exp-title" placeholder="Software Engineer" required>
+                                </div>
+                                <div class="form-field">
+                                    <label>Company *</label>
+                                    <input type="text" class="exp-company" placeholder="Acme Corp" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Start Date</label>
+                                    <input type="text" class="exp-start" placeholder="Jan 2020">
+                                </div>
+                                <div class="form-field">
+                                    <label>End Date</label>
+                                    <input type="text" class="exp-end" placeholder="Present">
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Key Responsibilities / Achievements (one per line)</label>
+                                <textarea class="exp-bullets" rows="4" placeholder="Built and maintained REST APIs serving 10K+ daily users
+Led migration from monolith to microservices
+Reduced deployment time by 40% through CI/CD automation"></textarea>
+                            </div>
+                            <button type="button" class="remove-entry-btn" style="display: none;">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" class="add-entry-btn" id="addExperience">+ Add Another Position</button>
+                </div>
+
+                <!-- Education -->
+                <div class="builder-card">
+                    <h2>Education</h2>
+                    <div id="educationEntries">
+                        <div class="education-entry" data-index="0">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Degree *</label>
+                                    <input type="text" class="edu-degree" placeholder="B.S. Computer Science" required>
+                                </div>
+                                <div class="form-field">
+                                    <label>Institution *</label>
+                                    <input type="text" class="edu-institution" placeholder="MIT" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Graduation Date</label>
+                                    <input type="text" class="edu-date" placeholder="May 2020">
+                                </div>
+                                <div class="form-field">
+                                    <label>Details (honors, GPA, etc.)</label>
+                                    <input type="text" class="edu-details" placeholder="Cum Laude, 3.8 GPA">
+                                </div>
+                            </div>
+                            <button type="button" class="remove-entry-btn" style="display: none;">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" class="add-entry-btn" id="addEducation">+ Add Another Degree</button>
+                </div>
+
+                <!-- Skills -->
+                <div class="builder-card">
+                    <h2>Skills</h2>
+                    <p class="card-hint">Comma-separated list. Our AI may suggest additions based on the job description.</p>
+                    <textarea id="skills" rows="3" placeholder="Python, JavaScript, AWS, Docker, React, SQL, Project Management, Agile"></textarea>
+                </div>
+
+                <!-- Certifications -->
+                <div class="builder-card">
+                    <h2>Certifications</h2>
+                    <div id="certEntries">
+                        <div class="cert-entry" data-index="0">
+                            <div class="form-row form-row-3">
+                                <div class="form-field">
+                                    <label>Certification Name</label>
+                                    <input type="text" class="cert-name" placeholder="AWS Solutions Architect">
+                                </div>
+                                <div class="form-field">
+                                    <label>Issuer</label>
+                                    <input type="text" class="cert-issuer" placeholder="Amazon Web Services">
+                                </div>
+                                <div class="form-field">
+                                    <label>Date</label>
+                                    <input type="text" class="cert-date" placeholder="2023">
+                                </div>
+                            </div>
+                            <button type="button" class="remove-entry-btn" style="display: none;">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" class="add-entry-btn" id="addCert">+ Add Certification</button>
+                </div>
+
+                <!-- Target Job Description -->
+                <div class="builder-card builder-card-highlight">
+                    <h2>Target Job Description *</h2>
+                    <p class="card-hint">Paste the full job description. Our AI uses this to tailor your CV for ATS optimization.</p>
+                    <textarea id="targetJD" rows="8" placeholder="Paste the complete job description here — title, requirements, responsibilities, qualifications..." required></textarea>
+                </div>
+
+                <!-- Generate Button -->
+                <div class="generate-wrapper">
+                    <button type="submit" class="generate-btn" id="generateBtn">
+                        <span class="gen-btn-text">Generate My CV</span>
+                        <span class="gen-btn-loading" style="display: none;">
+                            <span class="spinner"></span>
+                            <span class="gen-loading-text">Analyzing the job description...</span>
+                        </span>
+                    </button>
+                </div>
+
+                <!-- Error -->
+                <div class="error-message" id="builderError" style="display: none;"></div>
+            </form>
+
+            <!-- ============ PREVIEW SECTION ============ -->
+            <div class="preview-section" id="previewSection" style="display: none;">
+                <div class="builder-card">
+                    <div class="preview-header">
+                        <h2>Your Polished CV</h2>
+                        <button type="button" class="edit-btn" id="editBtn">Edit & Regenerate</button>
+                    </div>
+
+                    <div class="ai-polish-badge" id="aiPolishBadge" style="display: none;">
+                        Polished by AI
+                    </div>
+
+                    <div class="preview-content" id="previewContent"></div>
+                </div>
+
+                <!-- Template Picker -->
+                <div class="builder-card">
+                    <h2>Choose a Template</h2>
+                    <div class="template-picker">
+                        <label class="template-option">
+                            <input type="radio" name="template" value="classic" checked>
+                            <div class="template-card">
+                                <div class="template-name">Classic</div>
+                                <div class="template-preview tp-classic">
+                                    <div class="tp-name-bar" style="width:50%; margin:0 auto;"></div>
+                                    <div class="tp-contact-bar" style="width:40%; margin:4px auto 0;"></div>
+                                    <div class="tp-header-bar tp-underline" style="width:100%; margin-top:10px;"></div>
+                                    <div class="tp-text-line" style="width:90%;"></div>
+                                    <div class="tp-text-line" style="width:80%;"></div>
+                                    <div class="tp-header-bar tp-underline" style="width:100%; margin-top:8px;"></div>
+                                    <div class="tp-bullet-line" style="width:85%;"></div>
+                                    <div class="tp-bullet-line" style="width:75%;"></div>
+                                    <div class="tp-bullet-line" style="width:80%;"></div>
+                                </div>
+                                <div class="template-desc">Traditional professional layout with underline separators</div>
+                            </div>
+                        </label>
+                        <label class="template-option">
+                            <input type="radio" name="template" value="modern">
+                            <div class="template-card">
+                                <div class="template-name">Modern</div>
+                                <div class="template-preview tp-modern">
+                                    <div class="tp-accent-block"></div>
+                                    <div class="tp-name-bar tp-blue" style="width:55%;"></div>
+                                    <div class="tp-contact-bar" style="width:45%; margin-top:4px;"></div>
+                                    <div class="tp-header-bar tp-blue" style="width:35%; margin-top:10px;"></div>
+                                    <div class="tp-text-line" style="width:92%;"></div>
+                                    <div class="tp-text-line" style="width:85%;"></div>
+                                    <div class="tp-header-bar tp-blue" style="width:30%; margin-top:8px;"></div>
+                                    <div class="tp-text-line" style="width:88%;"></div>
+                                    <div class="tp-text-line" style="width:78%;"></div>
+                                </div>
+                                <div class="template-desc">Clean with blue accent line, compact and tech-friendly</div>
+                            </div>
+                        </label>
+                        <label class="template-option">
+                            <input type="radio" name="template" value="minimal">
+                            <div class="template-card">
+                                <div class="template-name">Minimal</div>
+                                <div class="template-preview tp-minimal">
+                                    <div class="tp-name-bar tp-thin" style="width:45%; margin:0 auto;"></div>
+                                    <div class="tp-contact-bar tp-thin" style="width:35%; margin:4px auto 0;"></div>
+                                    <div class="tp-spacer"></div>
+                                    <div class="tp-header-bar tp-thin" style="width:30%; margin-top:10px;"></div>
+                                    <div class="tp-text-line tp-thin" style="width:90%;"></div>
+                                    <div class="tp-text-line tp-thin" style="width:82%;"></div>
+                                    <div class="tp-spacer"></div>
+                                    <div class="tp-header-bar tp-thin" style="width:28%; margin-top:6px;"></div>
+                                    <div class="tp-text-line tp-thin" style="width:85%;"></div>
+                                </div>
+                                <div class="template-desc">Maximum whitespace, executive feel, ultra-clean</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Payment CTA -->
+                <div class="builder-card payment-card">
+                    <div class="payment-content">
+                        <div class="payment-info">
+                            <h2>Download Your CV</h2>
+                            <p>Get a clean, ATS-optimized PDF resume ready to submit.</p>
+                        </div>
+                        <div class="payment-action">
+                            <div class="payment-price">$2</div>
+                            <button type="button" class="payment-btn" id="paymentBtn">
+                                <span class="pay-btn-text">Download PDF</span>
+                                <span class="pay-btn-loading" style="display: none;">
+                                    <span class="spinner spinner-sm"></span> Redirecting...
+                                </span>
+                            </button>
+                        </div>
+                        <div class="payment-email-row">
+                            <label for="deliveryEmail">Email a copy to yourself (optional)</label>
+                            <input type="email" id="deliveryEmail" class="payment-email-input"
+                                   placeholder="your@email.com" maxlength="254">
+                            <small class="payment-email-hint">PDF downloads instantly + we send a backup to your inbox</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ============ FOOTER ============ -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-built">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Olushola Oladipupo</a> — AWS Solutions Architect</p>
+            <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
+            <p class="footer-privacy">Your CV data is processed in real-time and not permanently stored.</p>
+        </div>
+    </footer>
+
+    <script src="/static/js/builder.js"></script>
+</body>
+</html>

@@ -36,9 +36,15 @@
     <!-- ============ HEADER ============ -->
     <header class="header">
         <div class="container">
-            <div class="logo">
-                <span class="logo-icon">📡</span>
-                <span class="logo-text">ResumeRadar</span>
+            <div class="header-inner">
+                <div class="logo">
+                    <span class="logo-icon">📡</span>
+                    <span class="logo-text">ResumeRadar</span>
+                </div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link nav-link-active">Scan Resume</a>
+                    <a href="/build" class="nav-link">Build CV <span class="nav-badge">$2</span></a>
+                </nav>
             </div>
             <p class="tagline">Beat the scan. Land the interview.</p>
         </div>
@@ -219,6 +225,17 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         </div>
                         <div class="fit-verdict" id="fitVerdict"></div>
                     </div>
+                </div>
+
+                <!-- Build CV Cross-sell CTA (score-aware messaging set by JS) -->
+                <div class="result-card build-cta-card" id="buildCtaCard">
+                    <h2 id="buildCtaHeading">🚀 Get an ATS-optimized CV in seconds</h2>
+                    <p id="buildCtaBody">Our AI optimizes your wording and strategically places keywords from this job description — using only YOUR real experience. No forms to fill.</p>
+                    <div class="build-cta-trust">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        We never make anything up — your CV is built from your real skills and experience only.
+                    </div>
+                    <button type="button" class="build-cta-btn" onclick="launchBuilderFromScan()">Generate My Optimized CV — $2 →</button>
                 </div>
 
                 <!-- Category Breakdown -->

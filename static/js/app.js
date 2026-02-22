@@ -53,7 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailInput = document.getElementById('emailInput');
 
     // Store the last scan data for report generation
+    // Exposed on window for cross-page use (CV Builder cross-sell)
     let lastScanData = null;
+    window._resumeradar_getLastScanData = function () { return lastScanData; };
 
     // ============================================================
     // SOCIAL PROOF COUNTER
@@ -1068,6 +1070,9 @@ Nice to Have
         // 7. ATS Formatting
         renderATSFormatting(data.ats_formatting);
 
+        // 7.5. Update Build CV CTA based on score
+        renderBuildCta(data.match_score || 0);
+
         // 8. Scan History
         saveScanToHistory(data);
         renderScanHistory();
@@ -1421,6 +1426,25 @@ Nice to Have
         }
     }
 
+    function renderBuildCta(score) {
+        const heading = document.getElementById('buildCtaHeading');
+        const body = document.getElementById('buildCtaBody');
+        if (!heading || !body) return;
+
+        score = Math.round(score);
+
+        if (score >= 60) {
+            heading.textContent = '\uD83D\uDE80 Strong foundation — let\u2019s make it even stronger';
+            body.textContent = 'Your CV already matches well. Our AI will tighten your wording, strategically place keywords, and format it for ATS systems \u2014 using only your real experience.';
+        } else if (score >= 35) {
+            heading.textContent = '\uD83D\uDCA1 Good start — let\u2019s close the gaps';
+            body.textContent = 'Your CV has room to grow. Before generating, review the missing keywords above and add any skills you actually have. Our AI will then optimize your wording and weave in keywords \u2014 but it won\u2019t add experience you don\u2019t have.';
+        } else {
+            heading.textContent = '\u26A0\uFE0F Your CV has significant gaps for this role';
+            body.textContent = 'The CV Builder can polish your wording and add keywords where they honestly fit, but it cannot add skills or experience you don\u2019t have. We recommend reviewing the missing keywords above first \u2014 add any you genuinely have, then generate.';
+        }
+    }
+
     function renderATSFormatting(ats) {
         const container = document.getElementById('atsFormatting');
         container.innerHTML = '';
@@ -1624,3 +1648,37 @@ Nice to Have
         errorMessage.style.display = 'none';
     }
 });
+
+
+// ============================================================
+// CV BUILDER CROSS-SELL: Launch Builder from Scan Results
+// Global function called by onclick in the cross-sell CTA
+// ============================================================
+function launchBuilderFromScan() {
+    try {
+        const scanData = window._resumeradar_getLastScanData ? window._resumeradar_getLastScanData() : null;
+        if (!scanData) {
+            alert('No scan data available. Please run a scan first.');
+            return;
+        }
+
+        // Collect data to pass to the builder
+        // For file-upload users the textarea is empty, so fall back to resume_text from scan response
+        const textareaText = document.getElementById('resumeText') ? document.getElementById('resumeText').value : '';
+        const builderData = {
+            resumeText: textareaText || scanData.resume_text || '',
+            jobDescription: document.getElementById('jobDescription') ? document.getElementById('jobDescription').value : '',
+            matchedKeywords: scanData.matched_keywords || {},
+            missingKeywords: scanData.missing_keywords || {},
+        };
+
+        // Store in sessionStorage for the builder page to read
+        sessionStorage.setItem('resumeradar_scan_for_builder', JSON.stringify(builderData));
+
+        // Navigate to builder
+        window.location.href = '/build?from=scan';
+    } catch (e) {
+        console.error('Launch builder error:', e);
+        window.location.href = '/build';
+    }
+}
