@@ -1054,6 +1054,367 @@ MSc Data Science, Imperial, 2018
           'certifications_missing' not in e2e_warnings_complete,
           f"Warnings: {e2e_warnings_complete}")
 
+    # ---- SECTION 17: DOCX DOWNLOAD FEATURE ----
+    print("\n-- Section 17: DOCX Download Feature --")
+
+    # -- Source file reads --
+    docx_gen_path = os.path.join(project_root, 'backend', 'cv_docx_generator.py')
+    with open(docx_gen_path, 'r') as f:
+        docx_gen_source = f.read()
+
+    stripe_utils_path = os.path.join(project_root, 'backend', 'stripe_utils.py')
+    with open(stripe_utils_path, 'r') as f:
+        stripe_utils_source = f.read()
+
+    paystack_utils_path = os.path.join(project_root, 'backend', 'paystack_utils.py')
+    with open(paystack_utils_path, 'r') as f:
+        paystack_utils_source = f.read()
+
+    # Re-read app_source, builder_js, build_html for fresh state
+    with open(app_py_path, 'r') as f:
+        app_source_17 = f.read()
+    with open(builder_js_path, 'r') as f:
+        builder_js_17 = f.read()
+    with open(builder_css_path, 'r') as f:
+        builder_css_17 = f.read()
+
+    # -- Source pattern checks: cv_docx_generator.py --
+    check("DOCX: generate_cv_docx function exists",
+          'def generate_cv_docx' in docx_gen_source)
+    check("DOCX: does NOT import _safe from cv_pdf_generator",
+          'import _safe' not in docx_gen_source and 'from backend.cv_pdf_generator import' in docx_gen_source
+          and '_safe' not in docx_gen_source.split('from backend.cv_pdf_generator import')[1].split('\n')[0])
+    check("DOCX: has own _docx_safe function",
+          'def _docx_safe' in docx_gen_source)
+    check("DOCX: _docx_safe does NOT use latin-1 encoding",
+          "encode('latin" not in docx_gen_source and '.encode("latin' not in docx_gen_source)
+    check("DOCX: imports _flatten_skills from cv_pdf_generator",
+          '_flatten_skills' in docx_gen_source.split('from backend.cv_pdf_generator import')[1].split('\n')[0])
+    check("DOCX: imports _format_contact_line from cv_pdf_generator",
+          '_format_contact_line' in docx_gen_source.split('from backend.cv_pdf_generator import')[1].split('\n')[0])
+    check("DOCX: imports _format_date_range from cv_pdf_generator",
+          '_format_date_range' in docx_gen_source.split('from backend.cv_pdf_generator import')[1].split('\n')[0])
+    check("DOCX: returns bytes (BytesIO pattern)",
+          'BytesIO' in docx_gen_source and '.getvalue()' in docx_gen_source)
+    check("DOCX: 3 templates — classic, modern, minimal",
+          '_render_classic' in docx_gen_source and '_render_modern' in docx_gen_source and '_render_minimal' in docx_gen_source)
+
+    # -- Source pattern checks: app.py --
+    check("DOCX: generate_cv_docx imported in app.py",
+          'from backend.cv_docx_generator import generate_cv_docx' in app_source_17)
+    check("DOCX: format parameter handling in download endpoint",
+          'dl_format' in app_source_17 and 'VALID_FORMATS' in app_source_17)
+    check("DOCX: zipfile import in download endpoint",
+          'import zipfile' in app_source_17)
+
+    # -- Source pattern checks: build.html --
+    build_r = c.get('/build')
+    build_html_17 = build_r.data.decode()
+    check("DOCX: format-toggle buttons in build.html",
+          'format-toggle' in build_html_17 and 'data-format' in build_html_17)
+    check("DOCX: three format options (both, pdf, docx)",
+          'data-format="both"' in build_html_17 and 'data-format="pdf"' in build_html_17 and 'data-format="docx"' in build_html_17)
+
+    # -- Source pattern checks: builder.js --
+    check("DOCX: selectedFormat variable in builder.js",
+          'selectedFormat' in builder_js_17)
+    check("DOCX: resumeradar_cv_format sessionStorage in builder.js",
+          'resumeradar_cv_format' in builder_js_17)
+    check("DOCX: Content-Type based filename in builder.js",
+          'wordprocessingml' in builder_js_17 or 'contentType' in builder_js_17)
+    check("DOCX: format passed to checkout in builder.js",
+          'format: selectedFormat' in builder_js_17 or 'format:selectedFormat' in builder_js_17)
+
+    # -- Source pattern checks: email size guard --
+    check("DOCX: 10MB size guard in _send_cv_email",
+          '10_000_000' in app_source_17 or '10000000' in app_source_17)
+    check("DOCX: dual attachment in email sender",
+          'generate_cv_docx' in app_source_17.split('def _send_cv_email')[1].split('\ndef ')[0]
+          if 'def _send_cv_email' in app_source_17 else False)
+
+    # -- Source pattern checks: payment utils format plumbing --
+    check("DOCX: stripe create_checkout_session accepts format_choice",
+          'format_choice' in stripe_utils_source.split('def create_checkout_session')[1].split('\n')[0])
+    check("DOCX: paystack create_paystack_transaction accepts format_choice",
+          'format_choice' in paystack_utils_source.split('def create_paystack_transaction')[1].split('\n')[0])
+    check("DOCX: stripe verify returns format with empty default",
+          '"format": session.metadata.get("format", "")' in stripe_utils_source or
+          "'format': session.metadata.get('format', '')" in stripe_utils_source)
+    check("DOCX: paystack verify returns format with empty default",
+          '"format": metadata.get("format", "")' in paystack_utils_source or
+          "'format': metadata.get('format', '')" in paystack_utils_source)
+    check("DOCX: app.py build_create_checkout passes format_choice",
+          'format_choice' in app_source_17.split('def build_create_checkout')[1].split('\ndef ')[0]
+          if 'def build_create_checkout' in app_source_17 else False)
+    check("DOCX: app.py build_download uses 3-step format resolution",
+          'payment.get("format"' in app_source_17 or "payment.get('format'" in app_source_17)
+    check("DOCX: _send_cv_email signature unchanged (no format_choice param)",
+          'def _send_cv_email(email, token, template, event_id)' in app_source_17)
+
+    # -- Behavioral: DOCX generation --
+    from backend.cv_docx_generator import generate_cv_docx as gen_docx
+    from io import BytesIO
+
+    docx_test_cv = {
+        'personal': {'full_name': 'QA Test', 'email': 'qa@test.com', 'phone': '+1 555 0199', 'location': 'London'},
+        'summary': 'Experienced engineer with 5 years building scalable systems.',
+        'experience': [
+            {'title': 'Senior Engineer', 'company': 'Acme Corp', 'start_date': 'Jan 2020', 'end_date': 'Present',
+             'bullets': ['Built microservices', 'Led team of 4', 'Reduced deploy time by 60%']},
+            {'title': 'Junior Engineer', 'company': 'StartupCo', 'start_date': 'Jun 2017', 'end_date': 'Dec 2019',
+             'bullets': ['Developed REST APIs', 'Wrote unit tests']},
+            {'title': 'Intern', 'company': 'TechInc', 'start_date': 'Jan 2017', 'end_date': 'May 2017',
+             'bullets': ['Assisted with frontend development']},
+        ],
+        'education': [
+            {'degree': 'BSc Computer Science', 'institution': 'UCL', 'graduation_date': '2019', 'details': 'First Class Honours'},
+            {'degree': 'MSc Data Science', 'institution': 'Imperial', 'graduation_date': '2021', 'details': ''},
+        ],
+        'skills': ['Python', 'AWS', 'Docker', 'Kubernetes', 'React'],
+        'certifications': [
+            {'name': 'AWS Solutions Architect', 'issuer': 'Amazon', 'date': '2023'},
+            {'name': 'PMP', 'issuer': 'PMI', 'date': '2022'},
+        ]
+    }
+
+    for tmpl in ['classic', 'modern', 'minimal']:
+        try:
+            docx_out = gen_docx(docx_test_cv, tmpl)
+            is_docx = isinstance(docx_out, bytes) and len(docx_out) > 500
+            check(f"DOCX {tmpl} template generates", is_docx, f"{len(docx_out)} bytes")
+        except Exception as e:
+            check(f"DOCX {tmpl} template generates", False, str(e))
+
+    # Output starts with PK signature (ZIP/DOCX magic bytes)
+    try:
+        docx_out = gen_docx(docx_test_cv, 'classic')
+        check("DOCX: output starts with PK magic bytes",
+              docx_out[:2] == b'PK', f"Got: {docx_out[:4]}")
+    except Exception as e:
+        check("DOCX: output starts with PK magic bytes", False, str(e))
+
+    # Output can be loaded by python-docx
+    try:
+        from docx import Document as DocxDocument
+        doc = DocxDocument(BytesIO(docx_out))
+        check("DOCX: loadable by python-docx", True)
+
+        # Extract all text
+        all_text = "\n".join([p.text for p in doc.paragraphs])
+        # Also check table cells (Modern template uses tables)
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    all_text += "\n" + "\n".join([p.text for p in cell.paragraphs])
+
+        check("DOCX: contains personal name", 'QA Test' in all_text)
+        check("DOCX: contains summary text", 'scalable systems' in all_text)
+        check("DOCX: contains experience titles",
+              'Senior Engineer' in all_text and 'Junior Engineer' in all_text)
+        check("DOCX: contains education degrees",
+              'BSc Computer Science' in all_text or 'BSc' in all_text)
+        check("DOCX: contains certification names",
+              'AWS Solutions Architect' in all_text or 'AWS' in all_text)
+        check("DOCX: contains skills", 'Python' in all_text)
+    except ImportError:
+        check("DOCX: loadable by python-docx", False, "python-docx not installed")
+    except Exception as e:
+        check("DOCX: loadable by python-docx", False, str(e))
+
+    # Invalid template falls back to classic
+    try:
+        docx_fallback = gen_docx(docx_test_cv, 'nonexistent')
+        check("DOCX: invalid template falls back to classic",
+              isinstance(docx_fallback, bytes) and len(docx_fallback) > 500)
+    except Exception as e:
+        check("DOCX: invalid template falls back to classic", False, str(e))
+
+    # Empty CV doesn't crash
+    empty_cv_docx = {'personal': {}, 'summary': '', 'experience': [], 'education': [], 'skills': [], 'certifications': []}
+    try:
+        all_ok = True
+        for tmpl in ['classic', 'modern', 'minimal']:
+            out = gen_docx(empty_cv_docx, tmpl)
+            if not isinstance(out, bytes) or len(out) < 100:
+                all_ok = False
+        check("DOCX: empty CV doesn't crash (all templates)", all_ok)
+    except Exception as e:
+        check("DOCX: empty CV doesn't crash (all templates)", False, str(e))
+
+    # -- Behavioral: DOCX Unicode safety --
+    from backend.cv_docx_generator import _docx_safe
+
+    check("DOCX: _docx_safe preserves Unicode (em dash, accented)",
+          _docx_safe("Olú Adéyígá — Senior Manager") == "Olú Adéyígá — Senior Manager")
+    check("DOCX: _docx_safe strips control chars",
+          '\x00' not in _docx_safe("Hello\x00World\x0bTest") and '\x0b' not in _docx_safe("Hello\x00World\x0bTest"))
+    check("DOCX: _docx_safe preserves normal text",
+          _docx_safe("Normal text here") == "Normal text here")
+
+    # Generate DOCX with accented name — verify preserved
+    try:
+        unicode_cv = dict(docx_test_cv)
+        unicode_cv['personal'] = dict(docx_test_cv['personal'])
+        unicode_cv['personal']['full_name'] = "José García-López"
+        unicode_out = gen_docx(unicode_cv, 'classic')
+        unicode_doc = DocxDocument(BytesIO(unicode_out))
+        unicode_text = "\n".join([p.text for p in unicode_doc.paragraphs])
+        check("DOCX: Unicode name preserved in document",
+              "José García-López" in unicode_text, f"Name found: {'José García-López' in unicode_text}")
+    except Exception as e:
+        check("DOCX: Unicode name preserved in document", False, str(e))
+
+    # -- Behavioral: DOCX template-specific features --
+    try:
+        # Classic: check for pBdr (paragraph border bottom) in XML
+        classic_out = gen_docx(docx_test_cv, 'classic')
+        classic_doc = DocxDocument(BytesIO(classic_out))
+        classic_xml = classic_doc.element.xml
+        check("DOCX classic: has paragraph borders (pBdr)",
+              'pBdr' in classic_xml)
+
+        # Modern: check for blue accent (border color in XML)
+        modern_out = gen_docx(docx_test_cv, 'modern')
+        modern_doc = DocxDocument(BytesIO(modern_out))
+        modern_xml = modern_doc.element.xml
+        check("DOCX modern: has border color (accent tables)",
+              'tcBorders' in modern_xml or '2563eb' in modern_xml.lower() or '2563EB' in modern_xml)
+    except Exception as e:
+        check("DOCX classic/modern template features", False, str(e))
+
+    # -- Behavioral: true endpoint tests (Flask test client) --
+    # Mock Redis + payment verification for endpoint tests
+    import unittest.mock as mock
+    from unittest.mock import MagicMock, patch
+
+    mock_cv_data = json.dumps(docx_test_cv)
+
+    def _mock_redis_get(key):
+        if 'resumeradar:cv:' in key:
+            return mock_cv_data
+        if 'resumeradar:cv_paid:' in key:
+            return json.dumps({"template": "classic", "delivery_email": "", "format": ""})
+        return None
+
+    def _mock_redis_get_with_format(fmt):
+        def getter(key):
+            if 'resumeradar:cv:' in key:
+                return mock_cv_data
+            if 'resumeradar:cv_paid:' in key:
+                return json.dumps({"template": "classic", "delivery_email": "", "format": fmt})
+            return None
+        return getter
+
+    # Test: format=docx returns DOCX content type
+    try:
+        with patch('app._redis_client') as mock_redis:
+            mock_redis.get = MagicMock(side_effect=_mock_redis_get)
+            mock_redis.exists = MagicMock(return_value=True)
+            with patch('app.verify_checkout_payment', return_value={
+                'verified': True, 'template': 'classic', 'delivery_email': '', 'format': 'docx'
+            }):
+                resp = c.get('/api/build/download/test-token-123?session_id=cs_test&format=docx')
+                check("DOCX endpoint: format=docx returns DOCX Content-Type",
+                      resp.status_code == 200 and 'wordprocessingml' in (resp.content_type or ''),
+                      f"Status: {resp.status_code}, CT: {resp.content_type}")
+                if resp.status_code == 200:
+                    check("DOCX endpoint: format=docx body starts with PK",
+                          resp.data[:2] == b'PK')
+    except Exception as e:
+        check("DOCX endpoint: format=docx returns DOCX Content-Type", False, str(e))
+        check("DOCX endpoint: format=docx body starts with PK", False, "skipped")
+
+    # Test: format=both returns ZIP
+    try:
+        with patch('app._redis_client') as mock_redis:
+            mock_redis.get = MagicMock(side_effect=_mock_redis_get)
+            mock_redis.exists = MagicMock(return_value=True)
+            with patch('app.verify_checkout_payment', return_value={
+                'verified': True, 'template': 'classic', 'delivery_email': '', 'format': 'both'
+            }):
+                resp = c.get('/api/build/download/test-token-123?session_id=cs_test&format=both')
+                check("DOCX endpoint: format=both returns ZIP Content-Type",
+                      resp.status_code == 200 and 'zip' in (resp.content_type or ''),
+                      f"Status: {resp.status_code}, CT: {resp.content_type}")
+                if resp.status_code == 200:
+                    import zipfile as zf
+                    z = zf.ZipFile(BytesIO(resp.data))
+                    names = z.namelist()
+                    check("DOCX endpoint: ZIP contains PDF and DOCX",
+                          any('.pdf' in n for n in names) and any('.docx' in n for n in names),
+                          f"Files: {names}")
+    except Exception as e:
+        check("DOCX endpoint: format=both returns ZIP Content-Type", False, str(e))
+        check("DOCX endpoint: ZIP contains PDF and DOCX", False, "skipped")
+
+    # Test: format=pdf returns PDF (existing behavior)
+    try:
+        with patch('app._redis_client') as mock_redis:
+            mock_redis.get = MagicMock(side_effect=_mock_redis_get)
+            mock_redis.exists = MagicMock(return_value=True)
+            with patch('app.verify_checkout_payment', return_value={
+                'verified': True, 'template': 'classic', 'delivery_email': '', 'format': 'pdf'
+            }):
+                resp = c.get('/api/build/download/test-token-123?session_id=cs_test&format=pdf')
+                check("DOCX endpoint: format=pdf returns PDF Content-Type",
+                      resp.status_code == 200 and 'pdf' in (resp.content_type or ''),
+                      f"Status: {resp.status_code}, CT: {resp.content_type}")
+    except Exception as e:
+        check("DOCX endpoint: format=pdf returns PDF Content-Type", False, str(e))
+
+    # Test: no format param defaults to PDF (backward compatible)
+    try:
+        with patch('app._redis_client') as mock_redis:
+            mock_redis.get = MagicMock(side_effect=_mock_redis_get)
+            mock_redis.exists = MagicMock(return_value=True)
+            with patch('app.verify_checkout_payment', return_value={
+                'verified': True, 'template': 'classic', 'delivery_email': '', 'format': ''
+            }):
+                resp = c.get('/api/build/download/test-token-123?session_id=cs_test')
+                check("DOCX endpoint: no format + empty metadata = PDF default",
+                      resp.status_code == 200 and 'pdf' in (resp.content_type or ''),
+                      f"Status: {resp.status_code}, CT: {resp.content_type}")
+    except Exception as e:
+        check("DOCX endpoint: no format + empty metadata = PDF default", False, str(e))
+
+    # Test: metadata fallback — no format in request, but metadata has 'both'
+    try:
+        with patch('app._redis_client') as mock_redis:
+            mock_redis.get = MagicMock(side_effect=_mock_redis_get_with_format('both'))
+            mock_redis.exists = MagicMock(return_value=True)
+            with patch('app.verify_checkout_payment', return_value={
+                'verified': True, 'template': 'classic', 'delivery_email': '', 'format': 'both'
+            }):
+                resp = c.get('/api/build/download/test-token-123?session_id=cs_test')
+                check("DOCX endpoint: metadata fallback format=both → ZIP",
+                      resp.status_code == 200 and 'zip' in (resp.content_type or ''),
+                      f"Status: {resp.status_code}, CT: {resp.content_type}")
+    except Exception as e:
+        check("DOCX endpoint: metadata fallback format=both → ZIP", False, str(e))
+
+    # Test: pre-DOCX backward compat — no format anywhere → PDF
+    try:
+        with patch('app._redis_client') as mock_redis:
+            mock_redis.get = MagicMock(side_effect=_mock_redis_get_with_format(''))
+            mock_redis.exists = MagicMock(return_value=True)
+            with patch('app.verify_checkout_payment', return_value={
+                'verified': True, 'template': 'classic', 'delivery_email': '', 'format': ''
+            }):
+                resp = c.get('/api/build/download/test-token-123?session_id=cs_test')
+                check("DOCX endpoint: pre-DOCX payment (format='') → PDF",
+                      resp.status_code == 200 and 'pdf' in (resp.content_type or ''),
+                      f"Status: {resp.status_code}, CT: {resp.content_type}")
+    except Exception as e:
+        check("DOCX endpoint: pre-DOCX payment (format='') → PDF", False, str(e))
+
+    # -- Format toggle CSS --
+    check("DOCX: format-toggle-group CSS in builder.css",
+          'format-toggle-group' in builder_css_17)
+    check("DOCX: format-toggle active style in builder.css",
+          'format-toggle.active' in builder_css_17 or '.format-toggle.active' in builder_css_17)
+    check("DOCX: format-hint CSS in builder.css",
+          'format-hint' in builder_css_17)
+
     elapsed = time.time() - start
 
     # ============================================================

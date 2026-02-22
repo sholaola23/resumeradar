@@ -371,12 +371,12 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                     <div class="payment-content">
                         <div class="payment-info">
                             <h2>Download Your CV</h2>
-                            <p>Get a clean, ATS-optimized PDF resume ready to submit.</p>
+                            <p>Get your ATS-optimized CV in PDF and Word format</p>
                         </div>
                         <div class="payment-action">
                             <div class="payment-price" id="paymentPrice">£2</div>
                             <button type="button" class="payment-btn" id="paymentBtn">
-                                <span class="pay-btn-text">Download PDF</span>
+                                <span class="pay-btn-text">Get Your CV</span>
                                 <span class="pay-btn-loading" style="display: none;">
                                     <span class="spinner spinner-sm"></span> Redirecting...
                                 </span>
@@ -390,7 +390,22 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             <label for="deliveryEmail">Email a copy to yourself <span id="emailRequiredHint">(optional)</span></label>
                             <input type="email" id="deliveryEmail" class="payment-email-input"
                                    placeholder="your@email.com" maxlength="254">
-                            <small class="payment-email-hint">PDF downloads instantly + we send a backup to your inbox</small>
+                            <small class="payment-email-hint">Downloads instantly + we send a backup to your inbox</small>
+                        </div>
+                        <div class="format-selector-row">
+                            <label>Download format</label>
+                            <div class="format-toggle-group">
+                                <button type="button" class="format-toggle active" data-format="both">
+                                    PDF + Word
+                                </button>
+                                <button type="button" class="format-toggle" data-format="pdf">
+                                    PDF only
+                                </button>
+                                <button type="button" class="format-toggle" data-format="docx">
+                                    Word only
+                                </button>
+                            </div>
+                            <small class="format-hint">Word format lets you make quick edits before submitting</small>
                         </div>
                     </div>
                 </div>

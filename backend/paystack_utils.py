@@ -19,7 +19,7 @@ PAYSTACK_AMOUNT_KOBO = int(os.getenv("PAYSTACK_AMOUNT_KOBO", "350000"))  # 35000
 PAYSTACK_CURRENCY = "NGN"
 
 
-def create_paystack_transaction(cv_token, template, callback_url, customer_email):
+def create_paystack_transaction(cv_token, template, callback_url, customer_email, format_choice="both"):
     """
     Initialize a Paystack transaction. Equivalent to Stripe's create_checkout_session().
 
@@ -28,6 +28,7 @@ def create_paystack_transaction(cv_token, template, callback_url, customer_email
         template: chosen PDF template name (classic/modern/minimal)
         callback_url: URL to redirect after payment (with token embedded)
         customer_email: REQUIRED - real customer email for receipts + risk scoring
+        format_choice: download format ("pdf", "docx", or "both")
 
     Returns:
         dict with authorization_url and reference, or error
@@ -43,6 +44,7 @@ def create_paystack_transaction(cv_token, template, callback_url, customer_email
         "cv_token": cv_token,
         "template": template,
         "delivery_email": customer_email,
+        "format": format_choice,
         "custom_fields": [
             {"display_name": "Product", "variable_name": "product", "value": "ResumeRadar CV Download"}
         ],
@@ -137,6 +139,7 @@ def verify_paystack_payment(reference, expected_token):
             "verified": True,
             "template": metadata.get("template", "classic"),
             "delivery_email": metadata.get("delivery_email", ""),
+            "format": metadata.get("format", ""),
         }
     except requests.RequestException as e:
         print(f"Paystack verify error: {e}")

@@ -11,7 +11,7 @@ import stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 
-def create_checkout_session(cv_token, template, success_url, cancel_url, delivery_email=None):
+def create_checkout_session(cv_token, template, success_url, cancel_url, delivery_email=None, format_choice="both"):
     """
     Create a Stripe Checkout session for a £2 CV download.
 
@@ -21,6 +21,7 @@ def create_checkout_session(cv_token, template, success_url, cancel_url, deliver
         success_url: URL to redirect after successful payment
         cancel_url: URL to redirect if user cancels
         delivery_email: optional email to send PDF copy to (stored in metadata)
+        format_choice: download format ("pdf", "docx", or "both")
 
     Returns:
         dict with session_id and checkout_url, or error
@@ -33,6 +34,7 @@ def create_checkout_session(cv_token, template, success_url, cancel_url, deliver
         metadata = {
             "cv_token": cv_token,
             "template": template,
+            "format": format_choice,
         }
         if delivery_email:
             metadata["delivery_email"] = delivery_email
@@ -82,6 +84,7 @@ def verify_checkout_payment(session_id, expected_token):
             "verified": True,
             "template": session.metadata.get("template", "classic"),
             "delivery_email": session.metadata.get("delivery_email", ""),
+            "format": session.metadata.get("format", ""),
         }
     except stripe.error.StripeError as e:
         print(f"Stripe verify error: {str(e)}")

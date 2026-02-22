@@ -609,6 +609,53 @@
     margin-top: 4px;
 }
 
+/* ---- Format Toggle ---- */
+.format-selector-row {
+    margin: 12px 0;
+}
+.format-selector-row label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 6px;
+}
+.format-toggle-group {
+    display: flex;
+    gap: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.format-toggle {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    transition: all 0.15s;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+.format-toggle:last-child {
+    border-right: none;
+}
+.format-toggle.active {
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+}
+.format-toggle:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.15);
+}
+.format-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
 /* ---- Download Status (post-payment) ---- */
 .download-status {
     text-align: center;

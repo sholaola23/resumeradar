@@ -24,6 +24,7 @@ from backend.ai_analyzer import get_ai_suggestions
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.cv_pdf_generator import generate_cv_pdf
+from backend.cv_docx_generator import generate_cv_docx
 from backend.stripe_utils import create_checkout_session, verify_checkout_payment, verify_webhook_signature
 from backend.paystack_utils import (
     create_paystack_transaction,
@@ -842,6 +843,9 @@ def build_create_checkout():
         token = data.get("token", "").strip()
         template = data.get("template", "classic").strip()
         provider = data.get("provider", "stripe").strip().lower()
+        format_choice = data.get("format", "both").strip().lower()
+        if format_choice not in ("pdf", "docx", "both"):
+            format_choice = "both"
 
         if not token:
             return jsonify({"error": "Missing CV token."}), 400
@@ -879,7 +883,7 @@ def build_create_checkout():
                 return jsonify({"error": "Email address is required for Naira payments."}), 400
 
             callback_url = f"{base_url}/build?payment=success&token={token}&provider=paystack"
-            result = create_paystack_transaction(token, template, callback_url, delivery_email)
+            result = create_paystack_transaction(token, template, callback_url, delivery_email, format_choice)
 
             if result.get("error"):
                 return jsonify({"error": result["error"]}), 500
@@ -889,6 +893,7 @@ def build_create_checkout():
                 try:
                     _redis_client.setex(f"resumeradar:cv_template:{token}", 259200, template)
                     _redis_client.setex(f"resumeradar:cv_email:{token}", 259200, delivery_email)
+                    _redis_client.setex(f"resumeradar:cv_format:{token}", 259200, format_choice)
                 except Exception:
                     pass
 
@@ -903,7 +908,7 @@ def build_create_checkout():
         success_url = f"{base_url}/build?payment=success&token={token}&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{base_url}/build?payment=cancelled"
 
-        result = create_checkout_session(token, template, success_url, cancel_url, delivery_email)
+        result = create_checkout_session(token, template, success_url, cancel_url, delivery_email, format_choice)
 
         if result.get("error"):
             return jsonify({"error": result["error"]}), 500
@@ -924,13 +929,20 @@ def build_create_checkout():
 @limiter.limit("30 per hour")
 def build_download(token):
     """
-    Verify payment, generate PDF with chosen template, return download.
+    Verify payment, generate CV in chosen format, return download.
 
     GET (server storage / Redis):
-        Query params: session_id, template
+        Query params: session_id, template, format
     POST (client storage fallback):
-        JSON body: { session_id, template, cv_data }
+        JSON body: { session_id, template, cv_data, format }
+
+    Format resolution: request param > payment metadata > "pdf" (backward compatible)
     """
+    import zipfile
+    import io
+
+    VALID_FORMATS = ("pdf", "docx", "both")
+
     try:
         # Parse params from GET query string or POST body
         if request.method == 'POST':
@@ -940,12 +952,14 @@ def build_download(token):
             client_cv_data = body.get("cv_data")
             provider = body.get("provider", "").strip()
             paystack_ref = body.get("reference", "").strip()
+            dl_format = body.get("format", "").strip().lower()
         else:
             session_id = request.args.get("session_id", "").strip()
             template = request.args.get("template", "classic").strip()
             client_cv_data = None
             provider = request.args.get("provider", "").strip()
             paystack_ref = request.args.get("reference", "").strip()
+            dl_format = request.args.get("format", "").strip().lower()
 
         # Verify payment based on provider
         if provider == "paystack" and paystack_ref:
@@ -959,6 +973,12 @@ def build_download(token):
 
         # Use template from payment metadata if available
         template = payment.get("template", template)
+
+        # Format resolution: request param > payment metadata > "pdf"
+        if dl_format not in VALID_FORMATS:
+            dl_format = payment.get("format", "").strip().lower()
+        if dl_format not in VALID_FORMATS:
+            dl_format = "pdf"
 
         # Get CV data: try Redis first, fall back to client-provided data
         cv_data = None
@@ -986,31 +1006,62 @@ def build_download(token):
         if not cv_data:
             return jsonify({"error": "CV data not found. It may have expired. Please regenerate."}), 404
 
-        # Generate PDF
-        pdf_bytes = bytes(generate_cv_pdf(cv_data, template))
-
         raw_name = cv_data.get("personal", {}).get("full_name", "Resume")
         safe_name = re_module.sub(r'[^\w.-]', '_', raw_name)
-        filename = f"{safe_name}_CV.pdf"
 
-        # Check if email delivery was requested (from Stripe metadata)
+        # Check if email delivery was requested (from payment metadata)
         delivery_email = payment.get("delivery_email", "")
 
-        response = Response(
-            pdf_bytes,
-            mimetype='application/pdf',
-            headers={
-                'Content-Disposition': f'attachment; filename={filename}',
-                'Content-Type': 'application/pdf',
-                'Content-Length': str(len(pdf_bytes))
-            }
-        )
+        # Generate files based on format
+        if dl_format == "docx":
+            docx_bytes = bytes(generate_cv_docx(cv_data, template))
+            filename = f"{safe_name}_CV.docx"
+            response = Response(
+                docx_bytes,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                headers={
+                    'Content-Disposition': f'attachment; filename={filename}',
+                    'Content-Length': str(len(docx_bytes))
+                }
+            )
+        elif dl_format == "both":
+            pdf_bytes = bytes(generate_cv_pdf(cv_data, template))
+            docx_bytes = bytes(generate_cv_docx(cv_data, template))
+            # Create in-memory zip with both files
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr(f"{safe_name}_CV.pdf", pdf_bytes)
+                zf.writestr(f"{safe_name}_CV.docx", docx_bytes)
+            zip_bytes = zip_buffer.getvalue()
+            filename = f"{safe_name}_CV.zip"
+            response = Response(
+                zip_bytes,
+                mimetype='application/zip',
+                headers={
+                    'Content-Disposition': f'attachment; filename={filename}',
+                    'Content-Length': str(len(zip_bytes))
+                }
+            )
+        else:
+            # Default: PDF only
+            pdf_bytes = bytes(generate_cv_pdf(cv_data, template))
+            filename = f"{safe_name}_CV.pdf"
+            response = Response(
+                pdf_bytes,
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'attachment; filename={filename}',
+                    'Content-Type': 'application/pdf',
+                    'Content-Length': str(len(pdf_bytes))
+                }
+            )
+
         response.headers['X-Email-Requested'] = 'true' if delivery_email else 'false'
         return response
 
     except Exception as e:
         print(f"CV Builder download error: {str(e)}")
-        return jsonify({"error": "Failed to generate PDF."}), 500
+        return jsonify({"error": "Failed to generate CV."}), 500
 
 
 def _send_cv_email(email, token, template, event_id):
@@ -1048,13 +1099,26 @@ def _send_cv_email(email, token, template, event_id):
         pdf_bytes = bytes(generate_cv_pdf(cv_data, template))
         pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
 
+        # Generate DOCX and decide whether to include it (10MB size guard)
+        docx_bytes = generate_cv_docx(cv_data, template)
+        total_size = len(pdf_bytes) + len(docx_bytes)
+        include_docx = total_size <= 10_000_000
+
         # Sanitize user-derived values
         raw_name = cv_data.get('personal', {}).get('full_name', 'there')
         first_name = html_module.escape(
             raw_name.split()[0] if raw_name and raw_name != 'there' else 'there'
         )
         safe_name = re_module.sub(r'[^\w.-]', '_', raw_name) if raw_name != 'there' else 'ResumeRadar'
-        filename = f"{safe_name}_CV.pdf"
+
+        # Build attachments list — always PDF, DOCX if under 10MB combined
+        attachments = [{"filename": f"{safe_name}_CV.pdf", "content": pdf_base64}]
+        if include_docx:
+            docx_base64 = base64.b64encode(docx_bytes).decode('utf-8')
+            attachments.append({"filename": f"{safe_name}_CV.docx", "content": docx_base64})
+
+        format_note = "PDF and Word format" if include_docx else "PDF format"
+        edit_tip = '<li>Open the Word version to make quick edits</li>' if include_docx else ''
 
         html_body = f"""<div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
             <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
@@ -1063,10 +1127,11 @@ def _send_cv_email(email, token, template, event_id):
             </div>
             <div style="background: white; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
                 <h2 style="margin: 0 0 12px; font-size: 20px;">Hi {first_name},</h2>
-                <p style="font-size: 15px; line-height: 1.6; color: #4b5563;">Your polished CV is attached. It has been tailored for ATS systems.</p>
+                <p style="font-size: 15px; line-height: 1.6; color: #4b5563;">Your polished CV is attached in {format_note}. It has been tailored for ATS systems.</p>
                 <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
                     <p style="margin: 0; font-size: 14px; color: #166534; font-weight: 600;">Next steps:</p>
                     <ul style="margin: 8px 0 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
+                        {edit_tip}
                         <li>Submit your CV to the target job posting</li>
                         <li>Scan another resume at resumeradar.sholastechnotes.com</li>
                         <li>Tailor a new CV for each different role</li>
@@ -1083,7 +1148,7 @@ def _send_cv_email(email, token, template, event_id):
             "to": [email],
             "subject": f"Your ResumeRadar CV is ready, {first_name}",
             "html": html_body,
-            "attachments": [{"filename": filename, "content": pdf_base64}],
+            "attachments": attachments,
         })
 
     except Exception as e:

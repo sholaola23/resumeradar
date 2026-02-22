@@ -14,6 +14,7 @@
     let currentPolished = null;
     let storageMode = 'server'; // 'server' (Redis) or 'client' (sessionStorage fallback)
     let lastTargetJD = ''; // Stores the last job description for form pre-populate
+    var selectedFormat = 'both'; // Download format: 'pdf', 'docx', or 'both'
 
     // Loading message rotation
     const LOADING_MESSAGES = [
@@ -971,6 +972,19 @@
     });
 
     // ============================================================
+    // FORMAT TOGGLE
+    // ============================================================
+    document.querySelectorAll('.format-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.format-toggle').forEach(function(b) {
+                b.classList.remove('active');
+            });
+            this.classList.add('active');
+            selectedFormat = this.getAttribute('data-format');
+        });
+    });
+
+    // ============================================================
     // PAYMENT FLOW
     // ============================================================
     paymentBtn.addEventListener('click', async function () {
@@ -1010,6 +1024,7 @@
                     template: selectedTemplate,
                     delivery_email: deliveryEmail.trim(),
                     provider: detectedProvider,
+                    format: selectedFormat,
                 }),
             });
 
@@ -1042,8 +1057,9 @@
                 return;
             }
 
-            // Store template choice for post-payment
+            // Store template + format choice for post-payment
             sessionStorage.setItem('resumeradar_cv_template', selectedTemplate);
+            sessionStorage.setItem('resumeradar_cv_format', selectedFormat);
 
             // Store provider + reference for Paystack post-payment handling
             if (result.provider === 'paystack') {
@@ -1107,6 +1123,9 @@
     async function handlePostPayment(token, sessionId, provider, paystackRef) {
         const template = sessionStorage.getItem('resumeradar_cv_template') || 'classic';
         sessionStorage.removeItem('resumeradar_cv_template');
+        // Retrieve format — if absent (session lost), omit it and let backend resolve via metadata
+        const format = sessionStorage.getItem('resumeradar_cv_format') || '';
+        sessionStorage.removeItem('resumeradar_cv_format');
         // Clean up provider storage
         sessionStorage.removeItem('resumeradar_payment_provider');
         sessionStorage.removeItem('resumeradar_paystack_ref');
@@ -1115,7 +1134,7 @@
         builderForm.style.display = 'none';
         if (previewWrapper) previewWrapper.style.display = 'block';
         previewSection.style.display = 'block';
-        previewContent.innerHTML = '<div class="download-status"><span class="spinner"></span> Preparing your PDF download...</div>';
+        previewContent.innerHTML = '<div class="download-status"><span class="spinner"></span> Preparing your CV download...</div>';
 
         try {
             let response;
@@ -1126,34 +1145,40 @@
             if (provider === 'paystack' && paystackRef) {
                 // ---- PAYSTACK: verify by reference ----
                 if (storedCvData) {
+                    const bodyObj = {
+                        reference: paystackRef,
+                        provider: 'paystack',
+                        template: template,
+                        cv_data: JSON.parse(storedCvData),
+                    };
+                    if (format) bodyObj.format = format;
                     response = await fetch(`/api/build/download/${token}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            reference: paystackRef,
-                            provider: 'paystack',
-                            template: template,
-                            cv_data: JSON.parse(storedCvData),
-                        }),
+                        body: JSON.stringify(bodyObj),
                     });
                 } else {
-                    const downloadUrl = `/api/build/download/${token}?reference=${encodeURIComponent(paystackRef)}&provider=paystack&template=${encodeURIComponent(template)}`;
+                    let downloadUrl = `/api/build/download/${token}?reference=${encodeURIComponent(paystackRef)}&provider=paystack&template=${encodeURIComponent(template)}`;
+                    if (format) downloadUrl += `&format=${encodeURIComponent(format)}`;
                     response = await fetch(downloadUrl);
                 }
             } else {
                 // ---- STRIPE: verify by session_id (existing flow) ----
                 if (storedCvData) {
+                    const bodyObj = {
+                        session_id: sessionId,
+                        template: template,
+                        cv_data: JSON.parse(storedCvData),
+                    };
+                    if (format) bodyObj.format = format;
                     response = await fetch(`/api/build/download/${token}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            session_id: sessionId,
-                            template: template,
-                            cv_data: JSON.parse(storedCvData),
-                        }),
+                        body: JSON.stringify(bodyObj),
                     });
                 } else {
-                    const downloadUrl = `/api/build/download/${token}?session_id=${encodeURIComponent(sessionId)}&template=${encodeURIComponent(template)}`;
+                    let downloadUrl = `/api/build/download/${token}?session_id=${encodeURIComponent(sessionId)}&template=${encodeURIComponent(template)}`;
+                    if (format) downloadUrl += `&format=${encodeURIComponent(format)}`;
                     response = await fetch(downloadUrl);
                 }
             }
@@ -1172,16 +1197,29 @@
             // Read email-requested header before consuming the body
             const emailRequested = response.headers.get('X-Email-Requested') === 'true';
 
+            // Determine filename from actual response Content-Type (not requested format)
+            const contentType = response.headers.get('Content-Type') || '';
+            let downloadFilename = 'ResumeRadar_CV.pdf'; // safe default
+            let celebrationMsg = 'ResumeRadar_CV.pdf';
+
+            if (contentType.includes('zip')) {
+                downloadFilename = 'ResumeRadar_CV.zip';
+                celebrationMsg = 'ResumeRadar_CV.zip (contains PDF + Word)';
+            } else if (contentType.includes('wordprocessingml') || contentType.includes('docx')) {
+                downloadFilename = 'ResumeRadar_CV.docx';
+                celebrationMsg = 'ResumeRadar_CV.docx';
+            }
+
             // Trigger download
             const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
+            const dlUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = 'ResumeRadar_CV.pdf';
+            a.href = dlUrl;
+            a.download = downloadFilename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(dlUrl);
 
             // Celebration UI
             const emailBadge = emailRequested
@@ -1192,7 +1230,7 @@
                 <div class="celebration-container">
                     <div class="celebration-check">✓</div>
                     <h2 class="celebration-title">Your CV is Ready!</h2>
-                    <p class="celebration-subtitle">Check your downloads folder for ResumeRadar_CV.pdf</p>
+                    <p class="celebration-subtitle">Check your downloads folder for ${celebrationMsg}</p>
                     ${emailBadge}
                     <div class="celebration-next">
                         <p class="celebration-next-title">What to do next:</p>
