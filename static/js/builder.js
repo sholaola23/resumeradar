@@ -1359,4 +1359,162 @@
         return div.innerHTML;
     }
 
+    // ============================================================
+    // AI MICRO-TOOLS (Bullet Enhancer + Summary Generator)
+    // ============================================================
+
+    // Toggle tool sections open/closed
+    document.querySelectorAll('.tool-header[data-toggle]').forEach(function(header) {
+        header.addEventListener('click', function() {
+            var target = this.getAttribute('data-toggle');
+            var body = document.getElementById(target + 'Body');
+            var icon = this.querySelector('.tool-toggle-icon');
+            if (!body) return;
+            var visible = body.style.display !== 'none';
+            body.style.display = visible ? 'none' : 'block';
+            if (icon) icon.textContent = visible ? '▸' : '▾';
+        });
+    });
+
+    // Bullet Point Enhancer
+    (function() {
+        var btn = document.getElementById('enhanceBulletBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async function() {
+            var input = document.getElementById('bulletInput');
+            var context = document.getElementById('bulletContext');
+            var output = document.getElementById('bulletOutput');
+            var outputText = document.getElementById('bulletOutputText');
+            var loading = document.getElementById('bulletLoading');
+            var errorDiv = document.getElementById('bulletError');
+
+            var bulletText = (input.value || '').trim();
+            if (!bulletText || bulletText.length < 10) {
+                errorDiv.textContent = 'Please enter a bullet point (at least 10 characters).';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            loading.style.display = 'flex';
+            output.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            try {
+                var resp = await fetch('/api/tools/enhance-bullet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bullet_text: bulletText,
+                        job_context: (context.value || '').trim() || null
+                    })
+                });
+
+                var data = await resp.json();
+
+                if (!resp.ok || data.error) {
+                    errorDiv.textContent = resp.status === 429 ? 'Daily limit reached (10/day). Try again tomorrow!' : (data.error || 'Something went wrong.');
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                outputText.textContent = data.enhanced;
+                output.style.display = 'flex';
+            } catch (e) {
+                errorDiv.textContent = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                btn.disabled = false;
+            }
+        });
+
+        // Copy button
+        var copyBtn = document.getElementById('copyBulletBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', function() {
+                var text = document.getElementById('bulletOutputText').textContent;
+                navigator.clipboard.writeText(text).then(function() {
+                    copyBtn.textContent = '✅ Copied!';
+                    setTimeout(function() { copyBtn.textContent = '📋 Copy'; }, 2000);
+                });
+            });
+        }
+    })();
+
+    // Resume Summary Generator
+    (function() {
+        var btn = document.getElementById('generateSummaryBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async function() {
+            var resumeInput = document.getElementById('summaryResumeInput');
+            var jobInput = document.getElementById('summaryJobInput');
+            var output = document.getElementById('summaryOutput');
+            var outputText = document.getElementById('summaryOutputText');
+            var loading = document.getElementById('summaryLoading');
+            var errorDiv = document.getElementById('summaryError');
+
+            var resumeText = (resumeInput.value || '').trim();
+            var jobDesc = (jobInput.value || '').trim();
+
+            if (!resumeText || resumeText.length < 50) {
+                errorDiv.textContent = 'Please paste your resume text (at least 50 characters).';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            if (!jobDesc || jobDesc.split(/\s+/).length < 10) {
+                errorDiv.textContent = 'Please provide a job description.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            loading.style.display = 'flex';
+            output.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            try {
+                var resp = await fetch('/api/tools/generate-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        resume_text: resumeText,
+                        job_description: jobDesc
+                    })
+                });
+
+                var data = await resp.json();
+
+                if (!resp.ok || data.error) {
+                    errorDiv.textContent = resp.status === 429 ? 'Daily limit reached (5/day). Try again tomorrow!' : (data.error || 'Something went wrong.');
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                outputText.textContent = data.summary;
+                output.style.display = 'flex';
+            } catch (e) {
+                errorDiv.textContent = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                btn.disabled = false;
+            }
+        });
+
+        // Copy button
+        var copyBtn = document.getElementById('copySummaryBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', function() {
+                var text = document.getElementById('summaryOutputText').textContent;
+                navigator.clipboard.writeText(text).then(function() {
+                    copyBtn.textContent = '✅ Copied!';
+                    setTimeout(function() { copyBtn.textContent = '📋 Copy'; }, 2000);
+                });
+            });
+        }
+    })();
+
 })();

@@ -409,6 +409,69 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                         </div>
                     </div>
                 </div>
+
+                <!-- AI Micro-Tools -->
+                <div class="builder-card tools-card">
+                    <h2>🛠️ AI Writing Tools <span class="tools-free-badge">Free</span></h2>
+                    <p class="card-subtitle">Quick AI-powered helpers — no payment needed.</p>
+
+                    <!-- Bullet Point Enhancer -->
+                    <div class="tool-section" id="bulletEnhancerSection">
+                        <div class="tool-header" data-toggle="bulletEnhancer">
+                            <span class="tool-icon">⚡</span>
+                            <div class="tool-info">
+                                <span class="tool-name">Bullet Point Enhancer</span>
+                                <span class="tool-desc">Paste a weak bullet point — AI rewrites it with metrics and action verbs</span>
+                            </div>
+                            <span class="tool-toggle-icon">▸</span>
+                        </div>
+                        <div class="tool-body" id="bulletEnhancerBody" style="display: none;">
+                            <textarea class="tool-input" id="bulletInput" rows="2" placeholder="e.g. Managed a team and worked on projects" maxlength="500"></textarea>
+                            <textarea class="tool-input tool-context" id="bulletContext" rows="1" placeholder="Target role (optional, e.g. Senior Product Manager)" maxlength="200"></textarea>
+                            <div class="tool-actions">
+                                <button type="button" class="tool-btn" id="enhanceBulletBtn">Enhance Bullet</button>
+                                <span class="tool-limit">10/day</span>
+                            </div>
+                            <div class="tool-output" id="bulletOutput" style="display: none;">
+                                <div class="tool-output-text" id="bulletOutputText"></div>
+                                <button type="button" class="tool-copy-btn" id="copyBulletBtn">📋 Copy</button>
+                            </div>
+                            <div class="tool-loading" id="bulletLoading" style="display: none;">
+                                <div class="cl-spinner"></div> <span>Enhancing...</span>
+                            </div>
+                            <div class="tool-error" id="bulletError" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Resume Summary Generator -->
+                    <div class="tool-section" id="summaryGeneratorSection">
+                        <div class="tool-header" data-toggle="summaryGenerator">
+                            <span class="tool-icon">📝</span>
+                            <div class="tool-info">
+                                <span class="tool-name">Resume Summary Generator</span>
+                                <span class="tool-desc">Generate a professional summary paragraph tailored to the role</span>
+                            </div>
+                            <span class="tool-toggle-icon">▸</span>
+                        </div>
+                        <div class="tool-body" id="summaryGeneratorBody" style="display: none;">
+                            <textarea class="tool-input" id="summaryResumeInput" rows="4" placeholder="Paste your resume text or key skills/experience..." maxlength="3000"></textarea>
+                            <textarea class="tool-input tool-context" id="summaryJobInput" rows="2" placeholder="Target job description (paste the key requirements)" maxlength="2000"></textarea>
+                            <div class="tool-actions">
+                                <button type="button" class="tool-btn" id="generateSummaryBtn">Generate Summary</button>
+                                <span class="tool-limit">5/day</span>
+                            </div>
+                            <div class="tool-output" id="summaryOutput" style="display: none;">
+                                <div class="tool-output-text" id="summaryOutputText"></div>
+                                <button type="button" class="tool-copy-btn" id="copySummaryBtn">📋 Copy</button>
+                            </div>
+                            <div class="tool-loading" id="summaryLoading" style="display: none;">
+                                <div class="cl-spinner"></div> <span>Writing summary...</span>
+                            </div>
+                            <div class="tool-error" id="summaryError" style="display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </section>

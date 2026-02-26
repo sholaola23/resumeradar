@@ -1055,6 +1055,9 @@ Nice to Have
         // 2. Category Breakdown
         renderCategories(data.category_scores);
 
+        // 2b. Sub-score bars (Formatting + Recruiter Tips)
+        renderSubScoreBars(data);
+
         // 3. Missing Keywords
         renderKeywords('missingKeywords', data.missing_keywords, 'missing');
 
@@ -1259,6 +1262,88 @@ Nice to Have
         }
     }
 
+    function renderSubScoreBars(data) {
+        const container = document.getElementById('categoryBars');
+        if (!container) return;
+
+        // Formatting score bar
+        const ats = data.ats_formatting;
+        if (ats && typeof ats.formatting_score === 'number') {
+            renderSubScoreBar(container, '📋 ATS Formatting', ats.formatting_score, ats.checklist, null);
+        }
+
+        // Recruiter Tips bar
+        const rt = data.recruiter_tips;
+        if (rt && typeof rt.score === 'number') {
+            renderSubScoreBar(container, '🎯 Recruiter Tips', rt.score, rt.checklist, rt.quantification);
+        }
+    }
+
+    function renderSubScoreBar(container, label, score, checklist, quantification) {
+        let barClass = 'high';
+        if (score < 50) barClass = 'low';
+        else if (score < 80) barClass = 'medium';
+
+        const bar = document.createElement('div');
+        bar.className = 'category-bar subscore-bar';
+
+        // Build checklist HTML
+        let detailsHTML = '';
+        if (checklist && checklist.length > 0) {
+            const items = checklist.map(item => {
+                const icon = item.passed ? '✅' : '❌';
+                const detail = item.detail ? ` — ${item.detail}` : '';
+                return `<div class="subscore-item"><span class="subscore-icon">${icon}</span><span class="subscore-label">${item.label}${detail}</span><span class="subscore-pts">${item.points} pts</span></div>`;
+            }).join('');
+            detailsHTML = `<div class="subscore-details" style="display:none;">${items}</div>`;
+        }
+
+        // Flagged bullets section (for recruiter tips with quantification data)
+        let flaggedHTML = '';
+        if (quantification && quantification.flagged_bullets && quantification.flagged_bullets.length > 0) {
+            const bullets = quantification.flagged_bullets.slice(0, 5).map(b => {
+                const truncated = b.length > 100 ? b.substring(0, 100) + '...' : b;
+                return `<div class="flagged-bullet">💡 <span>${truncated}</span></div>`;
+            }).join('');
+            flaggedHTML = `<div class="flagged-bullets" style="display:none;">
+                <div class="flagged-header">Bullets that could use metrics:</div>
+                ${bullets}
+            </div>`;
+        }
+
+        bar.innerHTML = `
+            <div class="category-header subscore-header" style="cursor:pointer;">
+                <span class="category-name">${label}</span>
+                <span class="category-score">${Math.round(score)}%<span class="subscore-toggle"> ▸</span></span>
+            </div>
+            <div class="bar-bg">
+                <div class="bar-fill ${barClass}" style="width: 0%"></div>
+            </div>
+            ${detailsHTML}
+            ${flaggedHTML}
+        `;
+        container.appendChild(bar);
+
+        // Animate bar fill
+        setTimeout(() => {
+            bar.querySelector('.bar-fill').style.width = `${score}%`;
+        }, 200);
+
+        // Toggle expand/collapse
+        const header = bar.querySelector('.subscore-header');
+        header.addEventListener('click', () => {
+            const details = bar.querySelector('.subscore-details');
+            const flagged = bar.querySelector('.flagged-bullets');
+            const toggle = bar.querySelector('.subscore-toggle');
+            if (details) {
+                const visible = details.style.display !== 'none';
+                details.style.display = visible ? 'none' : 'block';
+                if (flagged) flagged.style.display = visible ? 'none' : 'block';
+                toggle.textContent = visible ? ' ▸' : ' ▾';
+            }
+        });
+    }
+
     function renderKeywords(containerId, keywords, type) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
@@ -1425,6 +1510,94 @@ Nice to Have
             };
         }
     }
+
+    // ============================================================
+    // COVER LETTER GENERATOR
+    // ============================================================
+    (function initCoverLetterGenerator() {
+        const btn = document.getElementById('generateCoverLetterBtn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async () => {
+            const output = document.getElementById('coverLetterOutput');
+            const loading = document.getElementById('coverLetterLoading');
+            const errorDiv = document.getElementById('coverLetterError');
+            const body = document.getElementById('coverLetterBody');
+
+            // Get resume text from last scan data, job description from form
+            const resumeText = lastScanData && lastScanData.resume_text;
+            const jobDesc = document.getElementById('jobDescription') && document.getElementById('jobDescription').value.trim();
+
+            if (!resumeText || !jobDesc) {
+                errorDiv.textContent = 'Please complete a scan first so we have your resume and job description.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            // Show loading, hide others
+            btn.disabled = true;
+            btn.querySelector('.cl-btn-text').textContent = 'Generating...';
+            loading.style.display = 'flex';
+            output.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/generate/cover-letter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resume_text: resumeText, job_description: jobDesc }),
+                });
+
+                const data = await resp.json();
+
+                if (!resp.ok || data.error) {
+                    const msg = data.error || 'Something went wrong. Please try again.';
+                    if (resp.status === 429) {
+                        errorDiv.textContent = 'Daily limit reached (3/day). Try again tomorrow!';
+                    } else {
+                        errorDiv.textContent = msg;
+                    }
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+
+                // Render cover letter
+                body.innerHTML = data.cover_letter.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+                body.innerHTML = '<p>' + body.innerHTML + '</p>';
+                output.style.display = 'block';
+
+                // Copy handler
+                document.getElementById('copyCoverLetterFull').onclick = () => {
+                    const text = body.innerText;
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('Cover letter copied!');
+                    }).catch(() => {
+                        showToast('Could not copy — try selecting the text manually', true);
+                    });
+                };
+
+                // Download handler
+                document.getElementById('downloadCoverLetterTxt').onclick = () => {
+                    const text = body.innerText;
+                    const blob = new Blob([text], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'cover-letter.txt';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('Cover letter downloaded!');
+                };
+            } catch (err) {
+                errorDiv.textContent = 'Network error. Please check your connection and try again.';
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+                btn.disabled = false;
+                btn.querySelector('.cl-btn-text').textContent = 'Generate Full Cover Letter';
+            }
+        });
+    })();
 
     function renderBuildCta(score) {
         const heading = document.getElementById('buildCtaHeading');

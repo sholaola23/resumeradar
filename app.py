@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 
 from backend.resume_parser import parse_resume
-from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting
-from backend.ai_analyzer import get_ai_suggestions
+from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score
+from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.cv_pdf_generator import generate_cv_pdf
@@ -289,6 +289,9 @@ def scan_resume():
         # 6. Analyze ATS formatting
         ats_check = analyze_ats_formatting(extracted_resume_text)
 
+        # 6b. Calculate recruiter tips score
+        recruiter_tips = calculate_recruiter_tips_score(extracted_resume_text, job_description)
+
         # 7. Get AI-powered suggestions
         ai_suggestions = get_ai_suggestions(
             extracted_resume_text,
@@ -311,6 +314,7 @@ def scan_resume():
             "matched_keywords": match_results["matched_keywords"],
             "missing_keywords": match_results["missing_keywords"],
             "ats_formatting": ats_check,
+            "recruiter_tips": recruiter_tips,
             "ai_suggestions": ai_suggestions,
             "resume_word_count": parse_result["word_count"],
             "resume_text": extracted_resume_text,
@@ -325,6 +329,99 @@ def scan_resume():
 
         print(f"Scan error: {str(e)}")
         return jsonify({"error": "Something went wrong during the analysis. Please try again."}), 500
+
+
+@app.route('/api/generate/cover-letter', methods=['POST'])
+@limiter.limit("3 per day")
+def generate_cover_letter_endpoint():
+    """
+    Generate a tailored cover letter from resume + job description.
+    Rate limited to 3 per day per IP (free tier).
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        resume_text = (data.get('resume_text') or '').strip()
+        job_description = (data.get('job_description') or '').strip()
+
+        if not resume_text or len(resume_text) < 50:
+            return jsonify({"error": "Please provide your resume text (at least 50 characters)."}), 400
+
+        if not job_description or len(job_description.split()) < 10:
+            return jsonify({"error": "Please provide a full job description."}), 400
+
+        result = generate_cover_letter(resume_text, job_description)
+
+        if "error" in result:
+            return jsonify(result), 500
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Cover letter endpoint error: {str(e)}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+@app.route('/api/tools/enhance-bullet', methods=['POST'])
+@limiter.limit("10 per day")
+def enhance_bullet_endpoint():
+    """Enhance a resume bullet point with AI. Rate limited to 10/day per IP."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        bullet_text = (data.get('bullet_text') or '').strip()
+        job_context = (data.get('job_context') or '').strip() or None
+
+        if not bullet_text or len(bullet_text) < 10:
+            return jsonify({"error": "Please provide a bullet point (at least 10 characters)."}), 400
+
+        if len(bullet_text) > 500:
+            return jsonify({"error": "Bullet point is too long (max 500 characters)."}), 400
+
+        result = enhance_bullet_point(bullet_text, job_context)
+
+        if "error" in result:
+            return jsonify(result), 500
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Bullet enhance endpoint error: {str(e)}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+@app.route('/api/tools/generate-summary', methods=['POST'])
+@limiter.limit("5 per day")
+def generate_summary_endpoint():
+    """Generate a professional resume summary. Rate limited to 5/day per IP."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        resume_text = (data.get('resume_text') or '').strip()
+        job_description = (data.get('job_description') or '').strip()
+
+        if not resume_text or len(resume_text) < 50:
+            return jsonify({"error": "Please provide resume text (at least 50 characters)."}), 400
+
+        if not job_description or len(job_description.split()) < 10:
+            return jsonify({"error": "Please provide a job description."}), 400
+
+        result = generate_resume_summary(resume_text, job_description)
+
+        if "error" in result:
+            return jsonify(result), 500
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Summary generation endpoint error: {str(e)}")
+        return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
 @app.route('/api/download-report', methods=['POST'])
@@ -1519,6 +1616,9 @@ def add_security_headers(response):
     # Only add HSTS in production
     if not app.debug:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    # Block search engine indexing on staging
+    if os.environ.get('STAGING') == 'true':
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow'
     return response
 
 

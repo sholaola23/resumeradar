@@ -301,23 +301,27 @@ def calculate_match(resume_keywords, job_keywords):
 def analyze_ats_formatting(resume_text):
     """
     Check for common ATS formatting issues in the resume.
+    Returns issues, tips, contact info, AND a numerical formatting_score (0-100).
     """
     issues = []
     tips = []
+    checklist = []  # individual check results for UI detail expansion
 
-    # Check for common ATS-unfriendly patterns
-    if re.search(r'[^\x00-\x7F]', resume_text):
-        # Has non-ASCII characters (emojis, special chars)
+    # --- Check 1: Special characters (15 pts) ---
+    has_special_chars = bool(re.search(r'[^\x00-\x7F]', resume_text))
+    if has_special_chars:
         issues.append({
             "type": "warning",
             "message": "Special characters or symbols detected",
             "detail": "Some ATS systems struggle with emojis, icons, or non-standard characters. Consider replacing them with plain text."
         })
+    checklist.append({"label": "No special characters", "passed": not has_special_chars, "points": 15 if not has_special_chars else 0})
 
-    # Check for headers/sections
+    # --- Check 2: Section headings (25 pts) ---
     common_sections = ["experience", "education", "skills", "summary", "objective", "projects", "certifications"]
     found_sections = [s for s in common_sections if s in resume_text.lower()]
-    missing_sections = [s for s in ["experience", "education", "skills"] if s not in resume_text.lower()]
+    required_sections = ["experience", "education", "skills"]
+    missing_sections = [s for s in required_sections if s not in resume_text.lower()]
 
     if missing_sections:
         issues.append({
@@ -326,7 +330,11 @@ def analyze_ats_formatting(resume_text):
             "detail": "ATS systems look for standard section headers to categorize your information. Make sure you have clearly labeled sections."
         })
 
-    # Check resume length
+    sections_found_ratio = (len(required_sections) - len(missing_sections)) / len(required_sections)
+    section_points = round(sections_found_ratio * 25)
+    checklist.append({"label": "Standard section headings", "passed": len(missing_sections) == 0, "points": section_points, "detail": f"{len(required_sections) - len(missing_sections)}/{len(required_sections)} required sections"})
+
+    # --- Check 3: Word count in range (20 pts) ---
     word_count = len(resume_text.split())
     if word_count < 150:
         issues.append({
@@ -334,14 +342,21 @@ def analyze_ats_formatting(resume_text):
             "message": "Resume seems very short",
             "detail": f"Your resume is about {word_count} words. Most effective resumes are 400-800 words. Consider adding more detail about your accomplishments."
         })
+        wc_points = 5
     elif word_count > 1200:
         issues.append({
             "type": "info",
             "message": "Resume is quite long",
             "detail": f"Your resume is about {word_count} words. For most roles, 1-2 pages (400-800 words) is ideal. Consider trimming less relevant details."
         })
+        wc_points = 10
+    elif 400 <= word_count <= 800:
+        wc_points = 20
+    else:
+        wc_points = 15
+    checklist.append({"label": "Word count (400-800 ideal)", "passed": 400 <= word_count <= 800, "points": wc_points, "detail": f"{word_count} words"})
 
-    # Check for contact info patterns
+    # --- Check 4: Contact info (20 pts) ---
     has_email = bool(re.search(r'[\w.-]+@[\w.-]+\.\w+', resume_text))
     has_phone = bool(re.search(r'[\+]?[\d\s\-\(\)]{10,}', resume_text))
     has_linkedin = bool(re.search(r'linkedin', resume_text, re.IGNORECASE))
@@ -359,7 +374,12 @@ def analyze_ats_formatting(resume_text):
     if not has_linkedin:
         tips.append("Adding your LinkedIn profile URL can strengthen your application.")
 
-    # Check for action verbs in experience
+    contact_count = sum([has_email, has_phone, has_linkedin])
+    contact_points = round((contact_count / 3) * 20)
+    contact_parts = [x for x in [("Email" if has_email else ""), ("Phone" if has_phone else ""), ("LinkedIn" if has_linkedin else "")] if x]
+    checklist.append({"label": "Contact information", "passed": contact_count == 3, "points": contact_points, "detail": ", ".join(contact_parts) if contact_parts else "None found"})
+
+    # --- Check 5: Action verbs (20 pts) ---
     action_verb_count = sum(1 for verb in ACTION_VERBS if _keyword_in_text(verb, resume_text.lower()))
     if action_verb_count < 3:
         issues.append({
@@ -367,6 +387,20 @@ def analyze_ats_formatting(resume_text):
             "message": "Few action verbs detected",
             "detail": "Strong resumes use action verbs (led, built, improved, managed) to describe accomplishments. Consider rewriting bullet points to start with impactful verbs."
         })
+
+    if action_verb_count >= 8:
+        verb_points = 20
+    elif action_verb_count >= 5:
+        verb_points = 15
+    elif action_verb_count >= 3:
+        verb_points = 10
+    else:
+        verb_points = 5
+    checklist.append({"label": "Action verbs used", "passed": action_verb_count >= 5, "points": verb_points, "detail": f"{action_verb_count} found"})
+
+    # Calculate formatting score (0-100)
+    formatting_score = sum(item["points"] for item in checklist)
+    formatting_score = max(0, min(100, formatting_score))
 
     # General tips
     tips.append("Use a clean, single-column layout for best ATS compatibility.")
@@ -382,5 +416,169 @@ def analyze_ats_formatting(resume_text):
             "email": has_email,
             "phone": has_phone,
             "linkedin": has_linkedin,
-        }
+        },
+        "formatting_score": formatting_score,
+        "checklist": checklist,
+    }
+
+
+def check_bullet_quantification(resume_text):
+    """
+    Check resume bullets for measurable results (numbers, percentages, metrics).
+    Returns flagged bullets and a quantification score.
+    """
+    lines = resume_text.split('\n')
+    flagged = []
+    quantified = []
+
+    bullet_pattern = re.compile(r'^\s*[-*\u2022\u25e6\u25aa\u25ba]\s+|^\s*\d+[.)]\s+')
+    metric_pattern = re.compile(
+        r'\d+[\s]*[%$\u00a3\u20ac\u00a5]|'
+        r'[$\u00a3\u20ac][\s]*\d|'
+        r'\d+\s*(?:percent|million|billion|thousand|users|clients|projects|'
+        r'team|members|employees|customers|revenue|sales|hours|days|weeks|'
+        r'months|years|x\b)',
+        re.IGNORECASE
+    )
+
+    # Get first 20 action verbs for startswith check
+    action_verb_list = sorted(ACTION_VERBS)[:20]
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or len(stripped) < 15:
+            continue
+
+        is_bullet = bool(bullet_pattern.match(stripped))
+        starts_with_verb = any(stripped.lower().startswith(verb) for verb in action_verb_list)
+
+        if is_bullet or starts_with_verb:
+            has_metric = bool(metric_pattern.search(stripped))
+            if has_metric:
+                quantified.append(stripped)
+            else:
+                flagged.append(stripped)
+
+    total_bullets = len(quantified) + len(flagged)
+    quantified_count = len(quantified)
+
+    if total_bullets == 0:
+        score = 50
+    else:
+        ratio = quantified_count / total_bullets
+        if ratio >= 0.6:
+            score = 100
+        elif ratio >= 0.4:
+            score = 80
+        elif ratio >= 0.2:
+            score = 60
+        elif ratio > 0:
+            score = 40
+        else:
+            score = 15
+
+    return {
+        "score": score,
+        "total_bullets": total_bullets,
+        "quantified_count": quantified_count,
+        "flagged_bullets": flagged[:8],
+        "detail": f"{quantified_count}/{total_bullets} bullets include metrics" if total_bullets > 0 else "No bullet points detected",
+    }
+
+
+def calculate_recruiter_tips_score(resume_text, job_description=""):
+    """
+    Calculate a Recruiter Tips score (0-100) based on resume quality signals.
+    """
+    checklist = []
+
+    # --- Measurable results (30 pts) ---
+    quant = check_bullet_quantification(resume_text)
+    if quant["score"] >= 80:
+        mr_points = 30
+    elif quant["score"] >= 60:
+        mr_points = 20
+    elif quant["score"] >= 40:
+        mr_points = 15
+    else:
+        mr_points = 5
+    checklist.append({
+        "label": "Measurable results",
+        "passed": quant["score"] >= 60,
+        "points": mr_points,
+        "detail": quant["detail"],
+    })
+
+    # --- Action verb density (25 pts) ---
+    resume_lower = resume_text.lower()
+    verb_count = sum(1 for verb in ACTION_VERBS if _keyword_in_text(verb, resume_lower))
+    word_count = len(resume_text.split())
+
+    if verb_count >= 10:
+        av_points = 25
+    elif verb_count >= 7:
+        av_points = 20
+    elif verb_count >= 4:
+        av_points = 15
+    else:
+        av_points = 5
+    checklist.append({
+        "label": "Action verb usage",
+        "passed": verb_count >= 7,
+        "points": av_points,
+        "detail": f"{verb_count} action verbs found",
+    })
+
+    # --- Resume length (20 pts) ---
+    if 400 <= word_count <= 800:
+        rl_points = 20
+        length_ok = True
+    elif 300 <= word_count <= 1000:
+        rl_points = 15
+        length_ok = True
+    elif word_count < 200:
+        rl_points = 5
+        length_ok = False
+    else:
+        rl_points = 10
+        length_ok = False
+    checklist.append({
+        "label": "Resume length",
+        "passed": length_ok,
+        "points": rl_points,
+        "detail": f"{word_count} words (400-800 ideal)",
+    })
+
+    # --- Job title alignment (25 pts) ---
+    jt_points = 15  # default when can't assess
+    if job_description:
+        jd_first_lines = ' '.join(job_description.split('\n')[:3]).lower()
+        stopwords = {'the', 'and', 'for', 'are', 'our', 'you', 'will', 'with', 'this', 'that', 'have', 'from', 'your', 'about', 'who', 'can', 'all', 'has', 'not', 'but', 'what', 'been', 'looking', 'seeking', 'role', 'position', 'join', 'team'}
+        title_words = [w for w in re.findall(r'\b[a-z]{3,}\b', jd_first_lines) if w not in stopwords][:10]
+
+        if title_words:
+            matches = sum(1 for w in title_words if w in resume_lower)
+            ratio = matches / len(title_words)
+            if ratio >= 0.5:
+                jt_points = 25
+            elif ratio >= 0.3:
+                jt_points = 18
+            elif ratio >= 0.1:
+                jt_points = 10
+            else:
+                jt_points = 3
+    checklist.append({
+        "label": "Job title alignment",
+        "passed": jt_points >= 18,
+        "points": jt_points,
+        "detail": "Resume aligns with job requirements" if jt_points >= 18 else "Consider tailoring resume to match the job title",
+    })
+
+    total_score = sum(item["points"] for item in checklist)
+    total_score = max(0, min(100, total_score))
+
+    return {
+        "score": total_score,
+        "checklist": checklist,
+        "quantification": quant,
     }

@@ -100,6 +100,38 @@
         </div>
     </section>
 
+    <!-- ============ TESTIMONIALS ============ -->
+    <section class="testimonials">
+        <div class="container">
+            <div class="testimonials-grid">
+                <div class="testimonial-card">
+                    <div class="testimonial-quote">"</div>
+                    <p class="testimonial-text">I got 4 interviews and 2 assessments within two weeks of using ResumeRadar. The keyword matching showed me exactly what I was missing.</p>
+                    <div class="testimonial-author">
+                        <div class="testimonial-avatar">S</div>
+                        <span class="testimonial-name">Verified User</span>
+                    </div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="testimonial-quote">"</div>
+                    <p class="testimonial-text">Changed my mindset from 'I'm not good enough' to 'I just need to add three keywords'. Game changer.</p>
+                    <div class="testimonial-author">
+                        <div class="testimonial-avatar">R</div>
+                        <span class="testimonial-name">Verified User</span>
+                    </div>
+                </div>
+                <div class="testimonial-card">
+                    <div class="testimonial-quote">"</div>
+                    <p class="testimonial-text">WOW, super easy to use! The feedback is on point. Used it for 3 different applications and got responses from all of them.</p>
+                    <div class="testimonial-author">
+                        <div class="testimonial-avatar">A</div>
+                        <span class="testimonial-name">Verified User</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- ============ MAIN SCANNER ============ -->
     <main class="scanner-section">
         <div class="container">
@@ -277,6 +309,33 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="cover-letter-footer">
                         <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">📋 Copy Points</button>
                         <span class="cover-letter-note">No competitors offer this — you're ahead of the pack.</span>
+                    </div>
+
+                    <!-- Full Cover Letter Generator -->
+                    <div class="cl-generator">
+                        <div class="cl-generator-cta">
+                            <p class="cl-generator-text">Want a complete, ready-to-send cover letter? Our AI writes one tailored to this job.</p>
+                            <button type="button" class="cl-generate-btn" id="generateCoverLetterBtn">
+                                <span class="cl-btn-text">Generate Full Cover Letter</span>
+                                <span class="cl-btn-free">Free — 3/day</span>
+                            </button>
+                        </div>
+                        <div class="cl-output" id="coverLetterOutput" style="display: none;">
+                            <div class="cl-output-header">
+                                <span class="cl-output-title">Your Cover Letter</span>
+                                <div class="cl-output-actions">
+                                    <button type="button" class="cl-action-btn" id="copyCoverLetterFull">📋 Copy</button>
+                                    <button type="button" class="cl-action-btn" id="downloadCoverLetterTxt">💾 Download .txt</button>
+                                </div>
+                            </div>
+                            <div class="cl-output-body" id="coverLetterBody" contenteditable="true"></div>
+                            <p class="cl-output-note">You can edit the text above before copying or downloading.</p>
+                        </div>
+                        <div class="cl-loading" id="coverLetterLoading" style="display: none;">
+                            <div class="cl-spinner"></div>
+                            <span>Writing your cover letter...</span>
+                        </div>
+                        <div class="cl-error" id="coverLetterError" style="display: none;"></div>
                     </div>
                 </div>
 

@@ -196,6 +196,169 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
         return fallback
 
 
+def generate_cover_letter(resume_text, job_description):
+    """
+    Generate a tailored cover letter using resume + job description.
+    Returns the cover letter text or an error message.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+
+    if not api_key or api_key == "your-anthropic-api-key-here":
+        return {"error": "AI service not configured. Please try again later."}
+
+    try:
+        client = Anthropic(api_key=api_key)
+
+        from datetime import datetime
+        today = datetime.now().strftime('%B %d, %Y')
+
+        prompt = f"""You are an expert career coach writing a professional cover letter.
+
+Using the resume and job description below, write a compelling 3-4 paragraph cover letter that:
+1. Opens with a specific, engaging hook — NOT "I am writing to apply for..."
+2. Connects the candidate's strongest experiences to the job requirements
+3. Highlights 2-3 measurable achievements from their resume
+4. Closes with enthusiasm and a clear call to action
+5. Uses a professional but warm tone
+
+RESUME:
+{resume_text[:3000]}
+
+JOB DESCRIPTION:
+{job_description[:2000]}
+
+Today's date: {today}
+
+RULES:
+- Do NOT invent experience or skills not present in the resume
+- Do NOT include placeholder text like [Company Name] or [Your Name] — use generic "your team" / "this role" if company name isn't in the job description
+- Keep it under 350 words
+- Write in first person
+- Do NOT include "Dear Hiring Manager" or sign-off — just the body paragraphs
+- Make every sentence count — no filler
+
+Write the cover letter body now:"""
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        cover_letter = message.content[0].text.strip()
+
+        # Basic cleanup — remove any accidental salutation/sign-off/headers
+        lines = cover_letter.split('\n')
+        cleaned = []
+        for line in lines:
+            stripped = line.strip().lower()
+            if stripped.startswith('dear ') or stripped.startswith('sincerely') or stripped.startswith('best regards') or stripped.startswith('yours'):
+                continue
+            if stripped.startswith('# ') or stripped.startswith('## '):
+                continue
+            cleaned.append(line)
+        cover_letter = '\n'.join(cleaned).strip()
+
+        return {"cover_letter": cover_letter}
+
+    except Exception as e:
+        print(f"Cover letter generation error: {str(e)}")
+        return {"error": "Could not generate cover letter. Please try again."}
+
+
+def enhance_bullet_point(bullet_text, job_context=None):
+    """
+    Rewrite a weak bullet point with metrics, action verbs, and impact.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your-anthropic-api-key-here":
+        return {"error": "AI service not configured."}
+
+    try:
+        client = Anthropic(api_key=api_key)
+
+        context_line = f"\nTarget role: {job_context}" if job_context else ""
+
+        prompt = f"""You are a resume writing expert. Rewrite this weak resume bullet point to be stronger.
+
+Original bullet: {bullet_text}{context_line}
+
+Rules:
+- Start with a strong action verb
+- Add a placeholder for metrics where the candidate should fill in numbers (use [X] or [X%])
+- Keep it to 1-2 lines max
+- Make it specific and results-oriented
+- Do NOT invent specific numbers — use [X], [X%], [X+] as placeholders
+- Return ONLY the rewritten bullet point, nothing else
+
+Rewritten bullet:"""
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result = message.content[0].text.strip()
+        # Clean up any leading dash/bullet
+        if result.startswith('- '):
+            result = result[2:]
+        if result.startswith('• '):
+            result = result[2:]
+
+        return {"enhanced": result}
+
+    except Exception as e:
+        print(f"Bullet enhance error: {str(e)}")
+        return {"error": "Could not enhance bullet point. Please try again."}
+
+
+def generate_resume_summary(resume_text, job_description):
+    """
+    Generate a professional summary paragraph from resume + job description.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your-anthropic-api-key-here":
+        return {"error": "AI service not configured."}
+
+    try:
+        client = Anthropic(api_key=api_key)
+
+        prompt = f"""You are a resume writing expert. Write a professional summary paragraph for the top of a resume.
+
+RESUME CONTENT:
+{resume_text[:2000]}
+
+TARGET JOB:
+{job_description[:1000]}
+
+Rules:
+- Write 3-4 sentences (50-80 words)
+- Start with the candidate's professional identity and years of experience
+- Highlight 2-3 key skills that match the job requirements
+- End with what they bring to the role
+- Use confident, third-person language (no "I")
+- Do NOT invent experience not present in the resume
+- Return ONLY the summary paragraph, nothing else
+
+Professional Summary:"""
+
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        summary = message.content[0].text.strip()
+        return {"summary": summary}
+
+    except Exception as e:
+        print(f"Summary generation error: {str(e)}")
+        return {"error": "Could not generate summary. Please try again."}
+
+
 def _get_fallback_suggestions(keyword_results):
     """
     Generate rule-based suggestions when AI is unavailable.
