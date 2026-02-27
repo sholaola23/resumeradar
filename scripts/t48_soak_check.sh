@@ -92,9 +92,10 @@ else
 fi
 
 # create-bundle-checkout (should work with Stripe)
+IDEM_KEY=$(python3 -c "import uuid;print(uuid.uuid4())" 2>/dev/null || echo "soak-$(date +%s)")
 CSTATUS=$(curl -s -w "\n%{http_code}" -X POST "$STAGING_URL/api/build/create-bundle-checkout" \
     -H "Content-Type: application/json" \
-    -d '{"tier":"jobhunt","provider":"stripe","email":"soak-check@test.local","idempotency_key":"soak-check-'"$(date +%s)"'"}' 2>/dev/null)
+    -d '{"plan":"jobhunt","provider":"stripe","email":"soak-check@test.local","idempotency_key":"'"$IDEM_KEY"'"}' 2>/dev/null)
 CCODE=$(echo "$CSTATUS" | tail -1)
 CBODY=$(echo "$CSTATUS" | head -1)
 if [ "$CCODE" = "200" ] && echo "$CBODY" | grep -q 'session_id'; then
@@ -108,8 +109,8 @@ log "Check 4: Core feature regression check"
 
 # Scan endpoint accepts valid input
 SCAN_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$STAGING_URL/api/scan" \
-    -F "jobDescription=We are looking for a software engineer with 5 years experience in Python, AWS, Docker, Kubernetes, and CI/CD pipelines. Strong problem solving skills required." \
-    -F "resumeText=Software engineer with 6 years experience in Python, AWS, Docker, Kubernetes. Built CI/CD pipelines. Strong problem solver." 2>/dev/null || echo "000")
+    -F "job_description=We are looking for a software engineer with 5 years experience in Python, AWS, Docker, Kubernetes, and CI/CD pipelines. Strong problem solving skills required. Must have experience with microservices architecture and cloud deployments." \
+    -F "resume_text=Software engineer with 6 years experience in Python, AWS, Docker, Kubernetes. Built CI/CD pipelines for multiple teams. Strong problem solver with experience in microservices architecture and cloud deployments across AWS and GCP." 2>/dev/null || echo "000")
 if [ "$SCAN_CODE" = "200" ]; then
     pass "Scan endpoint: $SCAN_CODE"
 else
