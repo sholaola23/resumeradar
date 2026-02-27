@@ -44,6 +44,10 @@ VALID_EVENTS = frozenset({
     "email_bounced",
     "email_delivery_delayed",
     "email_complained",
+    # Phase 2: Bundle events
+    "bundle_created",
+    "bundle_credit_used",
+    "bundle_exhausted",
 })
 
 ALLOWED_KWARGS = frozenset({
@@ -52,6 +56,9 @@ ALLOWED_KWARGS = frozenset({
     "resend_message_id",
     "format", "content_length", "status_code", "error",
     "filename", "source",   # source disambiguates duplicate event types
+    # Phase 2: Bundle fields
+    "type", "remaining", "plan",
+    "bundle_token_hash",    # H1: HMAC hash, never raw token
 })
 
 # ---------------------------------------------------------------------------

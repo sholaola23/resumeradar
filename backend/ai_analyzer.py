@@ -8,6 +8,10 @@ import os
 import json
 from anthropic import Anthropic
 
+from backend import ai_cache
+from backend import ai_budget
+from backend import ai_metrics
+
 
 def get_ai_suggestions(resume_text, job_description, keyword_results):
     """
@@ -200,11 +204,28 @@ def generate_cover_letter(resume_text, job_description):
     """
     Generate a tailored cover letter using resume + job description.
     Returns the cover letter text or an error message.
+
+    Integrates: cache lookup → budget check → Claude call → cache store → metrics.
     """
+    tool = ai_metrics.TOOL_COVER_LETTER
+    ai_metrics.record_request(tool)
+
+    # Check cache first
+    cached = ai_cache.cache_get(tool, resume_text, job_description)
+    if cached is not None:
+        ai_metrics.record_cache_hit(tool)
+        return cached
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
 
     if not api_key or api_key == "your-anthropic-api-key-here":
+        ai_metrics.record_error(tool)
         return {"error": "AI service not configured. Please try again later."}
+
+    # Check budget before calling Claude
+    if not ai_budget.check_budget():
+        ai_metrics.record_budget_reject(tool)
+        return {"error": ai_budget.BUDGET_EXCEEDED_MESSAGE}
 
     try:
         client = Anthropic(api_key=api_key)
@@ -247,6 +268,14 @@ Write the cover letter body now:"""
             ]
         )
 
+        ai_metrics.record_claude_call(tool)
+
+        # Record actual token usage for budget tracking
+        usage = getattr(message, 'usage', None)
+        input_tok = getattr(usage, 'input_tokens', None) if usage else None
+        output_tok = getattr(usage, 'output_tokens', None) if usage else None
+        ai_budget.record_usage(input_tok, output_tok)
+
         cover_letter = message.content[0].text.strip()
 
         # Basic cleanup — remove any accidental salutation/sign-off/headers
@@ -261,9 +290,15 @@ Write the cover letter body now:"""
             cleaned.append(line)
         cover_letter = '\n'.join(cleaned).strip()
 
-        return {"cover_letter": cover_letter}
+        result = {"cover_letter": cover_letter}
+
+        # Cache the result
+        ai_cache.cache_set(tool, result, resume_text, job_description)
+
+        return result
 
     except Exception as e:
+        ai_metrics.record_error(tool)
         print(f"Cover letter generation error: {str(e)}")
         return {"error": "Could not generate cover letter. Please try again."}
 
@@ -271,10 +306,26 @@ Write the cover letter body now:"""
 def enhance_bullet_point(bullet_text, job_context=None):
     """
     Rewrite a weak bullet point with metrics, action verbs, and impact.
+
+    Integrates: cache lookup → budget check → Claude call → cache store → metrics.
     """
+    tool = ai_metrics.TOOL_ENHANCE_BULLET
+    ai_metrics.record_request(tool)
+
+    # Check cache first
+    cached = ai_cache.cache_get(tool, bullet_text, job_context or "")
+    if cached is not None:
+        ai_metrics.record_cache_hit(tool)
+        return cached
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your-anthropic-api-key-here":
+        ai_metrics.record_error(tool)
         return {"error": "AI service not configured."}
+
+    if not ai_budget.check_budget():
+        ai_metrics.record_budget_reject(tool)
+        return {"error": ai_budget.BUDGET_EXCEEDED_MESSAGE}
 
     try:
         client = Anthropic(api_key=api_key)
@@ -301,16 +352,26 @@ Rewritten bullet:"""
             messages=[{"role": "user", "content": prompt}]
         )
 
-        result = message.content[0].text.strip()
-        # Clean up any leading dash/bullet
-        if result.startswith('- '):
-            result = result[2:]
-        if result.startswith('• '):
-            result = result[2:]
+        ai_metrics.record_claude_call(tool)
 
-        return {"enhanced": result}
+        usage = getattr(message, 'usage', None)
+        input_tok = getattr(usage, 'input_tokens', None) if usage else None
+        output_tok = getattr(usage, 'output_tokens', None) if usage else None
+        ai_budget.record_usage(input_tok, output_tok)
+
+        enhanced = message.content[0].text.strip()
+        if enhanced.startswith('- '):
+            enhanced = enhanced[2:]
+        if enhanced.startswith('• '):
+            enhanced = enhanced[2:]
+
+        result = {"enhanced": enhanced}
+        ai_cache.cache_set(tool, result, bullet_text, job_context or "")
+
+        return result
 
     except Exception as e:
+        ai_metrics.record_error(tool)
         print(f"Bullet enhance error: {str(e)}")
         return {"error": "Could not enhance bullet point. Please try again."}
 
@@ -318,10 +379,26 @@ Rewritten bullet:"""
 def generate_resume_summary(resume_text, job_description):
     """
     Generate a professional summary paragraph from resume + job description.
+
+    Integrates: cache lookup → budget check → Claude call → cache store → metrics.
     """
+    tool = ai_metrics.TOOL_GENERATE_SUMMARY
+    ai_metrics.record_request(tool)
+
+    # Check cache first
+    cached = ai_cache.cache_get(tool, resume_text, job_description)
+    if cached is not None:
+        ai_metrics.record_cache_hit(tool)
+        return cached
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your-anthropic-api-key-here":
+        ai_metrics.record_error(tool)
         return {"error": "AI service not configured."}
+
+    if not ai_budget.check_budget():
+        ai_metrics.record_budget_reject(tool)
+        return {"error": ai_budget.BUDGET_EXCEEDED_MESSAGE}
 
     try:
         client = Anthropic(api_key=api_key)
@@ -351,10 +428,21 @@ Professional Summary:"""
             messages=[{"role": "user", "content": prompt}]
         )
 
+        ai_metrics.record_claude_call(tool)
+
+        usage = getattr(message, 'usage', None)
+        input_tok = getattr(usage, 'input_tokens', None) if usage else None
+        output_tok = getattr(usage, 'output_tokens', None) if usage else None
+        ai_budget.record_usage(input_tok, output_tok)
+
         summary = message.content[0].text.strip()
-        return {"summary": summary}
+        result = {"summary": summary}
+        ai_cache.cache_set(tool, result, resume_text, job_description)
+
+        return result
 
     except Exception as e:
+        ai_metrics.record_error(tool)
         print(f"Summary generation error: {str(e)}")
         return {"error": "Could not generate summary. Please try again."}
 

@@ -364,8 +364,43 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                     </div>
                 </div>
 
-                <!-- Payment CTA -->
-                <div class="builder-card payment-card"
+                <!-- Bundle Credits Banner (shown by JS when active bundle) -->
+                <div class="builder-card bundle-banner" id="bundleBanner" style="display: none;">
+                    <div class="bundle-banner-content">
+                        <div class="bundle-banner-info">
+                            <h2 id="bundlePlanName">Job Hunt Pack</h2>
+                            <div class="bundle-credits-row">
+                                <span class="bundle-credit-item"><strong id="bundleCvCount">5</strong> CV downloads</span>
+                                <span class="bundle-credit-sep">|</span>
+                                <span class="bundle-credit-item"><strong id="bundleClCount">5</strong> cover letters</span>
+                            </div>
+                            <div class="bundle-expiry" id="bundleExpiry">Expires in 48 hours</div>
+                        </div>
+                        <button type="button" class="bundle-download-btn" id="bundleDownloadBtn">
+                            <span class="pay-btn-text">Download (included)</span>
+                            <span class="pay-btn-loading" style="display: none;">
+                                <span class="spinner spinner-sm"></span> Preparing...
+                            </span>
+                        </button>
+                    </div>
+                    <div class="format-selector-row">
+                        <label>Download format</label>
+                        <div class="format-toggle-group" id="bundleFormatGroup">
+                            <button type="button" class="format-toggle active" data-format="both">
+                                PDF + Word
+                            </button>
+                            <button type="button" class="format-toggle" data-format="pdf">
+                                PDF only
+                            </button>
+                            <button type="button" class="format-toggle" data-format="docx">
+                                Word only
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment CTA (single purchase — hidden when bundle active) -->
+                <div class="builder-card payment-card" id="paymentCard"
                      data-paystack-enabled="{{ 'true' if paystack_enabled else 'false' }}"
                      data-paystack-price="{{ paystack_price }}">
                     <div class="payment-content">
@@ -407,6 +442,51 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             </div>
                             <small class="format-hint">Word format lets you make quick edits before submitting</small>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Bundle Pricing (3-tier — shown by JS as upgrade option) -->
+                <div class="builder-card bundle-pricing-card" id="bundlePricingCard" style="display: none;">
+                    <h2>Save with a Bundle</h2>
+                    <p class="card-subtitle">Multiple CVs or cover letters? Bundles give you more for less.</p>
+                    <div class="bundle-tiers">
+                        <div class="bundle-tier" data-plan="jobhunt">
+                            <div class="bundle-tier-badge">Most Popular</div>
+                            <h3>Job Hunt Pack</h3>
+                            <div class="bundle-tier-price" id="bundlePriceJobhunt">£5</div>
+                            <ul class="bundle-tier-features">
+                                <li>5 CV downloads</li>
+                                <li>5 cover letters</li>
+                                <li>Valid for 48 hours</li>
+                            </ul>
+                            <button type="button" class="bundle-tier-btn" data-plan="jobhunt">Get Job Hunt Pack</button>
+                        </div>
+                        <div class="bundle-tier bundle-tier-highlight" data-plan="sprint">
+                            <h3>Unlimited Sprint</h3>
+                            <div class="bundle-tier-price" id="bundlePriceSprint">£9</div>
+                            <ul class="bundle-tier-features">
+                                <li>Unlimited CV downloads</li>
+                                <li>Unlimited cover letters</li>
+                                <li>Valid for 7 days</li>
+                            </ul>
+                            <button type="button" class="bundle-tier-btn" data-plan="sprint">Get Unlimited Sprint</button>
+                        </div>
+                    </div>
+                    <div class="bundle-email-row">
+                        <label for="bundleEmail">Your email (required for bundle recovery)</label>
+                        <input type="email" id="bundleEmail" class="payment-email-input"
+                               placeholder="your@email.com" maxlength="254" required>
+                    </div>
+                </div>
+
+                <!-- Bundle Recovery -->
+                <div class="bundle-recover-row" id="bundleRecoverRow">
+                    <a href="#" id="bundleRecoverLink">Already purchased a bundle? Recover access</a>
+                    <div class="bundle-recover-form" id="bundleRecoverForm" style="display: none;">
+                        <input type="email" id="bundleRecoverEmail" class="payment-email-input"
+                               placeholder="Email used for purchase" maxlength="254">
+                        <button type="button" class="bundle-recover-btn" id="bundleRecoverBtn">Send Recovery Link</button>
+                        <div class="bundle-recover-msg" id="bundleRecoverMsg" style="display: none;"></div>
                     </div>
                 </div>
 

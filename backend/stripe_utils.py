@@ -91,6 +91,90 @@ def verify_checkout_payment(session_id, expected_token):
         return {"verified": False, "reason": "Could not verify payment."}
 
 
+def create_bundle_checkout_session(plan, bundle_token, delivery_email, success_url, cancel_url):
+    """
+    Create a Stripe Checkout session for a bundle purchase.
+
+    Args:
+        plan: "jobhunt" or "sprint"
+        bundle_token: pre-generated server-side token (stored in metadata, NOT returned to client)
+        delivery_email: buyer's email (required for bundles)
+        success_url: redirect after successful payment
+        cancel_url: redirect if user cancels
+
+    Returns:
+        dict with session_id and checkout_url, or error
+    """
+    # Map plan to env var price IDs
+    price_map = {
+        "jobhunt": os.getenv("STRIPE_PRICE_ID_JOBHUNT"),
+        "sprint": os.getenv("STRIPE_PRICE_ID_SPRINT"),
+    }
+    price_id = price_map.get(plan)
+    if not price_id:
+        return {"error": f"Bundle plan '{plan}' not configured."}
+
+    try:
+        metadata = {
+            "bundle_token": bundle_token,
+            "plan": plan,
+            "delivery_email": delivery_email,
+            "product_type": "bundle",  # distinguishes from single CV purchase in webhook
+        }
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price": price_id,
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_email=delivery_email,
+            metadata=metadata,
+        )
+        return {
+            "session_id": session.id,
+            "checkout_url": session.url,
+        }
+    except stripe.error.StripeError as e:
+        print(f"Stripe bundle checkout error: {str(e)}")
+        return {"error": "Could not create payment session. Please try again."}
+
+
+def verify_bundle_payment(session_id):
+    """
+    Verify a Stripe Checkout session for bundle payment.
+    Returns bundle metadata if paid.
+
+    Args:
+        session_id: Stripe Checkout session ID
+
+    Returns:
+        dict with verified=True, bundle_token, plan, delivery_email or verified=False
+    """
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+
+        if session.payment_status != "paid":
+            return {"verified": False, "reason": "Payment not completed."}
+
+        metadata = session.metadata or {}
+        if metadata.get("product_type") != "bundle":
+            return {"verified": False, "reason": "Not a bundle payment."}
+
+        return {
+            "verified": True,
+            "bundle_token": metadata.get("bundle_token", ""),
+            "plan": metadata.get("plan", ""),
+            "delivery_email": metadata.get("delivery_email", ""),
+        }
+    except stripe.error.StripeError as e:
+        print(f"Stripe bundle verify error: {str(e)}")
+        return {"verified": False, "reason": "Could not verify payment."}
+
+
 def verify_webhook_signature(payload, sig_header):
     """
     Validate a Stripe webhook signature.

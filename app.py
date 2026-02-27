@@ -26,14 +26,23 @@ from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.cv_pdf_generator import generate_cv_pdf
 from backend.cv_docx_generator import generate_cv_docx
-from backend.stripe_utils import create_checkout_session, verify_checkout_payment, verify_webhook_signature
+from backend.stripe_utils import (
+    create_checkout_session, verify_checkout_payment, verify_webhook_signature,
+    create_bundle_checkout_session, verify_bundle_payment,
+)
 from backend.paystack_utils import (
     create_paystack_transaction,
     verify_paystack_payment,
     verify_paystack_webhook,
     format_naira_price,
+    create_paystack_bundle_transaction,
 )
 from backend import audit_log
+from backend import ai_cache
+from backend import ai_budget
+from backend import ai_metrics
+from backend import ai_ratelimit
+from backend import bundle_credits
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -118,6 +127,13 @@ except Exception as e:
 
 # Initialize audit log module with Redis client
 audit_log.init(_redis_client)
+
+# Initialize AI cost economics modules (2E)
+ai_cache.init(_redis_client)
+ai_budget.init(_redis_client)
+ai_metrics.init(_redis_client)
+ai_ratelimit.init(_redis_client)
+bundle_credits.init(_redis_client)
 
 # In-memory fallback
 _fallback_count = int(os.getenv('SCAN_COUNT_BASE', '150'))
@@ -332,11 +348,12 @@ def scan_resume():
 
 
 @app.route('/api/generate/cover-letter', methods=['POST'])
-@limiter.limit("3 per day")
+@limiter.limit("10 per minute")
 def generate_cover_letter_endpoint():
     """
     Generate a tailored cover letter from resume + job description.
-    Rate limited to 3 per day per IP (free tier).
+    Burst limiter: 10/min (decorator). Daily limit: 3/day/IP (in-handler, H7).
+    Bundle users bypass daily limit but are still subject to burst limiter.
     """
     try:
         data = request.get_json()
@@ -352,10 +369,39 @@ def generate_cover_letter_endpoint():
         if not job_description or len(job_description.split()) < 10:
             return jsonify({"error": "Please provide a full job description."}), 400
 
+        # In-handler daily rate limit with bundle override (H6, H7)
+        bundle_token = (data.get('bundle_token') or '').strip()
+        bundle_bypass = False
+        if bundle_token:
+            # Check bundle credit — if valid, bypass IP rate limit
+            bundle_result = bundle_credits.use_credit(bundle_token, "cover_letter")
+            if bundle_result.get("ok"):
+                bundle_bypass = True
+                # AUDIT: bundle credit used for cover letter
+                try:
+                    audit_log.log_event(
+                        "bundle_credit_used",
+                        token=bundle_token,
+                        type="cover_letter",
+                        remaining=bundle_result.get("remaining"),
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="cover-letter",
+                    )
+                except Exception:
+                    pass
+            # If bundle exhausted/expired, fall through to free tier (H6 rule 4)
+
+        if not bundle_bypass:
+            ip = get_real_ip()
+            if not ai_ratelimit.check_and_increment("cover_letter", ip):
+                ai_metrics.record_rate_reject(ai_metrics.TOOL_COVER_LETTER)
+                return jsonify({"error": "Daily limit reached (3 per day). Try again tomorrow."}), 429
+
         result = generate_cover_letter(resume_text, job_description)
 
         if "error" in result:
-            return jsonify(result), 500
+            status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
+            return jsonify(result), status
 
         return jsonify(result)
 
@@ -365,9 +411,12 @@ def generate_cover_letter_endpoint():
 
 
 @app.route('/api/tools/enhance-bullet', methods=['POST'])
-@limiter.limit("10 per day")
+@limiter.limit("10 per minute")
 def enhance_bullet_endpoint():
-    """Enhance a resume bullet point with AI. Rate limited to 10/day per IP."""
+    """
+    Enhance a resume bullet point with AI.
+    Burst limiter: 10/min (decorator). Daily limit: 10/day/IP (in-handler, H7).
+    """
     try:
         data = request.get_json()
         if not data:
@@ -382,10 +431,17 @@ def enhance_bullet_endpoint():
         if len(bullet_text) > 500:
             return jsonify({"error": "Bullet point is too long (max 500 characters)."}), 400
 
+        # In-handler daily rate limit (H7)
+        ip = get_real_ip()
+        if not ai_ratelimit.check_and_increment("enhance_bullet", ip):
+            ai_metrics.record_rate_reject(ai_metrics.TOOL_ENHANCE_BULLET)
+            return jsonify({"error": "Daily limit reached (10 per day). Try again tomorrow."}), 429
+
         result = enhance_bullet_point(bullet_text, job_context)
 
         if "error" in result:
-            return jsonify(result), 500
+            status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
+            return jsonify(result), status
 
         return jsonify(result)
 
@@ -395,9 +451,12 @@ def enhance_bullet_endpoint():
 
 
 @app.route('/api/tools/generate-summary', methods=['POST'])
-@limiter.limit("5 per day")
+@limiter.limit("10 per minute")
 def generate_summary_endpoint():
-    """Generate a professional resume summary. Rate limited to 5/day per IP."""
+    """
+    Generate a professional resume summary.
+    Burst limiter: 10/min (decorator). Daily limit: 5/day/IP (in-handler, H7).
+    """
     try:
         data = request.get_json()
         if not data:
@@ -412,10 +471,17 @@ def generate_summary_endpoint():
         if not job_description or len(job_description.split()) < 10:
             return jsonify({"error": "Please provide a job description."}), 400
 
+        # In-handler daily rate limit (H7)
+        ip = get_real_ip()
+        if not ai_ratelimit.check_and_increment("generate_summary", ip):
+            ai_metrics.record_rate_reject(ai_metrics.TOOL_GENERATE_SUMMARY)
+            return jsonify({"error": "Daily limit reached (5 per day). Try again tomorrow."}), 429
+
         result = generate_resume_summary(resume_text, job_description)
 
         if "error" in result:
-            return jsonify(result), 500
+            status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
+            return jsonify(result), status
 
         return jsonify(result)
 
@@ -1027,6 +1093,447 @@ def build_create_checkout():
         return jsonify({"error": "Could not create payment session."}), 500
 
 
+# ============================================================
+# BUNDLE ENDPOINTS (Phase 2)
+# ============================================================
+
+@app.route('/api/build/create-bundle-checkout', methods=['POST'])
+@limiter.limit("10 per hour")
+def create_bundle_checkout():
+    """
+    Create a payment session for a bundle purchase (Stripe-first, Paystack flagged).
+
+    Body: { plan, email, provider ("stripe"|"paystack"), idempotency_key }
+    Bundle token generated server-side, stored in metadata, NOT returned to client.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        plan = (data.get('plan') or '').strip().lower()
+        email = (data.get('email') or '').strip()
+        provider = (data.get('provider') or 'stripe').strip().lower()
+        idempotency_key = (data.get('idempotency_key') or '').strip()
+
+        # Validate plan
+        if plan not in bundle_credits.PLANS:
+            return jsonify({"error": "Invalid bundle plan."}), 400
+
+        # Validate email (required for bundles)
+        if not email or '@' not in email:
+            return jsonify({"error": "Email is required for bundle purchases."}), 400
+
+        # Cap body size
+        if len(email) > 320:
+            return jsonify({"error": "Invalid email."}), 400
+
+        # Validate idempotency_key as UUIDv4 if provided
+        if idempotency_key and not bundle_credits.is_valid_uuid4(idempotency_key):
+            return jsonify({"error": "Invalid idempotency key format."}), 400
+
+        # Idempotency check (H3)
+        if idempotency_key and _redis_client:
+            fingerprint = bundle_credits.compute_fingerprint(
+                "create-bundle-checkout",
+                plan=plan,
+                email=email,
+                provider=provider,
+            )
+            idem_key = f"resumeradar:bundle_checkout:{idempotency_key}"
+            existing_raw = _redis_client.get(idem_key)
+            if existing_raw:
+                try:
+                    stored = json.loads(existing_raw)
+                    if stored.get("fingerprint") == fingerprint:
+                        # Return stored response (safe retry)
+                        resp = jsonify(stored.get("response", {}))
+                        resp.headers['Cache-Control'] = 'no-store'
+                        return resp
+                    else:
+                        # Same key, different fingerprint (H3 → 409)
+                        return jsonify({"error": "Idempotency key reused with different request."}), 409
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        # Generate bundle token server-side
+        bundle_token = secrets.token_urlsafe(32)
+        base_url = _get_base_url()
+        success_url = f"{base_url}/build?bundle_payment=success&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{base_url}/build?payment=cancelled"
+
+        if provider == "paystack":
+            # Paystack bundle path (H4: behind feature flag)
+            callback_url = f"{base_url}/build?bundle_payment=success&provider=paystack"
+            result = create_paystack_bundle_transaction(plan, bundle_token, callback_url, email)
+            if result.get("error"):
+                return jsonify({"error": result["error"]}), 500
+            response_data = {
+                "success": True,
+                "checkout_url": result["authorization_url"],
+                "reference": result.get("reference", ""),
+                "provider": "paystack",
+            }
+        else:
+            # Stripe (default)
+            result = create_bundle_checkout_session(plan, bundle_token, email, success_url, cancel_url)
+            if result.get("error"):
+                return jsonify({"error": result["error"]}), 500
+            response_data = {
+                "success": True,
+                "checkout_url": result["checkout_url"],
+                "session_id": result["session_id"],
+                "provider": "stripe",
+            }
+
+        # Store idempotency response (H3)
+        if idempotency_key and _redis_client:
+            try:
+                idem_data = json.dumps({
+                    "fingerprint": fingerprint,
+                    "response": response_data,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                })
+                _redis_client.setex(idem_key, 3600, idem_data)
+            except Exception:
+                pass
+
+        resp = jsonify(response_data)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    except Exception as e:
+        print(f"Bundle checkout error: {str(e)}")
+        return jsonify({"error": "Could not create payment session."}), 500
+
+
+@app.route('/api/build/bundle-activate-from-payment', methods=['POST'])
+@limiter.limit("30 per hour")
+def bundle_activate_from_payment():
+    """
+    Post-payment browser auto-activation. Verifies payment via provider API,
+    looks up bundle_token from session metadata, creates bundle in Redis,
+    returns bundle data to client for localStorage storage.
+
+    Idempotent within 24hr window (safe for flaky redirects/retries).
+
+    Body: { session_id } (Stripe) or { reference } (Paystack)
+    Returns: { bundle_token, plan, cv_remaining, cl_remaining, expires_in_hours }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        session_id = (data.get('session_id') or '').strip()
+        reference = (data.get('reference') or '').strip()
+
+        if not session_id and not reference:
+            return jsonify({"error": "Missing session_id or reference."}), 400
+
+        # Determine activation key for idempotency
+        activation_key_suffix = session_id or reference
+        activation_key = f"resumeradar:bundle_activated:{activation_key_suffix}"
+
+        # Check for existing activation (idempotent 24hr window)
+        if _redis_client:
+            existing_raw = _redis_client.get(activation_key)
+            if existing_raw:
+                try:
+                    stored = json.loads(existing_raw)
+                    resp = jsonify(stored)
+                    resp.headers['Cache-Control'] = 'no-store'
+                    return resp
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        if session_id:
+            # Stripe verification
+            verify_result = verify_bundle_payment(session_id)
+            if not verify_result.get("verified"):
+                reason = verify_result.get("reason", "Verification failed.")
+                return jsonify({"error": reason}), 400
+
+            bundle_token = verify_result["bundle_token"]
+            plan = verify_result["plan"]
+            email = verify_result.get("delivery_email", "")
+        elif reference:
+            # Paystack: not supported in this endpoint yet (flagged)
+            return jsonify({"error": "Paystack activation not yet supported."}), 400
+        else:
+            return jsonify({"error": "Missing payment reference."}), 400
+
+        if not bundle_token or not plan:
+            return jsonify({"error": "Invalid payment metadata."}), 400
+
+        # Create bundle in Redis
+        bundle_result = bundle_credits.create_bundle(plan, "stripe" if session_id else "paystack", email, bundle_token)
+        if bundle_result.get("error"):
+            return jsonify({"error": bundle_result["error"]}), 500
+
+        # AUDIT: bundle created
+        try:
+            audit_log.log_event(
+                "bundle_created",
+                token=bundle_token,
+                email=email,
+                plan=plan,
+                provider="stripe" if session_id else "paystack",
+                bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                source="activate-from-payment",
+            )
+        except Exception:
+            pass
+
+        response_data = {
+            "bundle_token": bundle_result["bundle_token"],
+            "plan": bundle_result["plan"],
+            "cv_remaining": bundle_result["cv_remaining"],
+            "cl_remaining": bundle_result["cl_remaining"],
+            "expires_in_hours": bundle_result["expires_in_hours"],
+        }
+
+        # Store activation for idempotency (24hr window)
+        if _redis_client:
+            try:
+                _redis_client.setex(activation_key, 86400, json.dumps(response_data))
+            except Exception:
+                pass
+
+        resp = jsonify(response_data)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    except Exception as e:
+        print(f"Bundle activate error: {str(e)}")
+        return jsonify({"error": "Something went wrong."}), 500
+
+
+@app.route('/api/build/bundle-use', methods=['POST'])
+@limiter.limit("30 per hour")
+def bundle_use():
+    """
+    Consume a bundle credit atomically. Sets cv_paid flag on success.
+
+    Body: { bundle_token, cv_token, type ("cv"|"cover_letter"), operation_id }
+    operation_id is client-generated UUID for idempotency (H3).
+    Bundle token in body, NOT URL path (avoids log/referrer leakage).
+
+    Returns: { success, remaining } or { error } with appropriate status.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        bundle_token = (data.get('bundle_token') or '').strip()
+        cv_token = (data.get('cv_token') or '').strip()
+        credit_type = (data.get('type') or '').strip()
+        operation_id = (data.get('operation_id') or '').strip()
+
+        # Validate required fields
+        if not bundle_token:
+            return jsonify({"error": "Missing bundle token."}), 400
+        if credit_type not in ("cv", "cover_letter"):
+            return jsonify({"error": "Invalid credit type."}), 400
+        if credit_type == "cv" and not cv_token:
+            return jsonify({"error": "Missing CV token."}), 400
+
+        # Validate operation_id as UUIDv4 (polish item)
+        if operation_id and not bundle_credits.is_valid_uuid4(operation_id):
+            return jsonify({"error": "Invalid operation ID format."}), 400
+
+        # Idempotency check (H3)
+        if operation_id:
+            fingerprint = bundle_credits.compute_fingerprint(
+                "bundle-use",
+                bundle_token=bundle_token,
+                cv_token=cv_token,
+                type=credit_type,
+            )
+            existing = bundle_credits.check_operation_idempotency(operation_id, fingerprint)
+            if existing is not None:
+                if existing.get("error") == "conflict":
+                    return jsonify({"error": "Idempotency key reused with different request."}), 409
+                # Return stored response (safe retry)
+                resp = jsonify(existing)
+                resp.headers['Cache-Control'] = 'no-store'
+                return resp
+
+        # Atomic credit consumption
+        result = bundle_credits.use_credit(bundle_token, credit_type, cv_token=cv_token)
+
+        if result.get("error"):
+            error = result["error"]
+            if error == "expired":
+                status = 410  # Gone
+            elif error == "exhausted":
+                status = 402  # Payment Required
+            else:
+                status = 500
+            return jsonify({"error": error}), status
+
+        response_data = {"success": True, "remaining": result.get("remaining")}
+
+        # Store for idempotency (H3)
+        if operation_id:
+            bundle_credits.store_operation_result(operation_id, fingerprint, response_data)
+
+        # AUDIT: bundle credit used
+        try:
+            audit_log.log_event(
+                "bundle_credit_used",
+                token=cv_token or bundle_token,
+                type=credit_type,
+                remaining=result.get("remaining"),
+                bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                source="bundle-use",
+            )
+        except Exception:
+            pass
+
+        # Check if bundle is now exhausted (both CV and CL at 0)
+        try:
+            status_data = bundle_credits.get_status(bundle_token)
+            if status_data.get("active"):
+                cv_rem = status_data.get("cv_remaining", -1)
+                cl_rem = status_data.get("cl_remaining", -1)
+                if cv_rem == 0 and cl_rem == 0:
+                    audit_log.log_event(
+                        "bundle_exhausted",
+                        token=bundle_token,
+                        plan=status_data.get("plan", ""),
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="bundle-use",
+                    )
+        except Exception:
+            pass
+
+        resp = jsonify(response_data)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    except Exception as e:
+        print(f"Bundle use error: {str(e)}")
+        return jsonify({"error": "Something went wrong."}), 500
+
+
+@app.route('/api/build/bundle-status', methods=['POST'])
+@limiter.limit("60 per hour")
+def bundle_status():
+    """
+    Check bundle status. Bundle token in body (not URL path).
+
+    Body: { bundle_token }
+    Returns: { active, plan, cv_remaining, cl_remaining, expires_in_hours }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        bundle_token = (data.get('bundle_token') or '').strip()
+        if not bundle_token:
+            return jsonify({"error": "Missing bundle token."}), 400
+
+        status_data = bundle_credits.get_status(bundle_token)
+
+        resp = jsonify(status_data)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    except Exception as e:
+        print(f"Bundle status error: {str(e)}")
+        return jsonify({"error": "Something went wrong."}), 500
+
+
+@app.route('/api/build/bundle-exchange', methods=['POST'])
+@limiter.limit("30 per hour")
+def bundle_exchange():
+    """
+    Redeem a single-use exchange token for a bundle_token (H8).
+    Exchange tokens are created during recovery email flow.
+
+    Body: { exchange_token }
+    Returns: { bundle_token, plan, cv_remaining, cl_remaining, expires_in_hours }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        exchange_token = (data.get('exchange_token') or '').strip()
+        if not exchange_token:
+            return jsonify({"error": "Missing exchange token."}), 400
+
+        # Validate as UUID (exchange tokens are UUIDs)
+        if not bundle_credits.is_valid_uuid4(exchange_token):
+            return jsonify({"error": "Invalid exchange token format."}), 400
+
+        # Atomic single-use redemption (GETDEL)
+        bundle_token = bundle_credits.redeem_exchange_token(exchange_token)
+        if not bundle_token:
+            return jsonify({"error": "Exchange token expired or already used."}), 410
+
+        # Get bundle status to return full data
+        status_data = bundle_credits.get_status(bundle_token)
+        if not status_data.get("active"):
+            return jsonify({"error": "Bundle expired."}), 410
+
+        response_data = {
+            "bundle_token": bundle_token,
+            "plan": status_data.get("plan", ""),
+            "cv_remaining": status_data.get("cv_remaining", 0),
+            "cl_remaining": status_data.get("cl_remaining", 0),
+            "expires_in_hours": status_data.get("expires_in_hours", 0),
+        }
+
+        resp = jsonify(response_data)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+
+    except Exception as e:
+        print(f"Bundle exchange error: {str(e)}")
+        return jsonify({"error": "Something went wrong."}), 500
+
+
+@app.route('/api/build/bundle-recover', methods=['POST'])
+@limiter.limit("5 per hour")
+def bundle_recover():
+    """
+    Recovery path for lost bundle tokens. Non-enumerable by contract (H5).
+    Always returns { sent: true } whether email exists or not (no timing oracle).
+
+    Body: { email }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request."}), 400
+
+        email = (data.get('email') or '').strip()
+        if not email or '@' not in email:
+            return jsonify({"error": "Please provide a valid email."}), 400
+
+        # Always return same response shape (non-enumerable)
+        # Do the lookup + email send, but response is always { sent: true }
+        try:
+            bundle_token = bundle_credits.get_bundle_token_by_email(email)
+            if bundle_token:
+                # Verify the bundle is still active
+                status_data = bundle_credits.get_status(bundle_token)
+                if status_data.get("active"):
+                    _send_bundle_email(email, bundle_token, status_data.get("plan", ""))
+        except Exception:
+            pass  # Non-enumerable: errors don't change response
+
+        return jsonify({"sent": True})
+
+    except Exception as e:
+        print(f"Bundle recover error: {str(e)}")
+        return jsonify({"sent": True})  # Always same response
+
+
 @app.route('/api/build/download/<token>', methods=['GET', 'POST'])
 @limiter.limit("30 per hour")
 def build_download(token):
@@ -1063,13 +1570,24 @@ def build_download(token):
             paystack_ref = request.args.get("reference", "").strip()
             dl_format = request.args.get("format", "").strip().lower()
 
-        # Verify payment based on provider
+        # Verify payment based on provider, or check bundle cv_paid flag
         if provider == "paystack" and paystack_ref:
             payment = verify_paystack_payment(paystack_ref, token)
-        else:
-            if not session_id:
-                return jsonify({"error": "Missing payment session."}), 400
+        elif session_id:
             payment = verify_checkout_payment(session_id, token)
+        else:
+            # No session_id or reference — check cv_paid flag (set by bundle-use)
+            bundle_paid = False
+            if _redis_client:
+                try:
+                    bundle_paid = bool(_redis_client.get(f"resumeradar:cv_paid:{token}"))
+                except Exception:
+                    pass
+            if bundle_paid:
+                payment = {"verified": True, "template": template, "delivery_email": "", "format": dl_format}
+            else:
+                return jsonify({"error": "Missing payment session."}), 400
+
         if not payment.get("verified"):
             return jsonify({"error": payment.get("reason", "Payment verification failed.")}), 403
 
@@ -1324,52 +1842,211 @@ def _send_cv_email(email, token, template, event_id):
             pass
 
 
+def _send_bundle_email(email, bundle_token, plan):
+    """
+    Send bundle access email with single-use exchange token (H8).
+    Exchange token link lets user activate bundle in browser without
+    raw bundle_token ever appearing in email URLs.
+    Best-effort: failures are logged but don't break the webhook.
+    """
+    try:
+        if not email or not bundle_token:
+            return
+
+        resend_key = os.getenv("RESEND_API_KEY")
+        if not resend_key:
+            return
+
+        # Create single-use exchange token (H8)
+        exchange_id = bundle_credits.create_exchange_token(bundle_token)
+        if not exchange_id:
+            print("Bundle email: failed to create exchange token")
+            return
+
+        base_url = _get_base_url()
+        activate_link = f"{base_url}/build?activate={exchange_id}"
+
+        plan_names = {
+            "jobhunt": "Job Hunt Pack",
+            "sprint": "Unlimited Sprint",
+        }
+        plan_display = plan_names.get(plan, plan.title())
+
+        plan_details = {
+            "jobhunt": "5 CV downloads + 5 cover letters (valid for 48 hours)",
+            "sprint": "Unlimited CV downloads + cover letters (valid for 7 days)",
+        }
+        details = plan_details.get(plan, "")
+
+        import resend
+        resend.api_key = resend_key
+
+        result = resend.Emails.send({
+            "from": "ResumeRadar <noreply@resumeradar.sholastechnotes.com>",
+            "to": [email],
+            "subject": f"Your ResumeRadar {plan_display} is ready!",
+            "html": f"""
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #1a1a2e;">Your {plan_display} is Active!</h2>
+                <p>Thank you for your purchase. Your bundle includes:</p>
+                <p style="background: #f0f4ff; padding: 12px 16px; border-radius: 8px; font-weight: 500;">{details}</p>
+                <p>Click the button below to activate your bundle:</p>
+                <p style="text-align: center; margin: 24px 0;">
+                    <a href="{activate_link}" style="display: inline-block; background: #4361ee; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Activate Bundle</a>
+                </p>
+                <p style="color: #666; font-size: 14px;">This activation link expires in 15 minutes. If it expires, use the "Lost your bundle?" recovery form on the builder page with this email address.</p>
+                <p style="color: #666; font-size: 14px;">Your new bundle is now active. If you had a previous bundle, it remains valid but recovery emails will link to your latest purchase.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+                <p style="color: #999; font-size: 12px;">ResumeRadar — Privacy-first resume optimization</p>
+            </div>
+            """,
+        })
+
+        # AUDIT: email accepted
+        try:
+            audit_log.log_event(
+                "email_accepted",
+                token=bundle_token,
+                email=email,
+                resend_message_id=str(result.get("id", "")) if isinstance(result, dict) else "",
+                source="bundle-email",
+            )
+        except Exception:
+            pass
+
+    except Exception as e:
+        print(f"Bundle email error: {type(e).__name__}: {str(e)}")
+        try:
+            audit_log.log_event(
+                "email_send_error",
+                token=bundle_token,
+                email=email,
+                error=type(e).__name__,
+                source="bundle-email",
+            )
+        except Exception:
+            pass
+
+
 @app.route('/api/build/webhook', methods=['POST'])
 @limiter.exempt
 def build_webhook():
     """
-    Stripe webhook handler. Marks CV token as paid in Redis.
+    Stripe webhook handler. Handles both single CV payments and bundle payments.
+    Order: (1) verify signature → (2) dedup on event.id (H3) → (3) side effects.
     """
     try:
         payload = request.get_data()
         sig_header = request.headers.get('Stripe-Signature', '')
 
+        # (1) Verify signature FIRST — never dedup before sig check
         event = verify_webhook_signature(payload, sig_header)
         if not event:
             return jsonify({"error": "Invalid signature."}), 400
 
         if event['type'] == 'checkout.session.completed':
+            event_id = event['id']
             session = event['data']['object']
-            cv_token = session.get('metadata', {}).get('cv_token', '')
-            template = session.get('metadata', {}).get('template', 'classic')
-            delivery_email = session.get('metadata', {}).get('delivery_email', '')
+            metadata = session.get('metadata', {})
 
-            if cv_token and _redis_client:
+            # (2) Dedup on event.id (H3) — after signature verification
+            if event_id and _redis_client:
+                dedup_key = f"resumeradar:stripe_processed:{event_id}"
+                was_set = _redis_client.set(dedup_key, "1", nx=True, ex=259200)  # 72h
+                if not was_set:
+                    return jsonify({"received": True}), 200  # Already processed
+
+            product_type = metadata.get('product_type', '')
+
+            if product_type == 'bundle':
+                # (3) Bundle payment side effects
+                bundle_token = metadata.get('bundle_token', '')
+                plan = metadata.get('plan', '')
+                delivery_email = metadata.get('delivery_email', '')
+
+                if bundle_token and plan and _redis_client:
+                    try:
+                        # Create bundle in Redis (H9: email_hash, not plaintext)
+                        bundle_result = bundle_credits.create_bundle(plan, "stripe", delivery_email, bundle_token)
+
+                        if bundle_result.get("error"):
+                            print(f"Webhook bundle creation failed: {bundle_result['error']}")
+                            # Release dedup so retries can succeed
+                            try:
+                                _redis_client.delete(dedup_key)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        print(f"Webhook bundle error: {e}")
+                        try:
+                            _redis_client.delete(dedup_key)
+                        except Exception:
+                            pass
+
+                # AUDIT: bundle payment verified
                 try:
-                    paid_key = f"resumeradar:cv_paid:{cv_token}"
-                    _redis_client.setex(paid_key, 7200, "1")
-                    # Extend CV data TTL to survive Stripe retry window (72h)
-                    _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                    audit_log.log_event(
+                        "payment_verified",
+                        token=bundle_token,
+                        email=delivery_email,
+                        provider="stripe",
+                        plan=plan,
+                        session_id=session.get('id', ''),
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="webhook",
+                    )
                 except Exception:
                     pass
 
-            # AUDIT: payment confirmed via Stripe webhook (independent of download)
-            try:
-                audit_log.log_event(
-                    "payment_verified",
-                    token=cv_token,
-                    email=delivery_email,
-                    provider="stripe",
-                    session_id=session.get('id', ''),
-                    payment_intent_id=session.get('payment_intent', ''),
-                    source="webhook",
-                )
-            except Exception:
-                pass
+                # AUDIT: bundle created
+                try:
+                    audit_log.log_event(
+                        "bundle_created",
+                        token=bundle_token,
+                        email=delivery_email,
+                        plan=plan,
+                        provider="stripe",
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
 
-            # Send email if requested (best-effort, synchronous ~3-4s)
-            if delivery_email and cv_token:
-                _send_cv_email(delivery_email, cv_token, template, event['id'])
+                # Send bundle access email with exchange token (H8)
+                if delivery_email and bundle_token:
+                    _send_bundle_email(delivery_email, bundle_token, plan)
+
+            else:
+                # (3) Single CV payment side effects (existing flow)
+                cv_token = metadata.get('cv_token', '')
+                template = metadata.get('template', 'classic')
+                delivery_email = metadata.get('delivery_email', '')
+
+                if cv_token and _redis_client:
+                    try:
+                        paid_key = f"resumeradar:cv_paid:{cv_token}"
+                        _redis_client.setex(paid_key, 7200, "1")
+                        _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                    except Exception:
+                        pass
+
+                # AUDIT: payment confirmed
+                try:
+                    audit_log.log_event(
+                        "payment_verified",
+                        token=cv_token,
+                        email=delivery_email,
+                        provider="stripe",
+                        session_id=session.get('id', ''),
+                        payment_intent_id=session.get('payment_intent', ''),
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
+
+                # Send email if requested
+                if delivery_email and cv_token:
+                    _send_cv_email(delivery_email, cv_token, template, event_id)
 
         return jsonify({"received": True}), 200
 
@@ -1382,14 +2059,15 @@ def build_webhook():
 @limiter.exempt
 def build_webhook_paystack():
     """
-    Paystack webhook handler. Same post-payment flow as Stripe webhook.
-    Uses SETNX on reference for event-level idempotency BEFORE any side effects.
-    Email delivery uses its own dedup via _send_cv_email (separate from webhook dedup).
+    Paystack webhook handler. Handles both single CV payments and bundle payments.
+    Order: (1) verify signature → (2) dedup on reference (H3) → (3) side effects.
+    Bundle flow gated behind PAYSTACK_BUNDLES_ENABLED (H4).
     """
     try:
         payload = request.get_data()
         signature = request.headers.get('X-Paystack-Signature', '')
 
+        # (1) Verify signature FIRST
         if not verify_paystack_webhook(payload, signature):
             return jsonify({"error": "Invalid signature."}), 400
 
@@ -1399,53 +2077,99 @@ def build_webhook_paystack():
             data = event.get('data', {})
             reference = data.get('reference', '')
             metadata = data.get('metadata', {})
-            cv_token = metadata.get('cv_token', '')
-            template = metadata.get('template', 'classic')
+            product_type = metadata.get('product_type', '')
             delivery_email = metadata.get('delivery_email', '')
 
-            if cv_token and reference and _redis_client:
-                try:
-                    # SETNX idempotency — prevent duplicate Redis writes on Paystack retries
-                    dedup_key = f"resumeradar:paystack_processed:{reference}"
-                    was_set = _redis_client.set(dedup_key, "1", nx=True, ex=259200)  # 72h
-                    if not was_set:
-                        # Already processed this reference — return 200 to stop retries
-                        return jsonify({"received": True}), 200
+            # (2) Dedup on reference — after signature verification
+            if reference and _redis_client:
+                dedup_key = f"resumeradar:paystack_processed:{reference}"
+                was_set = _redis_client.set(dedup_key, "1", nx=True, ex=259200)  # 72h
+                if not was_set:
+                    return jsonify({"received": True}), 200  # Already processed this reference
 
-                    # Mark as paid (72h TTL matching cv data)
-                    paid_key = f"resumeradar:cv_paid:{cv_token}"
-                    _redis_client.setex(paid_key, 259200, "1")
-                    # Extend CV data TTL to survive retry window (72h)
-                    _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
-                    # Store reference for callback verification
-                    _redis_client.setex(f"resumeradar:cv_paystack_ref:{cv_token}", 259200, reference)
-                except Exception as redis_err:
-                    print(f"Paystack webhook Redis error: {redis_err}")
-                    # Release dedup on failure so retries can succeed
+            if product_type == 'bundle' and os.getenv("PAYSTACK_BUNDLES_ENABLED", "false").lower() == "true":
+                # (3) Bundle payment side effects (H4: behind feature flag)
+                bundle_token = metadata.get('bundle_token', '')
+                plan = metadata.get('plan', '')
+
+                if bundle_token and plan and _redis_client:
                     try:
-                        _redis_client.delete(f"resumeradar:paystack_processed:{reference}")
-                    except Exception:
-                        pass
+                        bundle_result = bundle_credits.create_bundle(plan, "paystack", delivery_email, bundle_token)
+                        if bundle_result.get("error"):
+                            print(f"Paystack webhook bundle creation failed: {bundle_result['error']}")
+                            try:
+                                _redis_client.delete(dedup_key)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        print(f"Paystack webhook bundle error: {e}")
+                        try:
+                            _redis_client.delete(dedup_key)
+                        except Exception:
+                            pass
 
-            # AUDIT: payment confirmed via Paystack webhook (independent of download)
-            try:
-                audit_log.log_event(
-                    "payment_verified",
-                    token=cv_token,
-                    email=delivery_email,
-                    provider="paystack",
-                    reference=reference,
-                    source="webhook",
-                )
-            except Exception:
-                pass
+                # AUDIT
+                try:
+                    audit_log.log_event(
+                        "payment_verified",
+                        token=bundle_token,
+                        email=delivery_email,
+                        provider="paystack",
+                        plan=plan,
+                        reference=reference,
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
 
-            # Send email if requested — _send_cv_email has its own dedup
-            # (resumeradar:cv_emailed:{event_id} with delete-on-failure),
-            # separate from webhook dedup so email failures can be retried.
-            # Signature: _send_cv_email(email, token, template, event_id)
-            if delivery_email and cv_token:
-                _send_cv_email(delivery_email, cv_token, template, f"paystack_{reference}")
+                try:
+                    audit_log.log_event(
+                        "bundle_created",
+                        token=bundle_token,
+                        email=delivery_email,
+                        plan=plan,
+                        provider="paystack",
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
+
+                if delivery_email and bundle_token:
+                    _send_bundle_email(delivery_email, bundle_token, plan)
+            else:
+                # (3) Single CV payment side effects (existing flow)
+                cv_token = metadata.get('cv_token', '')
+                template = metadata.get('template', 'classic')
+
+                if cv_token and _redis_client:
+                    try:
+                        paid_key = f"resumeradar:cv_paid:{cv_token}"
+                        _redis_client.setex(paid_key, 259200, "1")
+                        _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                        _redis_client.setex(f"resumeradar:cv_paystack_ref:{cv_token}", 259200, reference)
+                    except Exception as redis_err:
+                        print(f"Paystack webhook Redis error: {redis_err}")
+                        try:
+                            _redis_client.delete(dedup_key)
+                        except Exception:
+                            pass
+
+                try:
+                    audit_log.log_event(
+                        "payment_verified",
+                        token=cv_token,
+                        email=delivery_email,
+                        provider="paystack",
+                        reference=reference,
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
+
+                if delivery_email and cv_token:
+                    _send_cv_email(delivery_email, cv_token, template, f"paystack_{reference}")
 
         return jsonify({"received": True}), 200
 

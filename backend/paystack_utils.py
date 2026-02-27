@@ -146,6 +146,82 @@ def verify_paystack_payment(reference, expected_token):
         return {"verified": False, "reason": "Could not verify payment."}
 
 
+def create_paystack_bundle_transaction(plan, bundle_token, callback_url, customer_email):
+    """
+    Initialize a Paystack transaction for a bundle purchase.
+    Gated behind PAYSTACK_BUNDLES_ENABLED feature flag (H4).
+
+    Args:
+        plan: "jobhunt" or "sprint"
+        bundle_token: pre-generated server-side token (stored in metadata)
+        callback_url: URL to redirect after payment
+        customer_email: REQUIRED - buyer's email
+
+    Returns:
+        dict with authorization_url and reference, or error
+    """
+    # Feature flag check (H4)
+    if os.getenv("PAYSTACK_BUNDLES_ENABLED", "false").lower() != "true":
+        return {"error": "Paystack bundles not enabled."}
+
+    secret_key = os.getenv("PAYSTACK_SECRET_KEY")
+    if not secret_key:
+        return {"error": "Paystack not configured."}
+
+    if not customer_email:
+        return {"error": "Email is required for bundle purchases."}
+
+    # Map plan to amount env vars
+    amount_map = {
+        "jobhunt": int(os.getenv("PAYSTACK_AMOUNT_JOBHUNT", "850000")),   # NGN 8,500
+        "sprint": int(os.getenv("PAYSTACK_AMOUNT_SPRINT", "1500000")),     # NGN 15,000
+    }
+    amount = amount_map.get(plan)
+    if not amount:
+        return {"error": f"Invalid bundle plan: {plan}"}
+
+    metadata = {
+        "bundle_token": bundle_token,
+        "plan": plan,
+        "delivery_email": customer_email,
+        "product_type": "bundle",
+        "custom_fields": [
+            {"display_name": "Product", "variable_name": "product", "value": f"ResumeRadar {plan.title()} Bundle"}
+        ],
+    }
+
+    try:
+        response = requests.post(
+            f"{PAYSTACK_API_BASE}/transaction/initialize",
+            json={
+                "email": customer_email,
+                "amount": amount,
+                "currency": PAYSTACK_CURRENCY,
+                "reference": f"rr_bundle_{plan}_{os.urandom(4).hex()}",
+                "callback_url": callback_url,
+                "channels": ["card", "bank_transfer", "ussd", "mobile_money", "qr"],
+                "metadata": metadata,
+            },
+            headers={
+                "Authorization": f"Bearer {secret_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=15,
+        )
+        result = response.json()
+
+        if not result.get("status"):
+            return {"error": result.get("message", "Paystack initialization failed.")}
+
+        return {
+            "authorization_url": result["data"]["authorization_url"],
+            "reference": result["data"]["reference"],
+        }
+    except requests.RequestException as e:
+        print(f"Paystack bundle init error: {e}")
+        return {"error": "Could not create payment session. Please try again."}
+
+
 def verify_paystack_webhook(payload_bytes, signature):
     """
     Validate a Paystack webhook signature using HMAC SHA512.

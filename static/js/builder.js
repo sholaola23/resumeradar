@@ -1517,4 +1517,392 @@
         }
     })();
 
+    // ============================================================
+    // BUNDLE: STATUS CHECK, AUTO-ACTIVATION, DOWNLOAD, RECOVERY
+    // ============================================================
+    (function initBundles() {
+        var bundleBanner = document.getElementById('bundleBanner');
+        var bundlePricingCard = document.getElementById('bundlePricingCard');
+        var paymentCard = document.getElementById('paymentCard');
+        var bundleRecoverRow = document.getElementById('bundleRecoverRow');
+        var bundleRecoverLink = document.getElementById('bundleRecoverLink');
+        var bundleRecoverForm = document.getElementById('bundleRecoverForm');
+        var bundleRecoverBtn = document.getElementById('bundleRecoverBtn');
+        var bundleRecoverEmail = document.getElementById('bundleRecoverEmail');
+        var bundleRecoverMsg = document.getElementById('bundleRecoverMsg');
+        var bundleDownloadBtn = document.getElementById('bundleDownloadBtn');
+        var activeBundleToken = null;
+
+        // ---- Format toggle for bundle card ----
+        var bundleFormatGroup = document.getElementById('bundleFormatGroup');
+        if (bundleFormatGroup) {
+            bundleFormatGroup.querySelectorAll('.format-toggle').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    bundleFormatGroup.querySelectorAll('.format-toggle').forEach(function(b) {
+                        b.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    selectedFormat = this.getAttribute('data-format');
+                });
+            });
+        }
+
+        // ---- Show/hide bundle UI ----
+        function showBundleActive(status) {
+            activeBundleToken = localStorage.getItem('resumeradar_bundle_token');
+            if (bundleBanner) {
+                bundleBanner.style.display = 'block';
+                var planName = document.getElementById('bundlePlanName');
+                var cvCount = document.getElementById('bundleCvCount');
+                var clCount = document.getElementById('bundleClCount');
+                var expiry = document.getElementById('bundleExpiry');
+                if (planName) planName.textContent = status.plan === 'sprint' ? 'Unlimited Sprint' : 'Job Hunt Pack';
+                if (cvCount) cvCount.textContent = status.cv_remaining === -1 ? 'Unlimited' : status.cv_remaining;
+                if (clCount) clCount.textContent = status.cl_remaining === -1 ? 'Unlimited' : status.cl_remaining;
+                if (expiry) {
+                    var hrs = Math.round(status.expires_in_hours || 0);
+                    expiry.textContent = hrs > 24
+                        ? 'Expires in ' + Math.round(hrs / 24) + ' day' + (Math.round(hrs / 24) > 1 ? 's' : '')
+                        : 'Expires in ' + hrs + ' hour' + (hrs !== 1 ? 's' : '');
+                }
+            }
+            if (paymentCard) paymentCard.style.display = 'none';
+            if (bundlePricingCard) bundlePricingCard.style.display = 'none';
+            if (bundleRecoverRow) bundleRecoverRow.style.display = 'none';
+        }
+
+        function showBundleInactive() {
+            activeBundleToken = null;
+            localStorage.removeItem('resumeradar_bundle_token');
+            if (bundleBanner) bundleBanner.style.display = 'none';
+            if (paymentCard) paymentCard.style.display = 'block';
+            if (bundlePricingCard) bundlePricingCard.style.display = 'block';
+            if (bundleRecoverRow) bundleRecoverRow.style.display = 'block';
+        }
+
+        // ---- Check bundle status from server ----
+        async function checkBundleStatus(token) {
+            try {
+                var resp = await fetch('/api/build/bundle-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ bundle_token: token }),
+                });
+                if (!resp.ok) return null;
+                var data = await resp.json();
+                if (data.active) return data;
+                return null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // ---- Auto-activate from URL (exchange token flow, H8) ----
+        async function tryAutoActivate() {
+            var params = new URLSearchParams(window.location.search);
+            var exchangeUuid = params.get('activate');
+            if (!exchangeUuid) return false;
+
+            // Clean URL immediately (H8: exchange token should not linger in history)
+            var cleanUrl = new URL(window.location);
+            cleanUrl.searchParams.delete('activate');
+            window.history.replaceState({}, '', cleanUrl);
+
+            try {
+                var resp = await fetch('/api/build/bundle-exchange', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exchange_token: exchangeUuid }),
+                });
+                if (!resp.ok) return false;
+                var data = await resp.json();
+                if (data.bundle_token) {
+                    localStorage.setItem('resumeradar_bundle_token', data.bundle_token);
+                    showBundleActive(data);
+                    return true;
+                }
+            } catch (e) { /* fall through */ }
+            return false;
+        }
+
+        // ---- Auto-activate from payment redirect ----
+        async function tryPaymentActivate() {
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('bundle_payment') !== 'success') return false;
+
+            var sessionId = params.get('session_id');
+            var reference = params.get('reference') || params.get('trxref');
+            if (!sessionId && !reference) return false;
+
+            // Clean URL
+            var cleanUrl = new URL(window.location);
+            cleanUrl.searchParams.delete('bundle_payment');
+            cleanUrl.searchParams.delete('session_id');
+            cleanUrl.searchParams.delete('reference');
+            cleanUrl.searchParams.delete('trxref');
+            window.history.replaceState({}, '', cleanUrl);
+
+            try {
+                var body = {};
+                if (sessionId) body.session_id = sessionId;
+                if (reference) body.reference = reference;
+
+                var resp = await fetch('/api/build/bundle-activate-from-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!resp.ok) return false;
+                var data = await resp.json();
+                if (data.bundle_token) {
+                    localStorage.setItem('resumeradar_bundle_token', data.bundle_token);
+                    showBundleActive(data);
+                    return true;
+                }
+            } catch (e) { /* fall through */ }
+            return false;
+        }
+
+        // ---- Init: check for existing bundle or activate ----
+        (async function() {
+            // 1. Try exchange token activation (from recovery email)
+            var activated = await tryAutoActivate();
+            if (activated) return;
+
+            // 2. Try payment redirect activation
+            activated = await tryPaymentActivate();
+            if (activated) return;
+
+            // 3. Check localStorage for existing bundle
+            var storedToken = localStorage.getItem('resumeradar_bundle_token');
+            if (storedToken) {
+                var status = await checkBundleStatus(storedToken);
+                if (status) {
+                    showBundleActive(status);
+                } else {
+                    showBundleInactive();
+                }
+            } else {
+                // No bundle — show pricing as upgrade option
+                if (bundlePricingCard) bundlePricingCard.style.display = 'block';
+            }
+        })();
+
+        // ---- Bundle download (uses bundle-use endpoint) ----
+        if (bundleDownloadBtn) {
+            bundleDownloadBtn.addEventListener('click', async function() {
+                if (!currentToken) {
+                    showError('Please generate your CV first.');
+                    return;
+                }
+                if (!activeBundleToken) {
+                    showError('Bundle not active. Please purchase or recover your bundle.');
+                    return;
+                }
+
+                var selectedTemplate = document.querySelector('input[name="template"]:checked').value;
+                var btnText = bundleDownloadBtn.querySelector('.pay-btn-text');
+                var btnLoading = bundleDownloadBtn.querySelector('.pay-btn-loading');
+                btnText.style.display = 'none';
+                btnLoading.style.display = 'inline';
+                bundleDownloadBtn.disabled = true;
+
+                try {
+                    // 1. Use bundle credit
+                    var operationId = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substr(2, 8));
+                    var useResp = await fetch('/api/build/bundle-use', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            bundle_token: activeBundleToken,
+                            cv_token: currentToken,
+                            type: 'cv',
+                            operation_id: operationId,
+                        }),
+                    });
+
+                    if (!useResp.ok) {
+                        var useErr = await useResp.json().catch(function() { return {}; });
+                        showError(useErr.error || 'Could not use bundle credit. Please try again.');
+                        return;
+                    }
+
+                    var useData = await useResp.json();
+
+                    // 2. Download the CV (cv_paid flag now set by bundle-use)
+                    var storedCvData = sessionStorage.getItem('resumeradar_cv_' + currentToken);
+                    var downloadResp;
+
+                    if (storedCvData) {
+                        var bodyObj = {
+                            template: selectedTemplate,
+                            cv_data: JSON.parse(storedCvData),
+                            format: selectedFormat,
+                        };
+                        downloadResp = await fetch('/api/build/download/' + currentToken, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(bodyObj),
+                        });
+                    } else {
+                        var downloadUrl = '/api/build/download/' + currentToken + '?template=' + encodeURIComponent(selectedTemplate);
+                        if (selectedFormat) downloadUrl += '&format=' + encodeURIComponent(selectedFormat);
+                        downloadResp = await fetch(downloadUrl);
+                    }
+
+                    if (!downloadResp.ok) {
+                        var dlErr = await downloadResp.json().catch(function() { return {}; });
+                        showError(dlErr.error || 'Download failed. Your credit was used. Please try again.');
+                        return;
+                    }
+
+                    // Trigger download
+                    var ct = downloadResp.headers.get('Content-Type') || '';
+                    var fname = 'ResumeRadar_CV.pdf';
+                    if (ct.includes('zip')) fname = 'ResumeRadar_CV.zip';
+                    else if (ct.includes('wordprocessingml') || ct.includes('docx')) fname = 'ResumeRadar_CV.docx';
+
+                    var blob = await downloadResp.blob();
+                    var dlUrl = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = dlUrl;
+                    a.download = fname;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(dlUrl);
+
+                    // Update banner with new remaining count
+                    var newStatus = await checkBundleStatus(activeBundleToken);
+                    if (newStatus) {
+                        showBundleActive(newStatus);
+                    }
+
+                    // Clean up client storage
+                    if (storedCvData) sessionStorage.removeItem('resumeradar_cv_' + currentToken);
+
+                } catch (err) {
+                    showError('Network error. Please try again.');
+                } finally {
+                    btnText.style.display = 'inline';
+                    btnLoading.style.display = 'none';
+                    bundleDownloadBtn.disabled = false;
+                }
+            });
+        }
+
+        // ---- Bundle tier purchase ----
+        document.querySelectorAll('.bundle-tier-btn').forEach(function(btn) {
+            btn.addEventListener('click', async function() {
+                var plan = this.getAttribute('data-plan');
+                var emailInput = document.getElementById('bundleEmail');
+                var email = emailInput ? emailInput.value.trim() : '';
+
+                if (!email) {
+                    showError('Email is required for bundle purchases (needed for recovery access).');
+                    if (emailInput) emailInput.focus();
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = 'Redirecting...';
+
+                try {
+                    var idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substr(2, 8));
+
+                    var resp = await fetch('/api/build/create-bundle-checkout', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            plan: plan,
+                            email: email,
+                            provider: detectedProvider,
+                            idempotency_key: idempotencyKey,
+                        }),
+                    });
+
+                    var data = await resp.json();
+                    if (!resp.ok || data.error) {
+                        showError(data.error || 'Could not start checkout. Please try again.');
+                        return;
+                    }
+
+                    // Store session info for post-payment
+                    sessionStorage.setItem('resumeradar_bundle_session', data.session_id || '');
+
+                    window.location.href = data.checkout_url;
+
+                } catch (err) {
+                    showError('Network error. Please try again.');
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = plan === 'sprint' ? 'Get Unlimited Sprint' : 'Get Job Hunt Pack';
+                }
+            });
+        });
+
+        // ---- Bundle Naira pricing (update tier prices for Nigeria) ----
+        if (shouldShowPaystackOption()) {
+            var paymentCard2 = document.querySelector('.payment-card');
+            var paystackEnabled2 = paymentCard2 ? paymentCard2.dataset.paystackEnabled === 'true' : false;
+            if (paystackEnabled2) {
+                var priceJobhunt = document.getElementById('bundlePriceJobhunt');
+                var priceSprint = document.getElementById('bundlePriceSprint');
+                if (priceJobhunt && detectedProvider === 'paystack') priceJobhunt.textContent = '\u20a68,500';
+                if (priceSprint && detectedProvider === 'paystack') priceSprint.textContent = '\u20a615,000';
+            }
+        }
+
+        // ---- Recovery link toggle ----
+        if (bundleRecoverLink) {
+            bundleRecoverLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (bundleRecoverForm) {
+                    bundleRecoverForm.style.display = bundleRecoverForm.style.display === 'none' ? 'flex' : 'none';
+                }
+            });
+        }
+
+        // ---- Recovery form submit ----
+        if (bundleRecoverBtn) {
+            bundleRecoverBtn.addEventListener('click', async function() {
+                var email = bundleRecoverEmail ? bundleRecoverEmail.value.trim() : '';
+                if (!email) {
+                    if (bundleRecoverMsg) {
+                        bundleRecoverMsg.textContent = 'Please enter your email address.';
+                        bundleRecoverMsg.className = 'bundle-recover-msg error';
+                        bundleRecoverMsg.style.display = 'block';
+                    }
+                    return;
+                }
+
+                bundleRecoverBtn.disabled = true;
+                bundleRecoverBtn.textContent = 'Sending...';
+
+                try {
+                    var resp = await fetch('/api/build/bundle-recover', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: email }),
+                    });
+                    // Always shows success (non-enumerable, H5)
+                    if (bundleRecoverMsg) {
+                        bundleRecoverMsg.textContent = 'If a bundle exists for this email, you\'ll receive a recovery link shortly. Check your inbox.';
+                        bundleRecoverMsg.className = 'bundle-recover-msg';
+                        bundleRecoverMsg.style.display = 'block';
+                    }
+                } catch (err) {
+                    if (bundleRecoverMsg) {
+                        bundleRecoverMsg.textContent = 'Network error. Please try again.';
+                        bundleRecoverMsg.className = 'bundle-recover-msg error';
+                        bundleRecoverMsg.style.display = 'block';
+                    }
+                } finally {
+                    bundleRecoverBtn.disabled = false;
+                    bundleRecoverBtn.textContent = 'Send Recovery Link';
+                }
+            });
+        }
+    })();
+
 })();
