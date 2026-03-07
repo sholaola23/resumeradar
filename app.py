@@ -10,6 +10,7 @@ import uuid
 import hmac as hmac_module
 import secrets
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import html as html_module
 import re as re_module
 from datetime import datetime, timezone
@@ -86,9 +87,14 @@ _redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
     key_func=get_real_ip,
-    default_limits=["2000 per day", "500 per hour"],
+    default_limits=["5000 per day", "1000 per hour"],
     storage_uri=_redis_limiter_uri,
 )
+
+# Exempt static assets from rate limiting — they'd burn through global limits during spikes
+@limiter.request_filter
+def _exempt_static():
+    return request.path.startswith('/static/')
 
 # File upload configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
@@ -100,6 +106,12 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 # Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Beehiiv async subscription pool — bounded to prevent thread explosion under spike load.
+# Each Gunicorn worker gets its own pool (3 workers × 3 threads = 9 Beehiiv threads total).
+# Semaphore caps pending queue at 50 per worker to prevent unbounded growth.
+_beehiiv_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix='beehiiv')
+_beehiiv_semaphore = threading.Semaphore(50)
 
 # ============================================================
 # SCAN COUNTER (Redis-backed, persistent across deploys)
@@ -232,6 +244,34 @@ def apple_touch_icon():
 def robots_txt():
     """Serve robots.txt for search engine crawlers."""
     return send_from_directory(app.static_folder, 'robots.txt', mimetype='text/plain')
+
+
+@app.route('/sitemap.xml')
+@limiter.exempt
+def sitemap_xml():
+    """Serve sitemap.xml for search engines and AI crawlers."""
+    base = 'https://resumeradar.sholastechnotes.com'
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    pages = [
+        {'loc': f'{base}/', 'priority': '1.0', 'changefreq': 'weekly'},
+        {'loc': f'{base}/build', 'priority': '0.8', 'changefreq': 'monthly'},
+    ]
+    xml_entries = '\n'.join(
+        f'  <url>\n'
+        f'    <loc>{p["loc"]}</loc>\n'
+        f'    <lastmod>{today}</lastmod>\n'
+        f'    <changefreq>{p["changefreq"]}</changefreq>\n'
+        f'    <priority>{p["priority"]}</priority>\n'
+        f'  </url>'
+        for p in pages
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f'{xml_entries}\n'
+        '</urlset>'
+    )
+    return Response(xml, mimetype='application/xml')
 
 
 @app.route('/api/scan', methods=['POST'])
@@ -682,44 +722,47 @@ def subscribe_newsletter():
         if not beehiiv_key or not pub_id:
             return jsonify({"error": "Newsletter service is not configured."}), 503
 
-        import requests as http_requests
-
-        # Build the subscription payload
-        subscription_data = {
-            'email': email,
-            'reactivate_existing': True,
-            'send_welcome_email': True,
-            'utm_source': utm_source,
-        }
-
-        # Add first name as custom field if provided
-        if first_name:
-            subscription_data['custom_fields'] = [
-                {
-                    'name': 'first_name',
-                    'value': first_name,
+        # Fire-and-forget: submit Beehiiv call to bounded thread pool.
+        # Semaphore prevents unbounded queue growth under spike traffic.
+        def _beehiiv_task():
+            try:
+                import requests as http_requests
+                subscription_data = {
+                    'email': email,
+                    'reactivate_existing': True,
+                    'send_welcome_email': True,
+                    'utm_source': utm_source,
                 }
-            ]
+                if first_name:
+                    subscription_data['custom_fields'] = [
+                        {'name': 'first_name', 'value': first_name}
+                    ]
+                resp = http_requests.post(
+                    f'https://api.beehiiv.com/v2/publications/{pub_id}/subscriptions',
+                    headers={
+                        'Authorization': f'Bearer {beehiiv_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    json=subscription_data,
+                    timeout=10,
+                )
+                if resp.status_code not in [200, 201]:
+                    print(f"Beehiiv API error: {resp.status_code} - {resp.text[:200]}")
+            except Exception as exc:
+                print(f"Beehiiv background error: {exc}")
+            finally:
+                _beehiiv_semaphore.release()
 
-        response = http_requests.post(
-            f'https://api.beehiiv.com/v2/publications/{pub_id}/subscriptions',
-            headers={
-                'Authorization': f'Bearer {beehiiv_key}',
-                'Content-Type': 'application/json',
-            },
-            json=subscription_data,
-            timeout=10,
-        )
+        if _beehiiv_semaphore.acquire(blocking=False):
+            try:
+                _beehiiv_executor.submit(_beehiiv_task)
+            except Exception:
+                _beehiiv_semaphore.release()
 
-        if response.status_code in [200, 201]:
-            return jsonify({
-                "success": True,
-                "message": "You're subscribed! Check your inbox."
-            })
-        else:
-            error_msg = response.json().get('message', 'Subscription failed')
-            print(f"Beehiiv API error: {response.status_code} - {error_msg}")
-            return jsonify({"error": "Could not subscribe. Please try again."}), 500
+        return jsonify({
+            "success": True,
+            "message": "You're subscribed! Check your inbox."
+        })
 
     except Exception as e:
         print(f"Newsletter subscription error: {str(e)}")
@@ -2333,8 +2376,11 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    # Cache static assets for 1 hour (not longer — filenames aren't fingerprinted)
+    if request.path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=3600, stale-while-revalidate=600'
     # Prevent browser caching of CV builder API responses (PII protection)
-    if request.path.startswith('/api/build/'):
+    elif request.path.startswith('/api/build/'):
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
     # Only add HSTS in production

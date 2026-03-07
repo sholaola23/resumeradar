@@ -7,8 +7,8 @@ Allow: /
 # Static assets
 Allow: /static/
 
-# Sitemap (optional — add when you have one)
-# Sitemap: https://resumeradar.sholastechnotes.com/sitemap.xml
+# Sitemap
+Sitemap: https://resumeradar.sholastechnotes.com/sitemap.xml
 
 # Block API endpoints from indexing (not useful for crawlers)
 Disallow: /api/

@@ -22,6 +22,9 @@
     <meta name="twitter:description" content="Free tool: See exactly why your resume gets filtered out by ATS systems — and how to fix it in minutes.">
     <meta name="twitter:image" content="https://resumeradar.sholastechnotes.com/static/images/{{ og_image }}">
 
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://resumeradar.sholastechnotes.com/">
+
     <!-- Favicon -->
     <link rel="icon" href="/static/favicon.ico" sizes="any">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
@@ -31,6 +34,36 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+
+    <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "ResumeRadar",
+        "url": "https://resumeradar.sholastechnotes.com",
+        "description": "Free ATS resume scanner. Upload your resume, paste a job description, and get instant feedback on keyword matches, missing skills, and how to optimize for Applicant Tracking Systems.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "GBP"
+        },
+        "featureList": [
+            "ATS resume scanning with keyword match scoring",
+            "Missing keyword detection and gap analysis",
+            "AI-powered resume improvement suggestions",
+            "Cover letter generator tailored to job descriptions",
+            "ATS-optimized CV builder with PDF download"
+        ],
+        "creator": {
+            "@type": "Person",
+            "name": "Olushola Oladipupo",
+            "url": "https://sholastechnotes.com"
+        }
+    }
+    </script>
 </head>
 <body>
     <!-- ============ HEADER ============ -->
