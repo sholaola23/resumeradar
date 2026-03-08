@@ -44,6 +44,7 @@ from backend import ai_budget
 from backend import ai_metrics
 from backend import ai_ratelimit
 from backend import bundle_credits
+from backend import funnel_metrics
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -146,6 +147,7 @@ ai_budget.init(_redis_client)
 ai_metrics.init(_redis_client)
 ai_ratelimit.init(_redis_client)
 bundle_credits.init(_redis_client)
+funnel_metrics.init(_redis_client)
 
 # In-memory fallback
 _fallback_count = int(os.getenv('SCAN_COUNT_BASE', '150'))
@@ -355,8 +357,9 @@ def scan_resume():
             match_results
         )
 
-        # 8. Increment scan counter
+        # 8. Increment scan counter + funnel analytics
         _increment_scan_count()
+        funnel_metrics.record("scan_completed")
 
         # 9. Compile final response
         response = {
@@ -759,6 +762,7 @@ def subscribe_newsletter():
             except Exception:
                 _beehiiv_semaphore.release()
 
+        funnel_metrics.record("subscribe_completed")
         return jsonify({
             "success": True,
             "message": "You're subscribed! Check your inbox."
@@ -1086,6 +1090,7 @@ def build_create_checkout():
                     return jsonify({"error": "Please enter a valid email address."}), 400
 
         base_url = _get_base_url()
+        funnel_metrics.record("checkout_started")
 
         # ---- PAYSTACK PATH (Nigeria — explicit opt-in) ----
         if provider == "paystack" and os.getenv("PAYSTACK_SECRET_KEY"):
@@ -1198,6 +1203,8 @@ def create_bundle_checkout():
                         return jsonify({"error": "Idempotency key reused with different request."}), 409
                 except (json.JSONDecodeError, TypeError):
                     pass
+
+        funnel_metrics.record("bundle_checkout_started")
 
         # Generate bundle token server-side
         bundle_token = secrets.token_urlsafe(32)
@@ -1746,6 +1753,7 @@ def build_download(token):
             )
         except Exception:
             pass
+        funnel_metrics.record("download_completed")
 
         response.headers['X-Email-Requested'] = 'true' if delivery_email else 'false'
         return response
@@ -2040,6 +2048,7 @@ def build_webhook():
                     )
                 except Exception:
                     pass
+                funnel_metrics.record("purchase_completed")
 
                 # AUDIT: bundle created
                 try:
@@ -2086,6 +2095,7 @@ def build_webhook():
                     )
                 except Exception:
                     pass
+                funnel_metrics.record("purchase_completed")
 
                 # Send email if requested
                 if delivery_email and cv_token:
@@ -2165,6 +2175,7 @@ def build_webhook_paystack():
                     )
                 except Exception:
                     pass
+                funnel_metrics.record("purchase_completed")
 
                 try:
                     audit_log.log_event(
@@ -2210,6 +2221,7 @@ def build_webhook_paystack():
                     )
                 except Exception:
                     pass
+                funnel_metrics.record("purchase_completed")
 
                 if delivery_email and cv_token:
                     _send_cv_email(delivery_email, cv_token, template, f"paystack_{reference}")
@@ -2301,6 +2313,50 @@ def build_webhook_resend():
     except Exception as e:
         print(f"Resend webhook error: {type(e).__name__}")
         return jsonify({"received": True}), 200  # Always 200 to prevent infinite retries
+
+
+@app.route('/api/event', methods=['POST'])
+@limiter.limit("60 per minute")
+def track_client_event():
+    """Accept client-side funnel events. Always returns 204 (silent)."""
+    try:
+        data = request.get_json(silent=True) or {}
+        event = data.get('event', '')
+        if event in funnel_metrics.CLIENT_EVENTS:
+            funnel_metrics.record(event)
+    except Exception:
+        pass
+    return '', 204
+
+
+@app.route('/api/admin/funnel', methods=['GET'])
+@limiter.exempt
+def admin_funnel():
+    """Return funnel analytics. Bearer token auth (AUDIT_ADMIN_TOKEN)."""
+    admin_token = os.getenv('AUDIT_ADMIN_TOKEN', '')
+    if not admin_token:
+        return jsonify({"error": "Not configured."}), 503
+
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Unauthorized."}), 401
+    provided_token = auth_header[7:]
+    if not hmac_module.compare_digest(provided_token, admin_token):
+        return jsonify({"error": "Unauthorized."}), 401
+
+    # Single date or range
+    date_param = request.args.get('date', '')
+    days_param = request.args.get('days', '7')
+
+    if date_param:
+        metrics = funnel_metrics.get_day(date_param)
+        return jsonify({"date": date_param, "metrics": metrics}), 200
+
+    try:
+        days = min(int(days_param), 30)
+    except (ValueError, TypeError):
+        days = 7
+    return jsonify(funnel_metrics.get_range(days)), 200
 
 
 @app.route('/api/admin/audit/lookup', methods=['GET'])
@@ -2436,6 +2492,7 @@ print(f"   Rate Limiter: {'Redis' if os.getenv('REDIS_URL') else 'In-memory'}")
 print(f"   Email Delivery: {'✅ Enabled' if os.getenv('RESEND_API_KEY') else '❌ Not configured'}")
 print(f"   Paystack: {'✅ Enabled' if os.getenv('PAYSTACK_SECRET_KEY') else '❌ Not configured'}")
 print(f"   Audit Log: {'✅ Enabled' if (os.getenv('AUDIT_HMAC_SECRET') and _redis_client) else '❌ Disabled (needs AUDIT_HMAC_SECRET + Redis)'}")
+print(f"   Funnel Analytics: {'✅ Enabled' if _redis_client else '❌ Disabled (needs Redis)'}")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))

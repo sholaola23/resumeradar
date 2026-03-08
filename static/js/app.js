@@ -19,6 +19,17 @@ function sanitizeAIText(text) {
 
 document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
+    // FUNNEL ANALYTICS (fire-and-forget via sendBeacon)
+    // ============================================================
+    function trackEvent(eventName) {
+        try {
+            var blob = new Blob([JSON.stringify({ event: eventName })], { type: 'application/json' });
+            navigator.sendBeacon('/api/event', blob);
+        } catch (e) { /* best-effort */ }
+    }
+    window._rr_trackEvent = trackEvent;
+
+    // ============================================================
     // DOM ELEMENTS
     // ============================================================
     const scanForm = document.getElementById('scanForm');
@@ -150,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         newsletterPopup.style.display = 'flex';
+        trackEvent('gate_shown');
         if (newsletterFirstName) newsletterFirstName.focus();
     }
 
@@ -1048,6 +1060,7 @@ Nice to Have
     function renderResults(data) {
         // Show results section
         resultsSection.style.display = 'block';
+        trackEvent('partial_results_viewed');
 
         // 1. Score
         renderScore(data);
@@ -1540,6 +1553,7 @@ Nice to Have
             loading.style.display = 'flex';
             output.style.display = 'none';
             errorDiv.style.display = 'none';
+            trackEvent('cover_letter_started');
 
             try {
                 const resp = await fetch('/api/generate/cover-letter', {
@@ -1848,7 +1862,8 @@ function launchBuilderFromScan() {
         // Store in sessionStorage for the builder page to read
         sessionStorage.setItem('resumeradar_scan_for_builder', JSON.stringify(builderData));
 
-        // Navigate to builder
+        // Track funnel event + navigate to builder
+        if (window._rr_trackEvent) window._rr_trackEvent('cv_optimize_clicked');
         window.location.href = '/build?from=scan';
     } catch (e) {
         console.error('Launch builder error:', e);
