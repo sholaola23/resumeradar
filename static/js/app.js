@@ -579,10 +579,13 @@ Nice to Have
             if (fileSelected) fileSelected.style.display = 'none';
             if (dropZone) dropZone.style.display = 'block';
 
-            // 4. Scroll up to the form so they see it filled in
+            // 4. Track demo scan for funnel analytics
+            trackEvent('demo_scan');
+
+            // 5. Scroll up to the form so they see it filled in
             scanForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            // 5. Brief visual pulse on the scan button to draw attention
+            // 6. Brief visual pulse on the scan button to draw attention
             scanBtn.classList.add('pulse-hint');
             setTimeout(() => scanBtn.classList.remove('pulse-hint'), 1500);
         });

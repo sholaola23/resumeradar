@@ -16,6 +16,7 @@ _FUNNEL_TTL = 604800  # 7 days
 
 VALID_EVENTS = frozenset({
     "scan_completed",
+    "demo_scan",
     "subscribe_completed",
     "gate_shown",
     "gate_skipped",
@@ -30,6 +31,7 @@ VALID_EVENTS = frozenset({
 
 # Subset allowed from the public POST /api/event endpoint
 CLIENT_EVENTS = frozenset({
+    "demo_scan",
     "gate_shown",
     "gate_skipped",
     "partial_results_viewed",
