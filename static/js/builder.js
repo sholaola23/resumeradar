@@ -341,6 +341,25 @@
         updateRemoveButtons('educationEntries', '.education-entry');
     });
 
+    // Projects
+    document.getElementById('addProject').addEventListener('click', function () {
+        const container = document.getElementById('projectEntries');
+        const entries = container.querySelectorAll('.project-entry');
+        const newIndex = entries.length;
+
+        const template = entries[0].cloneNode(true);
+        template.setAttribute('data-index', newIndex);
+        template.querySelectorAll('input, textarea').forEach(el => el.value = '');
+        template.querySelector('.remove-entry-btn').style.display = 'block';
+        template.querySelector('.remove-entry-btn').addEventListener('click', function () {
+            template.remove();
+            updateRemoveButtons('projectEntries', '.project-entry');
+        });
+
+        container.appendChild(template);
+        updateRemoveButtons('projectEntries', '.project-entry');
+    });
+
     // Certifications
     document.getElementById('addCert').addEventListener('click', function () {
         const container = document.getElementById('certEntries');
@@ -633,6 +652,20 @@
             ? skillsText.split(',').map(s => s.trim()).filter(s => s.length > 0)
             : [];
 
+        // Projects
+        const projects = [];
+        document.querySelectorAll('.project-entry').forEach(entry => {
+            const name = entry.querySelector('.proj-name').value.trim();
+            if (!name) return; // Skip empty entries
+
+            projects.push({
+                name: name,
+                url: entry.querySelector('.proj-url').value.trim(),
+                technologies: entry.querySelector('.proj-tech').value.trim(),
+                description: entry.querySelector('.proj-description').value.trim(),
+            });
+        });
+
         // Certifications
         const certifications = [];
         document.querySelectorAll('.cert-entry').forEach(entry => {
@@ -655,6 +688,7 @@
             experience,
             education,
             skills,
+            projects,
             certifications,
             target_job_description,
         };
@@ -740,6 +774,7 @@
         const personal = data.personal || {};
         const experience = data.experience || [];
         const education = data.education || [];
+        const projects = data.projects || [];
         // Skills can be array (from form flow) or object (from scan flow)
         let skillsList = [];
         const smartSuggestions = data.smart_suggestions || [];
@@ -792,6 +827,18 @@
                     });
                     html += '</ul>';
                 }
+            });
+        }
+
+        // Projects
+        if (projects.length) {
+            html += `<div class="preview-section-title">Projects</div>`;
+            projects.forEach(proj => {
+                let projLine = `<strong>${escapeHtml(proj.name || '')}</strong>`;
+                if (proj.url) projLine += ` — ${escapeHtml(proj.url)}`;
+                html += `<div class="preview-exp-header">${projLine}</div>`;
+                if (proj.technologies) html += `<div class="preview-exp-dates">${escapeHtml(proj.technologies)}</div>`;
+                if (proj.description) html += `<div class="preview-text">${escapeHtml(proj.description)}</div>`;
             });
         }
 
@@ -877,6 +924,10 @@
             containerId = 'educationEntries';
             entrySelector = '.education-entry';
             addBtnId = 'addEducation';
+        } else if (type === 'projects') {
+            containerId = 'projectEntries';
+            entrySelector = '.project-entry';
+            addBtnId = 'addProject';
         } else if (type === 'certifications') {
             containerId = 'certEntries';
             entrySelector = '.cert-entry';
@@ -920,6 +971,11 @@
             el.querySelector('.edu-institution').value = data.institution || '';
             el.querySelector('.edu-date').value = data.graduation_date || '';
             el.querySelector('.edu-details').value = data.details || '';
+        } else if (type === 'projects') {
+            el.querySelector('.proj-name').value = data.name || '';
+            el.querySelector('.proj-url').value = data.url || '';
+            el.querySelector('.proj-tech').value = data.technologies || '';
+            el.querySelector('.proj-description').value = data.description || '';
         } else if (type === 'certifications') {
             el.querySelector('.cert-name').value = data.name || '';
             el.querySelector('.cert-issuer').value = data.issuer || '';
@@ -958,6 +1014,7 @@
             // Dynamic entries
             populateDynamicEntries('experience', currentPolished.experience);
             populateDynamicEntries('education', currentPolished.education);
+            populateDynamicEntries('projects', currentPolished.projects);
             populateDynamicEntries('certifications', currentPolished.certifications);
 
             // Target JD
@@ -1371,6 +1428,8 @@
                 messages.push('Education/Qualifications');
             if (warnings.indexOf('certifications_missing') >= 0 || warnings.indexOf('certifications_partial') >= 0)
                 messages.push('Certifications/Training');
+            if (warnings.indexOf('projects_missing') >= 0 || warnings.indexOf('projects_partial') >= 0)
+                messages.push('Projects/Portfolio');
             if (warnings.indexOf('experience_missing') >= 0 || warnings.indexOf('experience_partial') >= 0)
                 messages.push('Work Experience');
 

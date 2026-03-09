@@ -244,6 +244,38 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                     <textarea id="skills" rows="3" placeholder="Python, JavaScript, AWS, Docker, React, SQL, Project Management, Agile"></textarea>
                 </div>
 
+                <!-- Projects -->
+                <div class="builder-card">
+                    <h2>Projects</h2>
+                    <p class="card-hint">Side projects, open source, or portfolio work. Leave blank if none.</p>
+                    <div id="projectEntries">
+                        <div class="project-entry" data-index="0">
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Project Name</label>
+                                    <input type="text" class="proj-name" placeholder="E-commerce Platform">
+                                </div>
+                                <div class="form-field">
+                                    <label>Project URL</label>
+                                    <input type="text" class="proj-url" placeholder="https://github.com/...">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-field">
+                                    <label>Technologies Used</label>
+                                    <input type="text" class="proj-tech" placeholder="React, Node.js, PostgreSQL">
+                                </div>
+                            </div>
+                            <div class="form-field">
+                                <label>Description</label>
+                                <textarea class="proj-description" rows="2" placeholder="Brief description of the project and your role"></textarea>
+                            </div>
+                            <button type="button" class="remove-entry-btn" style="display: none;">Remove</button>
+                        </div>
+                    </div>
+                    <button type="button" class="add-entry-btn" id="addProject">+ Add Project</button>
+                </div>
+
                 <!-- Certifications -->
                 <div class="builder-card">
                     <h2>Certifications</h2>

@@ -85,15 +85,16 @@ def generate_cv_docx(cv_data, template="classic"):
     education = cv_data.get("education", [])
     raw_skills = cv_data.get("skills", [])
     certifications = cv_data.get("certifications", [])
+    projects = cv_data.get("projects", [])
 
     skills = _flatten_skills(raw_skills)
 
     if template == "modern":
-        doc = _render_modern(personal, summary, experience, education, skills, certifications)
+        doc = _render_modern(personal, summary, experience, education, skills, certifications, projects)
     elif template == "minimal":
-        doc = _render_minimal(personal, summary, experience, education, skills, certifications)
+        doc = _render_minimal(personal, summary, experience, education, skills, certifications, projects)
     else:
-        doc = _render_classic(personal, summary, experience, education, skills, certifications)
+        doc = _render_classic(personal, summary, experience, education, skills, certifications, projects)
 
     buffer = BytesIO()
     doc.save(buffer)
@@ -162,7 +163,7 @@ def _set_run_font(run, name='Calibri', size=None, bold=False, color=None):
 # Traditional single-column, underline separators, standard corporate.
 # ============================================================
 
-def _render_classic(personal, summary, experience, education, skills, certifications):
+def _render_classic(personal, summary, experience, education, skills, certifications, projects=None):
     doc = _setup_document()
 
     # -- Name (centered, 18pt bold) --
@@ -239,6 +240,44 @@ def _render_classic(personal, summary, experience, education, skills, certificat
                 sp.paragraph_format.space_before = Pt(4)
                 sp.paragraph_format.space_after = Pt(0)
 
+    # -- Projects (only rendered when non-empty) --
+    if projects:
+        _classic_section_header(doc, "PROJECTS")
+        for i, proj in enumerate(projects):
+            proj_name = _docx_safe(proj.get("name", ""))
+            proj_url = _docx_safe(proj.get("url", ""))
+            tech = _docx_safe(proj.get("technologies", ""))
+            desc = _docx_safe(proj.get("description", ""))
+
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(2) if i > 0 else Pt(0)
+            p.paragraph_format.space_after = Pt(1)
+
+            header = proj_name
+            if proj_url:
+                header += f"  ({proj_url})"
+            run = p.add_run(header)
+            _set_run_font(run, size=11, bold=True, color=COLOR_DARK)
+
+            if tech:
+                tp = doc.add_paragraph()
+                tp.paragraph_format.space_after = Pt(1)
+                run = tp.add_run(tech)
+                _set_run_font(run, size=10, color=COLOR_GRAY)
+
+            if desc:
+                bp = doc.add_paragraph(style='List Bullet')
+                bp.paragraph_format.space_before = Pt(1)
+                bp.paragraph_format.space_after = Pt(1)
+                bp.paragraph_format.left_indent = Cm(1.27)
+                run = bp.add_run(desc)
+                _set_run_font(run, size=10, color=COLOR_BODY)
+
+            if i < len(projects) - 1:
+                sp = doc.add_paragraph()
+                sp.paragraph_format.space_before = Pt(4)
+                sp.paragraph_format.space_after = Pt(0)
+
     # -- Education --
     if education:
         _classic_section_header(doc, "EDUCATION")
@@ -309,7 +348,7 @@ def _classic_section_header(doc, title):
 # Uses single-column tables for the blue left border effect.
 # ============================================================
 
-def _render_modern(personal, summary, experience, education, skills, certifications):
+def _render_modern(personal, summary, experience, education, skills, certifications, projects=None):
     doc = _setup_document()
 
     # -- Name (bold, blue, left-aligned) --
@@ -382,6 +421,32 @@ def _render_modern(personal, summary, experience, education, skills, certificati
             _modern_accent_block(doc, lines)
 
             if i < len(experience) - 1:
+                sp = doc.add_paragraph()
+                sp.paragraph_format.space_before = Pt(2)
+                sp.paragraph_format.space_after = Pt(0)
+
+    # -- Projects (only rendered when non-empty) --
+    if projects:
+        _modern_section_header(doc, "PROJECTS")
+        for i, proj in enumerate(projects):
+            proj_name = _docx_safe(proj.get("name", ""))
+            proj_url = _docx_safe(proj.get("url", ""))
+            tech = _docx_safe(proj.get("technologies", ""))
+            desc = _docx_safe(proj.get("description", ""))
+
+            header = proj_name
+            if proj_url:
+                header += f"  ({proj_url})"
+
+            lines = [(header, 10, True, COLOR_DARK)]
+            if tech:
+                lines.append((tech, 10, False, COLOR_GRAY))
+            if desc:
+                lines.append(("• " + desc, 10, False, COLOR_BODY))
+
+            _modern_accent_block(doc, lines)
+
+            if i < len(projects) - 1:
                 sp = doc.add_paragraph()
                 sp.paragraph_format.space_before = Pt(2)
                 sp.paragraph_format.space_after = Pt(0)
@@ -492,7 +557,7 @@ def _modern_accent_block(doc, lines):
 # Ultra-clean, generous whitespace, no separators or bullets.
 # ============================================================
 
-def _render_minimal(personal, summary, experience, education, skills, certifications):
+def _render_minimal(personal, summary, experience, education, skills, certifications, projects=None):
     doc = _setup_document(margin_cm=2.54)
 
     # Wider margins for minimal feel
@@ -573,6 +638,42 @@ def _render_minimal(personal, summary, experience, education, skills, certificat
                 _set_run_font(run, size=10, color=COLOR_BODY)
 
             if i < len(experience) - 1:
+                sp = doc.add_paragraph()
+                sp.paragraph_format.space_before = Pt(6)
+                sp.paragraph_format.space_after = Pt(0)
+
+    # -- Projects (only rendered when non-empty) --
+    if projects:
+        _minimal_section_header(doc, "Projects")
+        for i, proj in enumerate(projects):
+            proj_name = _docx_safe(proj.get("name", ""))
+            proj_url = _docx_safe(proj.get("url", ""))
+            tech = _docx_safe(proj.get("technologies", ""))
+            desc = _docx_safe(proj.get("description", ""))
+
+            p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(1)
+            header = proj_name
+            if proj_url:
+                header += f"  ({proj_url})"
+            run = p.add_run(header)
+            _set_run_font(run, size=10, bold=True, color=COLOR_DARK)
+
+            if tech:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(2)
+                run = p.add_run(tech)
+                _set_run_font(run, size=10, color=COLOR_GRAY)
+
+            if desc:
+                p = doc.add_paragraph()
+                p.paragraph_format.left_indent = Cm(0.5)
+                p.paragraph_format.space_before = Pt(1)
+                p.paragraph_format.space_after = Pt(2)
+                run = p.add_run(desc)
+                _set_run_font(run, size=10, color=COLOR_BODY)
+
+            if i < len(projects) - 1:
                 sp = doc.add_paragraph()
                 sp.paragraph_format.space_before = Pt(6)
                 sp.paragraph_format.space_after = Pt(0)

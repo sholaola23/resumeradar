@@ -90,17 +90,18 @@ def generate_cv_pdf(cv_data, template="classic"):
     education = cv_data.get("education", [])
     raw_skills = cv_data.get("skills", [])
     certifications = cv_data.get("certifications", [])
+    projects = cv_data.get("projects", [])
 
     # Normalize skills: scan flow returns {matched:[], missing:[], additional:[]}
     # form flow returns a flat list of strings
     skills = _flatten_skills(raw_skills)
 
     if template == "modern":
-        return _render_modern(personal, summary, experience, education, skills, certifications)
+        return _render_modern(personal, summary, experience, education, skills, certifications, projects)
     elif template == "minimal":
-        return _render_minimal(personal, summary, experience, education, skills, certifications)
+        return _render_minimal(personal, summary, experience, education, skills, certifications, projects)
     else:
-        return _render_classic(personal, summary, experience, education, skills, certifications)
+        return _render_classic(personal, summary, experience, education, skills, certifications, projects)
 
 
 # ============================================================
@@ -164,7 +165,7 @@ def _render_bullet_point(pdf, text, indent_x=22, text_width=170, line_height=5.5
 # Inspired by Ismail Oyeleke & Mayowa Ojo CV styles.
 # ============================================================
 
-def _render_classic(personal, summary, experience, education, skills, certifications):
+def _render_classic(personal, summary, experience, education, skills, certifications, projects=None):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -254,6 +255,34 @@ def _render_classic(personal, summary, experience, education, skills, certificat
             else:
                 pdf.ln(1)
 
+    # -- Projects (only rendered when non-empty) --
+    if projects:
+        _classic_section_header(pdf, "PROJECTS")
+        for i, proj in enumerate(projects):
+            name = _safe(proj.get("name", ""))
+            url = _safe(proj.get("url", ""))
+            tech = _safe(proj.get("technologies", ""))
+            desc = _safe(proj.get("description", ""))
+
+            pdf.set_font('Helvetica', 'B', 11)
+            pdf.set_text_color(31, 41, 55)
+            header = name
+            if url:
+                header += f"  ({url})"
+            pdf.cell(0, 6, header, new_x='LMARGIN', new_y='NEXT')
+
+            if tech:
+                pdf.set_font('Helvetica', 'I', 10)
+                pdf.set_text_color(107, 114, 128)
+                pdf.cell(0, 5, tech, new_x='LMARGIN', new_y='NEXT')
+
+            if desc:
+                _render_bullet_point(pdf, desc, indent_x=22, text_width=173)
+
+            if i < len(projects) - 1:
+                pdf.ln(2)
+        pdf.ln(2)
+
     # -- Education --
     if education:
         _classic_section_header(pdf, "EDUCATION")
@@ -342,7 +371,7 @@ def _classic_section_header(pdf, title):
 # Inspired by Billy Soomro CV style with accent elements.
 # ============================================================
 
-def _render_modern(personal, summary, experience, education, skills, certifications):
+def _render_modern(personal, summary, experience, education, skills, certifications, projects=None):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.add_page()
@@ -426,6 +455,35 @@ def _render_modern(personal, summary, experience, education, skills, certificati
 
             _modern_accent_block(pdf, render_exp)
             if i < len(experience) - 1:
+                pdf.ln(3)
+
+    # -- Projects (only rendered when non-empty) --
+    if projects:
+        _modern_section_header(pdf, "PROJECTS")
+        for i, proj in enumerate(projects):
+            name = _safe(proj.get("name", ""))
+            url = _safe(proj.get("url", ""))
+            tech = _safe(proj.get("technologies", ""))
+            desc = _safe(proj.get("description", ""))
+
+            def render_proj(n=name, u=url, t=tech, d=desc):
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.set_text_color(31, 41, 55)
+                header = n
+                if u:
+                    header += f"  ({u})"
+                pdf.cell(0, 6, header, new_x='LMARGIN', new_y='NEXT')
+                if t:
+                    pdf.set_font('Helvetica', '', 10)
+                    pdf.set_text_color(107, 114, 128)
+                    pdf.cell(0, 5, t, new_x='LMARGIN', new_y='NEXT')
+                if d:
+                    cur_margin = pdf.l_margin
+                    _render_bullet_point(pdf, d, indent_x=cur_margin + 7,
+                                         text_width=168, line_height=5.5, font_size=10)
+
+            _modern_accent_block(pdf, render_proj)
+            if i < len(projects) - 1:
                 pdf.ln(3)
 
     # -- Education --
@@ -518,7 +576,7 @@ def _modern_accent_block(pdf, render_fn):
 # Executive / design-adjacent feel.
 # ============================================================
 
-def _render_minimal(personal, summary, experience, education, skills, certifications):
+def _render_minimal(personal, summary, experience, education, skills, certifications, projects=None):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=25)
     pdf.add_page()
@@ -593,6 +651,44 @@ def _render_minimal(personal, summary, experience, education, skills, certificat
                 pdf.ln(1)
 
             if i < len(experience) - 1:
+                pdf.ln(4)
+            else:
+                pdf.ln(2)
+
+    # -- Projects (only rendered when non-empty) --
+    if projects:
+        _minimal_section_header(pdf, "Projects")
+        for i, proj in enumerate(projects):
+            name = _safe(proj.get("name", ""))
+            url = _safe(proj.get("url", ""))
+            tech = _safe(proj.get("technologies", ""))
+            desc = _safe(proj.get("description", ""))
+
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.set_text_color(31, 41, 55)
+            header = name
+            if url:
+                header += f"  ({url})"
+            pdf.cell(0, 6, header, new_x='LMARGIN', new_y='NEXT')
+
+            if tech:
+                pdf.set_font('Helvetica', '', 10)
+                pdf.set_text_color(107, 114, 128)
+                pdf.cell(0, 5, tech, new_x='LMARGIN', new_y='NEXT')
+
+            pdf.ln(2)
+
+            if desc:
+                pdf.set_font('Helvetica', '', 10)
+                pdf.set_text_color(55, 65, 81)
+                old_l_margin = pdf.l_margin
+                pdf.l_margin = 25
+                pdf.set_x(25)
+                pdf.multi_cell(155, 6, _safe(desc), align='L')
+                pdf.l_margin = old_l_margin
+                pdf.ln(1)
+
+            if i < len(projects) - 1:
                 pdf.ln(4)
             else:
                 pdf.ln(2)

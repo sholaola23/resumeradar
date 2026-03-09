@@ -104,10 +104,11 @@
 | T=0 | Feb 26, 09:26 | PASS — all 13 probes clean |
 | T+24h | Feb 27, 20:36 | PASS — staging clean + prod clean with real traffic |
 | T+24h GO | Feb 27 | **Conditional GO** — Phase 2 impl on staging only, no prod deploy before T+48 |
-| T+48h | Feb 28, 09:26 | Pending — final release go/no-go for master merge |
-| T+72h | Mar 1, 09:26 | Optional — stronger confidence |
-
-**Greenlight rule:** T+48h clean + representative traffic → proceed. Light traffic → wait T+72h.
+| T+48h | Mar 1, 23:01 | PASS — 12/12 soak script clean |
+| Prod deploy | Mar 1, 23:10 | LIVE — `staging → master` merged, Render auto-deployed |
+| Claude canary | Mar 1, 23:15 | PASS — 5/5 endpoint checks |
+| Independent QA | Mar 1 | PASS — 16/16 user-verified checks |
+| Release tag | Mar 1 | `phase2-live-2026-03-01` pushed |
 
 #### Soak Exit Criteria
 - [ ] 24-72h with no sustained 5xx increase
@@ -209,6 +210,54 @@ Events show full chain: `payment_verified` → `bundle_created` → `bundle_cred
 
 ---
 
+## Production Launch Record — March 1, 2026
+
+### Endpoint Payload Reference (corrected)
+
+| Endpoint | Method | Content-Type | Payload |
+|----------|--------|--------------|---------|
+| `/api/scan` | POST | `multipart/form-data` | `job_description`, `resume_text` (snake_case, form fields) |
+| `/api/build/create-bundle-checkout` | POST | `application/json` | `{"plan": "jobhunt"\|"sprint", "email": "...", "idempotency_key": "<UUIDv4>"}` |
+| `/api/build/bundle-activate-from-payment` | POST | `application/json` | `{"session_id": "cs_..."}` |
+| `/api/build/bundle-status` | POST | `application/json` | `{"bundle_token": "..."}` |
+| `/api/build/bundle-use` | POST | `application/json` | `{"bundle_token": "...", "type": "cv"\|"cl", "idempotency_key": "<UUIDv4>"}` |
+| `/api/build/bundle-recover` | POST | `application/json` | `{"email": "..."}` |
+| `/api/build/bundle-exchange` | POST | `application/json` | `{"exchange_token": "<UUIDv4>"}` |
+| `/api/tools/enhance-bullet` | POST | `application/json` | `{"bullet_text": "...", "job_context": "..."}` |
+| `/api/tools/generate-summary` | POST | `application/json` | `{"resume_text": "...", "job_description": "..."}` |
+| `/api/generate/cover-letter` | POST | `application/json` | `{"resume_text": "...", "job_description": "..."}` |
+
+**Key corrections from testing:**
+- `create-bundle-checkout` uses `email` (not `delivery_email`) and `plan` (not `tier`)
+- `bundle-use` uses `type` (not `credit_type`)
+- `idempotency_key` must be valid UUIDv4 format
+- `/api/scan` uses `multipart/form-data` (not JSON)
+- `bullet_text` (not `bullet`) for enhance-bullet endpoint
+
+### Production Environment
+
+| Variable | Value |
+|----------|-------|
+| Service | `srv-d64cnlfgi27c73aumndg` (resumeradar, master branch) |
+| URL | `https://resumeradar.sholastechnotes.com` |
+| PAYSTACK_BUNDLES_ENABLED | `false` (locked) |
+| BUNDLE_HMAC_SECRET | Set (prod-specific, distinct from staging) |
+| STRIPE_PRICE_ID_JOBHUNT | `price_1T6J3u0kxtLwjKihH0VRCs7l` (live, £5) |
+| STRIPE_PRICE_ID_SPRINT | `price_1T6J3v0kxtLwjKih6BOk2Bit` (live, £9) |
+| AUDIT_HMAC_SECRET | Set (distinct from staging) |
+| AUDIT_ADMIN_TOKEN | Set (distinct from staging) |
+
+### Post-Launch Monitoring (24h window)
+
+- [ ] No sustained 5xx
+- [ ] Bundle checkout success rate stable
+- [ ] Bundle activation success rate stable
+- [ ] 409 idempotency mismatches = expected (replays only)
+- [ ] Recovery email send success
+- [ ] One controlled real user journey: buy → activate → use 1 CV + 1 CL → recover via email
+
+---
+
 ## Files Modified (Phase 1)
 
 | File | Changes |
@@ -240,3 +289,77 @@ Events show full chain: `payment_verified` → `bundle_created` → `bundle_cred
 | `templates/build.html` | Bundle banner, 3-tier pricing, recovery form |
 | `static/js/builder.js` | Bundle auto-activation, status check, download, purchase, recovery |
 | `static/css/builder.css` | Bundle banner, tier cards, recovery form, mobile responsive |
+
+---
+
+## Phase 3A: SEO/GEO + Traffic Spike Prep (COMPLETE — March 8, 2026)
+
+Full strategy doc: `tasks/phase3a-seo-geo-strategy.md`
+Backlink gap analysis: `tasks/backlink-gap-analysis.md`
+
+- [x] **3A-1. Gunicorn tuning** — 3 workers, max-requests recycling (`572c2cc`)
+- [x] **3A-2. Static asset cache headers** — 1hr Cache-Control on `/static/` (`572c2cc`)
+- [x] **3A-3. Beehiiv async subscribe** — ThreadPoolExecutor + Semaphore (`572c2cc`)
+- [x] **3A-4. Rate limit tuning** — 5000/day, 1000/hr global; static exempt (`572c2cc`)
+- [x] **3A-5. Sitemap.xml route** — Dynamic, limiter-exempt (`572c2cc`)
+- [x] **3A-6. Canonical URLs** — index.html + build.html (`572c2cc`)
+- [x] **3A-7. JSON-LD structured data** — WebApplication schema (`572c2cc`)
+- [x] **3A-8. build.html OG + Twitter cards** — Complete meta tags (`572c2cc`)
+- [x] **3A-9. 404 meta tags** — noindex + description (`572c2cc`)
+- [x] **3A-10. robots.txt sitemap** — Uncommented (`572c2cc`)
+- [x] **3A-11. Google Search Console** — Verified + sitemap submitted, 2 pages discovered (`68d4d0e`)
+- [x] **3A-12. AI directory submissions** — All major directories paid-only; ToolPilot.ai partial (needs manual logo upload)
+- [x] **3A-13. Backlink gap analysis** — 7 competitors mapped, 15+ roundup articles identified, 44-83 link potential in 6mo
+- [x] **3A-14. QA** — 370/370 tests passed before deploy
+
+### Monday Monitoring (March 9)
+- 4 scheduled tasks created (pre-spike, spike, peak, post-spike)
+- Emergency rollback: `--workers 2` if memory > 480MB or 5xx > 1%
+
+---
+
+## Phase 3B: Nigeria Free Download (COMPLETE — March 9, 2026)
+
+Funnel data: 7 checkouts started, 2 purchases. Nigerian users can't pay via Stripe (no Naira).
+Solution: Free download for Nigeria-detected users who verifiably cancelled a Stripe checkout.
+
+- [x] **3B-1. Cancel nonce generation** — `secrets.token_urlsafe(16)` in create-checkout, stored in Redis with 2h TTL (`b22ad49`)
+- [x] **3B-2. sessionStorage token persistence** — `resumeradar_cv_token` + `resumeradar_stripe_session` stored before Stripe redirect (`b22ad49`)
+- [x] **3B-3. Cancel handler update** — Reads nonce from URL + token/session from sessionStorage (`b22ad49`)
+- [x] **3B-4. Green banner UI** — `showPaymentCancelledMessage()` rewritten with Nigeria branch (Africa/Lagos check) (`b22ad49`)
+- [x] **3B-5. Free download endpoint** — `POST /api/build/free-download-nigeria`, 3-layer verification: cancel_nonce + sessionStorage match + Stripe API (`b22ad49`)
+- [x] **3B-6. Event registries** — `free_download_nigeria` added to `funnel_metrics.py` + `audit_log.py` (`b22ad49`)
+- [x] **3B-7. Green banner CSS** — `.nigeria-free-download` styles in builder.css (`b22ad49`)
+- [x] **3B-8. Staging verification** — STRIPE_PRICE_ID fixed (test mode), create-checkout 200, full free-download flow verified via Render Shell
+- [x] **3B-9. Lagos E2E test** — Real tester in Nigeria confirmed: green banner appears, Download for Free works, correct PDF generated
+- [x] **3B-10. Nonce single-use** — Verified via Render Shell: nonce consumed after grant, 0 remaining
+- [ ] **3B-11. Prod deploy** — Push to production, verify live STRIPE_PRICE_ID unchanged, canary checks
+- [ ] **3B-12. Prod monitoring** — 30-60min watch for 5xx, checkout conversion stable
+
+### Files Modified (Phase 3B)
+
+| File | Changes |
+|------|---------|
+| `app.py` | `import stripe`, cancel nonce in create-checkout (~8 lines), `POST /api/build/free-download-nigeria` (~60 lines) |
+| `static/js/builder.js` | sessionStorage writes (+3), cancel handler fix (+5), `showPaymentCancelledMessage()` rewrite (~90) |
+| `static/css/builder.css` | `.nigeria-free-download` + `.nigeria-free-btn` styles (~30 lines) |
+| `backend/funnel_metrics.py` | `free_download_nigeria` in `VALID_EVENTS` (+1) |
+| `backend/audit_log.py` | `free_download_nigeria` in `VALID_EVENTS` (+1) |
+
+---
+
+## Phase 3C: CV Builder — Projects Section (TODO)
+
+**Reported by**: Nigeria tester (March 9, 2026)
+**Issue**: CV builder PDF output missing Projects section. Two scenarios:
+1. User fills form manually — unclear if Projects field exists in the form
+2. User uploads CV with Projects section — parsed but not included in generated PDF
+
+### Tasks
+- [ ] **3C-1. Investigate form** — Check if builder form has a Projects input field
+- [ ] **3C-2. Investigate PDF template** — Check if CV templates (classic/modern/minimal) render projects
+- [ ] **3C-3. Investigate parser** — Check if CV upload parser extracts projects section
+- [ ] **3C-4. Add Projects to form** — Add projects input section to build.html
+- [ ] **3C-5. Add Projects to templates** — Render projects in all 3 CV templates
+- [ ] **3C-6. Add Projects to parser** — Ensure uploaded CVs preserve projects
+- [ ] **3C-7. QA** — Verify projects appear in generated PDF for both form + upload paths

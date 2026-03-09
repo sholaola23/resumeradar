@@ -813,7 +813,8 @@ def run_tests():
     from backend.cv_builder import (
         _smart_truncate_resume, _fallback_extract_education_certs,
         _assess_extraction_quality, _EDU_HEADING_RE, _CERT_HEADING_RE,
-        _SECTION_HEADING_RE, _EDU_CERT_HEADING_RE
+        _SECTION_HEADING_RE, _EDU_CERT_HEADING_RE, _PROJ_HEADING_RE,
+        _PRESERVED_HEADING_RE
     )
 
     # -- Source pattern checks --
@@ -1666,6 +1667,228 @@ MSc Data Science, Imperial, 2018
     else:
         check("Audit endpoint: AUDIT_ADMIN_TOKEN missing → 503 (fail-closed)",
               True, "AUDIT_ADMIN_TOKEN is set, skipping")
+
+    # ---- SECTION 19: CV BUILDER PROJECTS SECTION ----
+    print("\n-- Section 19: CV Builder Projects Section --")
+
+    # Re-read sources for fresh state
+    with open(cv_builder_path, 'r') as f:
+        cv_builder_src_19 = f.read()
+    pdf_gen_path = os.path.join(project_root, 'backend', 'cv_pdf_generator.py')
+    with open(pdf_gen_path, 'r') as f:
+        pdf_gen_src_19 = f.read()
+    with open(docx_gen_path, 'r') as f:
+        docx_gen_src_19 = f.read()
+    with open(builder_js_path, 'r') as f:
+        builder_js_19 = f.read()
+    build_html_19 = c.get('/build').data.decode()
+
+    # -- Source pattern checks: cv_builder.py --
+    check("Projects: _PROJ_HEADING_RE regex exists",
+          '_PROJ_HEADING_RE = re.compile' in cv_builder_src_19)
+    check("Projects: _PRESERVED_HEADING_RE regex exists",
+          '_PRESERVED_HEADING_RE = re.compile' in cv_builder_src_19)
+    check("Projects: _EDU_CERT_HEADING_RE preserved (QA compat)",
+          '_EDU_CERT_HEADING_RE' in cv_builder_src_19)
+    check("Projects: project heading synonyms in extract prompt",
+          'PROJECTS' in cv_builder_src_19 and 'PROJECT PORTFOLIO' in cv_builder_src_19)
+    check("Projects: 'projects' key in polish JSON schema",
+          '"projects"' in cv_builder_src_19)
+    check("Projects: _parse_proj_entry function exists",
+          'def _parse_proj_entry' in cv_builder_src_19)
+    check("Projects: projects in _get_fallback",
+          'projects' in cv_builder_src_19.split('def _get_fallback')[1].split('\ndef ')[0]
+          if 'def _get_fallback' in cv_builder_src_19 else False)
+
+    # -- Source pattern checks: PDF generator --
+    check("Projects: projects extracted in cv_pdf_generator.py",
+          'projects = cv_data.get("projects"' in pdf_gen_src_19 or
+          "projects = cv_data.get('projects'" in pdf_gen_src_19)
+    check("Projects: PROJECTS section header in PDF classic",
+          '"PROJECTS"' in pdf_gen_src_19)
+    check("Projects: projects param in all 3 PDF render functions",
+          'projects' in pdf_gen_src_19.split('def _render_classic')[1].split('):')[0] and
+          'projects' in pdf_gen_src_19.split('def _render_modern')[1].split('):')[0] and
+          'projects' in pdf_gen_src_19.split('def _render_minimal')[1].split('):')[0])
+
+    # -- Source pattern checks: DOCX generator --
+    check("Projects: projects extracted in cv_docx_generator.py",
+          'projects = cv_data.get("projects"' in docx_gen_src_19 or
+          "projects = cv_data.get('projects'" in docx_gen_src_19)
+    check("Projects: PROJECTS section header in DOCX classic",
+          '"PROJECTS"' in docx_gen_src_19)
+    check("Projects: projects param in all 3 DOCX render functions",
+          'projects' in docx_gen_src_19.split('def _render_classic')[1].split('):')[0] and
+          'projects' in docx_gen_src_19.split('def _render_modern')[1].split('):')[0] and
+          'projects' in docx_gen_src_19.split('def _render_minimal')[1].split('):')[0])
+
+    # -- Source pattern checks: build.html --
+    check("Projects: projectEntries container in build.html",
+          'id="projectEntries"' in build_html_19)
+    check("Projects: addProject button in build.html",
+          'id="addProject"' in build_html_19)
+    check("Projects: proj-name input in build.html",
+          'class="proj-name"' in build_html_19)
+    check("Projects: proj-url input in build.html",
+          'class="proj-url"' in build_html_19)
+
+    # -- Source pattern checks: builder.js --
+    check("Projects: addProject handler in builder.js",
+          'addProject' in builder_js_19)
+    check("Projects: project-entry selector in builder.js",
+          '.project-entry' in builder_js_19)
+    check("Projects: projects in collectFormData",
+          'proj-name' in builder_js_19 and 'proj-url' in builder_js_19)
+    check("Projects: projects in populateDynamicEntries",
+          "'projects'" in builder_js_19 and 'projectEntries' in builder_js_19)
+    check("Projects: projects in renderPreview",
+          'projects.length' in builder_js_19 or 'projects.forEach' in builder_js_19)
+    check("Projects: projects_missing in showExtractionWarnings",
+          'projects_missing' in builder_js_19)
+
+    # -- Behavioral: _PROJ_HEADING_RE matches expected headings --
+    for heading in ['PROJECTS', 'Project Portfolio', 'SIDE PROJECTS',
+                    'PERSONAL PROJECTS', 'TECHNICAL PROJECTS']:
+        match = _PROJ_HEADING_RE.search(f"\n{heading}\n")
+        check(f"Projects regex matches '{heading}'",
+              match is not None, f"No match for '{heading}'")
+
+    # -- Behavioral: _PRESERVED_HEADING_RE includes project headings --
+    check("Projects: _PRESERVED_HEADING_RE matches PROJECTS",
+          _PRESERVED_HEADING_RE.search("\nPROJECTS\n") is not None)
+    check("Projects: _PRESERVED_HEADING_RE still matches EDUCATION",
+          _PRESERVED_HEADING_RE.search("\nEDUCATION\n") is not None)
+    check("Projects: _PRESERVED_HEADING_RE still matches CERTIFICATIONS",
+          _PRESERVED_HEADING_RE.search("\nCERTIFICATIONS\n") is not None)
+
+    # -- Behavioral: smart truncation preserves project headings --
+    long_with_proj = ("X " * 7000 + "\nPROJECTS\nE-commerce Platform - React, Node.js\n"
+                      "Built a full-stack marketplace\n")
+    result_trunc_proj = _smart_truncate_resume(long_with_proj, max_chars=12000)
+    check("Projects: smart truncation preserves PROJECTS heading",
+          'PROJECTS' in result_trunc_proj)
+
+    # -- Behavioral: fallback extractor handles projects --
+    synth_proj_text = """PROFESSIONAL EXPERIENCE
+Senior Engineer at Acme Corp
+Jan 2020 - Present
+Built APIs
+
+PROJECTS
+E-commerce Platform
+Built a full-stack marketplace handling 10k daily transactions
+
+Open Source CLI Tool
+Created a developer productivity tool with 500 GitHub stars
+"""
+    test_proj_result = {"education": [], "certifications": [], "projects": [], "experience": []}
+    proj_counts = _fallback_extract_education_certs(synth_proj_text, test_proj_result)
+    check("Projects fallback: finds project entries",
+          len(test_proj_result.get("projects", [])) >= 1,
+          f"Found {len(test_proj_result.get('projects', []))} entries")
+    check("Projects fallback: raw_proj_count > 0",
+          proj_counts.get("raw_proj_count", 0) >= 1,
+          f"raw_proj_count={proj_counts.get('raw_proj_count', 0)}")
+
+    # No project heading = no false positives
+    no_proj_text = "PROFESSIONAL EXPERIENCE\nSenior Engineer\nBuilt APIs\n"
+    no_proj_result = {"education": [], "certifications": [], "projects": []}
+    no_proj_counts = _fallback_extract_education_certs(no_proj_text, no_proj_result)
+    check("Projects fallback: no false positives without project heading",
+          len(no_proj_result.get("projects", [])) == 0)
+
+    # -- Behavioral: quality assessment for projects --
+    qtext_proj = "Some text\nPROJECTS\nE-commerce Platform\n"
+    qresult_proj = {"education": [], "certifications": [], "projects": [], "experience": []}
+    qcounts_proj = {"raw_edu_count": 0, "raw_cert_count": 0, "raw_proj_count": 1}
+    proj_warnings = _assess_extraction_quality(qtext_proj, qresult_proj, qcounts_proj)
+    check("Projects quality: projects_missing when heading + entries + empty",
+          'projects_missing' in proj_warnings, f"Got: {proj_warnings}")
+
+    # -- Behavioral: PDF renders projects when present, omits when empty --
+    from backend.cv_pdf_generator import generate_cv_pdf as gen_pdf_19
+
+    cv_with_projects = {
+        'personal': {'full_name': 'QA Test'},
+        'summary': 'Test summary.',
+        'experience': [],
+        'education': [],
+        'skills': [],
+        'certifications': [],
+        'projects': [
+            {'name': 'Test Project Alpha', 'url': 'https://github.com/test',
+             'technologies': 'Python, Flask', 'description': 'A test project'}
+        ]
+    }
+    cv_without_projects = {
+        'personal': {'full_name': 'QA Test'},
+        'summary': 'Test summary.',
+        'experience': [],
+        'education': [],
+        'skills': [],
+        'certifications': [],
+        'projects': []
+    }
+
+    for tmpl in ['classic', 'modern', 'minimal']:
+        try:
+            pdf_with = gen_pdf_19(cv_with_projects, tmpl)
+            check(f"Projects PDF {tmpl}: generates with projects",
+                  isinstance(pdf_with, (bytes, bytearray)) and len(pdf_with) > 500)
+        except Exception as e:
+            check(f"Projects PDF {tmpl}: generates with projects", False, str(e))
+
+        try:
+            pdf_without = gen_pdf_19(cv_without_projects, tmpl)
+            check(f"Projects PDF {tmpl}: generates without projects (no crash)",
+                  isinstance(pdf_without, (bytes, bytearray)) and len(pdf_without) > 200)
+        except Exception as e:
+            check(f"Projects PDF {tmpl}: generates without projects (no crash)", False, str(e))
+
+    # -- Behavioral: DOCX renders projects when present, omits when empty --
+    from backend.cv_docx_generator import generate_cv_docx as gen_docx_19
+
+    for tmpl in ['classic', 'modern', 'minimal']:
+        try:
+            docx_with = gen_docx_19(cv_with_projects, tmpl)
+            check(f"Projects DOCX {tmpl}: generates with projects",
+                  isinstance(docx_with, bytes) and len(docx_with) > 500)
+        except Exception as e:
+            check(f"Projects DOCX {tmpl}: generates with projects", False, str(e))
+
+        try:
+            docx_without = gen_docx_19(cv_without_projects, tmpl)
+            check(f"Projects DOCX {tmpl}: generates without projects (no crash)",
+                  isinstance(docx_without, bytes) and len(docx_without) > 200)
+        except Exception as e:
+            check(f"Projects DOCX {tmpl}: generates without projects (no crash)", False, str(e))
+
+    # -- Functional: DOCX with projects contains project text --
+    try:
+        docx_proj_out = gen_docx_19(cv_with_projects, 'classic')
+        docx_proj_doc = DocxDocument(BytesIO(docx_proj_out))
+        all_proj_text = "\n".join([p.text for p in docx_proj_doc.paragraphs])
+        for table in docx_proj_doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    all_proj_text += "\n" + "\n".join([p.text for p in cell.paragraphs])
+        check("Projects DOCX functional: contains project name",
+              'Test Project Alpha' in all_proj_text, f"Text has {len(all_proj_text)} chars")
+        check("Projects DOCX functional: contains technologies",
+              'Python, Flask' in all_proj_text)
+    except Exception as e:
+        check("Projects DOCX functional: contains project name", False, str(e))
+        check("Projects DOCX functional: contains technologies", False, str(e))
+
+    # -- Functional: empty projects = no PROJECTS header in DOCX --
+    try:
+        docx_noproj_out = gen_docx_19(cv_without_projects, 'classic')
+        docx_noproj_doc = DocxDocument(BytesIO(docx_noproj_out))
+        noproj_text = "\n".join([p.text for p in docx_noproj_doc.paragraphs])
+        check("Projects DOCX functional: empty projects = no PROJECTS header",
+              'PROJECTS' not in noproj_text, f"Found PROJECTS in text")
+    except Exception as e:
+        check("Projects DOCX functional: empty projects = no PROJECTS header", False, str(e))
 
     elapsed = time.time() - start
 

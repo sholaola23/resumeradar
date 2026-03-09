@@ -41,6 +41,17 @@ _EDU_CERT_HEADING_RE = re.compile(
     _EDU_HEADING_RE.pattern + r'|' + _CERT_HEADING_RE.pattern,
     re.MULTILINE | re.IGNORECASE
 )
+_PROJ_HEADING_RE = re.compile(
+    r'^\s*(?:PROJECTS?|PROJECT\s+PORTFOLIO|PORTFOLIO|SIDE\s+PROJECTS?|'
+    r'PERSONAL\s+PROJECTS?|KEY\s+PROJECTS?|SELECTED\s+PROJECTS?|'
+    r'TECHNICAL\s+PROJECTS?)\s*$',
+    re.MULTILINE | re.IGNORECASE
+)
+# All sections to preserve during smart truncation (edu + cert + projects)
+_PRESERVED_HEADING_RE = re.compile(
+    _EDU_HEADING_RE.pattern + r'|' + _CERT_HEADING_RE.pattern + r'|' + _PROJ_HEADING_RE.pattern,
+    re.MULTILINE | re.IGNORECASE
+)
 
 
 # ============================================================
@@ -49,14 +60,14 @@ _EDU_CERT_HEADING_RE = re.compile(
 
 def _smart_truncate_resume(text, max_chars=12000):
     """
-    Section-aware resume truncation. Always preserves education and
-    certification sections, even if they appear late in the document.
-    Strict hard cap ensures output never exceeds max_chars.
+    Section-aware resume truncation. Always preserves education,
+    certification, and project sections, even if they appear late
+    in the document. Strict hard cap ensures output never exceeds max_chars.
     """
     if len(text) <= max_chars:
         return text
 
-    matches = list(_EDU_CERT_HEADING_RE.finditer(text))
+    matches = list(_PRESERVED_HEADING_RE.finditer(text))
     marker = "\n\n[... some experience content omitted for length ...]\n\n"
     marker_len = len(marker)
 
@@ -156,6 +167,32 @@ def _fallback_extract_education_certs(resume_text, ai_result):
         if added > 0:
             ai_result["certifications"] = ai_certs
             print(f"CV Builder fallback: added {added} certifications")
+
+    # --- Projects ---
+    proj_entries = _extract_section_entries(resume_text, _PROJ_HEADING_RE)
+    counts["raw_proj_count"] = len(proj_entries)
+
+    ai_projs = ai_result.get("projects", [])
+    if len(proj_entries) > len(ai_projs):
+        existing_keys = set()
+        for p in ai_projs:
+            key = _normalize_for_dedup(p.get("name", ""))
+            if key:
+                existing_keys.add(key)
+
+        added = 0
+        for raw_entry in proj_entries:
+            raw_key = _normalize_for_dedup(raw_entry)
+            if raw_key and raw_key not in existing_keys:
+                parsed = _parse_proj_entry(raw_entry)
+                if parsed:
+                    ai_projs.append(parsed)
+                    existing_keys.add(raw_key)
+                    added += 1
+
+        if added > 0:
+            ai_result["projects"] = ai_projs
+            print(f"CV Builder fallback: added {added} projects")
 
     return counts
 
@@ -264,6 +301,18 @@ def _parse_cert_entry(raw_text):
     }
 
 
+def _parse_proj_entry(raw_text):
+    """Parse a raw project entry text into structured dict."""
+    if not raw_text or len(raw_text) < 5:
+        return None
+    return {
+        "name": raw_text[:150].strip(),
+        "url": "",
+        "technologies": "",
+        "description": ""
+    }
+
+
 def _normalize_for_dedup(text):
     """Normalize text for dedup comparison: lowercase, collapse whitespace."""
     if not text:
@@ -308,6 +357,15 @@ def _assess_extraction_quality(resume_text, result, fallback_counts=None):
         warnings.append("certifications_missing")
     elif has_cert_heading and raw_cert_count > cert_count:
         warnings.append("certifications_partial")
+
+    # --- Projects: advisory only ---
+    has_proj_heading = bool(_PROJ_HEADING_RE.search(resume_text))
+    raw_proj_count = fallback_counts.get("raw_proj_count", 0)
+    proj_count = len(result.get("projects", []))
+    if has_proj_heading and raw_proj_count >= 1 and proj_count == 0:
+        warnings.append("projects_missing")
+    elif has_proj_heading and raw_proj_count > proj_count:
+        warnings.append("projects_partial")
 
     # --- Experience: advisory only (no payment block) ---
     exp_signals = len(re.findall(
@@ -355,6 +413,7 @@ def polish_cv_sections(cv_data):
         experience = cv_data.get("experience", [])
         education = cv_data.get("education", [])
         skills = cv_data.get("skills", [])
+        projects = cv_data.get("projects", [])
         certifications = cv_data.get("certifications", [])
         target_jd = cv_data.get("target_job_description", "")
 
@@ -374,6 +433,7 @@ Summary: {summary}
 Experience: {json.dumps(experience[:5], indent=2)[:3500]}
 Education: {json.dumps(education[:3], indent=2)[:500]}
 Skills: {', '.join(skills[:30])}
+Projects: {json.dumps(projects[:5], indent=2)[:1000]}
 Certifications: {json.dumps(certifications[:5], indent=2)[:500]}
 
 STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
@@ -381,7 +441,7 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
 2. NEVER invent metrics, numbers, percentages, or impact figures. If the person wrote "improved performance" do NOT change it to "improved performance by 40%". Only include numbers the person explicitly provided.
 3. NEVER add new experience entries or bullets describing work the person did not mention.
 4. NEVER fabricate certifications, degrees, or qualifications.
-5. Keep education and certifications EXACTLY as provided — only fix obvious typos or formatting.
+5. Keep education, certifications, and projects EXACTLY as provided — only improve description wording.
 6. NEVER omit any entries. If the input has 5 jobs, return ALL 5. If it has 3 education entries, return ALL 3.
 
 WHAT YOU SHOULD DO:
@@ -419,6 +479,14 @@ Respond with ONLY valid JSON in this exact structure:
         }}
     ],
     "skills": ["Only skills the person listed, reordered by JD relevance"],
+    "projects": [
+        {{
+            "name": "Project Name (as provided)",
+            "url": "URL (as provided, or empty string)",
+            "technologies": "Technologies (as provided, or empty string)",
+            "description": "Polished description (improve wording only)"
+        }}
+    ],
     "certifications": [
         {{
             "name": "Cert Name (as provided)",
@@ -491,6 +559,7 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
                 "experience": polished.get("experience", experience),
                 "education": polished.get("education", education),
                 "skills": polished.get("skills", skills),
+                "projects": polished.get("projects", projects),
                 "certifications": polished.get("certifications", certifications),
                 "smart_suggestions": polished.get("smart_suggestions", []),
                 # Keep backward compat — frontend checks both fields
@@ -567,17 +636,20 @@ And ALL of these as certifications:
   CERTIFICATIONS, PROFESSIONAL TRAINING, TRAINING & QUALIFICATIONS,
   PROFESSIONAL QUALIFICATIONS, LICENSES & CERTIFICATIONS, ACCREDITATIONS,
   CREDENTIALS, PROFESSIONAL DEVELOPMENT
+And ALL of these as projects:
+  PROJECTS, PROJECT PORTFOLIO, PORTFOLIO, SIDE PROJECTS, PERSONAL PROJECTS,
+  KEY PROJECTS, SELECTED PROJECTS, TECHNICAL PROJECTS
 
 RAW RESUME TEXT:
 {truncated_resume}
 
 STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
-1. Only extract information that ACTUALLY EXISTS in the resume text. Do NOT add skills, experience, certifications, or qualifications that are not in the original resume.
+1. Only extract information that ACTUALLY EXISTS in the resume text. Do NOT add skills, experience, projects, certifications, or qualifications that are not in the original resume.
 2. NEVER invent or fabricate metrics, numbers, percentages, or impact figures. If the resume says "improved system performance", do NOT change it to "improved system performance by 35%". Only include numbers that are explicitly in the resume.
 3. NEVER add experience bullets describing work not mentioned in the resume.
 4. Keep education and certifications EXACTLY as they appear in the resume.
 5. For skills: only extract skills the person actually listed or clearly demonstrated in their experience bullets. Do NOT guess at skills they "probably" have.
-6. NEVER omit any entries. If the resume lists 5 jobs, return ALL 5. If it lists 3 education entries, return ALL 3. If it lists 4 certifications, return ALL 4. Completeness is critical.
+6. NEVER omit any entries. If the resume lists 5 jobs, return ALL 5. If it lists 3 education entries, return ALL 3. If it lists 4 certifications, return ALL 4. If it lists projects, return ALL of them. Completeness is critical.
 
 WHAT YOU SHOULD DO:
 - Extract personal info (name, email, phone, location, LinkedIn) from the resume header
@@ -621,6 +693,14 @@ Respond with ONLY valid JSON:
         "missing": [],
         "additional": ["other skills ACTUALLY in resume"]
     }},
+    "projects": [
+        {{
+            "name": "Project Name (as in resume)",
+            "url": "URL or empty string",
+            "technologies": "Technologies used or empty string",
+            "description": "Description as in resume"
+        }}
+    ],
     "certifications": [
         {{
             "name": "Cert Name (as in resume)",
@@ -703,6 +783,7 @@ def _get_fallback(cv_data):
         "experience": cv_data.get("experience", []),
         "education": cv_data.get("education", []),
         "skills": cv_data.get("skills", []),
+        "projects": cv_data.get("projects", []),
         "certifications": cv_data.get("certifications", []),
         "smart_suggestions": [],
         "suggested_additions": [],
