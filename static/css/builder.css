@@ -971,6 +971,44 @@
     color: #dc2626;
 }
 
+/* ---- Nigeria Free Download Banner ---- */
+.nigeria-free-download {
+    background: #f0fdf4 !important;
+    border-bottom-color: #86efac !important;
+}
+.nigeria-free-download .nigeria-icon {
+    background: #dcfce7;
+    color: #16a34a;
+    font-size: 18px;
+}
+.nigeria-free-download strong {
+    color: #166534 !important;
+}
+.nigeria-free-download p {
+    color: #15803d !important;
+}
+.nigeria-free-btn {
+    margin-left: auto;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+.nigeria-free-btn:hover {
+    background: #15803d;
+}
+.nigeria-free-btn:disabled {
+    background: #86efac;
+    cursor: wait;
+}
+
 /* ---- Upload Toggle Row ---- */
 .upload-toggle-row {
     text-align: center;

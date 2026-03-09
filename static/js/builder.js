@@ -125,9 +125,13 @@
             }
         }
 
-        // Payment cancelled — hide upload, show form so they can see their preview
+        // Payment cancelled — restore token from sessionStorage, show cancel banner
         if (params.get('payment') === 'cancelled') {
-            showPaymentCancelledMessage();
+            var storedToken = sessionStorage.getItem('resumeradar_cv_token');
+            var storedSession = sessionStorage.getItem('resumeradar_stripe_session');
+            var cancelNonce = params.get('cancel_nonce') || '';
+            if (storedToken) currentToken = storedToken;
+            showPaymentCancelledMessage(cancelNonce, storedSession);
         }
 
         // ---- PAYSTACK: Provider toggle setup ----
@@ -1061,6 +1065,12 @@
             sessionStorage.setItem('resumeradar_cv_template', selectedTemplate);
             sessionStorage.setItem('resumeradar_cv_format', selectedFormat);
 
+            // Store token + session_id for cancel-redirect free-download flow
+            sessionStorage.setItem('resumeradar_cv_token', currentToken);
+            if (result.session_id) {
+                sessionStorage.setItem('resumeradar_stripe_session', result.session_id);
+            }
+
             // Store provider + reference for Paystack post-payment handling
             if (result.provider === 'paystack') {
                 sessionStorage.setItem('resumeradar_payment_provider', 'paystack');
@@ -1082,38 +1092,102 @@
     // ============================================================
     // PAYMENT CANCELLED FEEDBACK
     // ============================================================
-    function showPaymentCancelledMessage() {
-        // Show a temporary banner at the top of the page
-        const banner = document.createElement('div');
-        banner.className = 'payment-cancelled-banner';
-        banner.innerHTML = `
-            <div class="cancelled-content">
-                <span class="cancelled-icon">✕</span>
-                <div>
-                    <strong>Payment cancelled</strong>
-                    <p>No worries — your CV is still ready. You can try again whenever you like.</p>
-                </div>
-                <button class="cancelled-dismiss" aria-label="Dismiss">&times;</button>
-            </div>
-        `;
-        document.body.prepend(banner);
+    function showPaymentCancelledMessage(cancelNonce, storedSession) {
+        var isNigeria = shouldShowPaystackOption();  // Africa/Lagos timezone check
+        var banner = document.createElement('div');
 
-        // Dismiss button
-        banner.querySelector('.cancelled-dismiss').addEventListener('click', function () {
-            banner.remove();
-        });
+        if (isNigeria && currentToken && cancelNonce && storedSession) {
+            // GREEN BANNER — free download for Nigeria users with verified cancel
+            banner.className = 'payment-cancelled-banner nigeria-free-download';
+            banner.innerHTML = '<div class="cancelled-content">' +
+                '<span class="cancelled-icon nigeria-icon">\uD83C\uDF81</span>' +
+                '<div>' +
+                '<strong>We\'ve got you covered!</strong>' +
+                '<p>Card payments aren\'t available in your region yet. Download your CV for free.</p>' +
+                '</div>' +
+                '<button class="nigeria-free-btn" id="nigeriaFreeBtn">Download for Free</button>' +
+                '<button class="cancelled-dismiss" aria-label="Dismiss">&times;</button>' +
+                '</div>';
+            document.body.prepend(banner);
 
-        // Auto-dismiss after 8 seconds
-        setTimeout(function () {
-            if (banner.parentNode) {
-                banner.style.opacity = '0';
-                setTimeout(function () { banner.remove(); }, 300);
-            }
-        }, 8000);
+            banner.querySelector('.cancelled-dismiss').addEventListener('click', function () {
+                banner.remove();
+            });
 
-        // Clean up the URL
-        const url = new URL(window.location);
+            document.getElementById('nigeriaFreeBtn').addEventListener('click', function () {
+                var btn = this;
+                btn.disabled = true;
+                btn.textContent = 'Processing...';
+
+                var template = sessionStorage.getItem('resumeradar_cv_template') || 'classic';
+                var format = sessionStorage.getItem('resumeradar_cv_format') || 'both';
+
+                fetch('/api/build/free-download-nigeria', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: currentToken,
+                        session_id: storedSession,
+                        cancel_nonce: cancelNonce,
+                        template: template,
+                        format: format,
+                    }),
+                })
+                .then(function (resp) {
+                    return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
+                })
+                .then(function (result) {
+                    if (result.ok && (result.data.granted || result.data.already_granted)) {
+                        banner.remove();
+                        // Clean up sessionStorage before download
+                        sessionStorage.removeItem('resumeradar_cv_token');
+                        sessionStorage.removeItem('resumeradar_stripe_session');
+                        // Trigger download via existing flow
+                        // Empty session_id/provider → falls through to cv_paid check
+                        handlePostPayment(currentToken, '', '', '');
+                    } else {
+                        btn.textContent = 'Download for Free';
+                        btn.disabled = false;
+                        alert(result.data.error || 'Something went wrong. Please try again.');
+                    }
+                })
+                .catch(function () {
+                    btn.textContent = 'Download for Free';
+                    btn.disabled = false;
+                    alert('Network error. Please try again.');
+                });
+            });
+
+        } else {
+            // RED BANNER — existing behaviour for non-Nigeria users
+            banner.className = 'payment-cancelled-banner';
+            banner.innerHTML = '<div class="cancelled-content">' +
+                '<span class="cancelled-icon">\u2715</span>' +
+                '<div>' +
+                '<strong>Payment cancelled</strong>' +
+                '<p>No worries \u2014 your CV is still ready. You can try again whenever you like.</p>' +
+                '</div>' +
+                '<button class="cancelled-dismiss" aria-label="Dismiss">&times;</button>' +
+                '</div>';
+            document.body.prepend(banner);
+
+            banner.querySelector('.cancelled-dismiss').addEventListener('click', function () {
+                banner.remove();
+            });
+
+            // Auto-dismiss after 8 seconds (only red banner — green stays visible)
+            setTimeout(function () {
+                if (banner.parentNode) {
+                    banner.style.opacity = '0';
+                    setTimeout(function () { banner.remove(); }, 300);
+                }
+            }, 8000);
+        }
+
+        // Clean up URL params
+        var url = new URL(window.location);
         url.searchParams.delete('payment');
+        url.searchParams.delete('cancel_nonce');
         window.history.replaceState({}, '', url);
     }
 
@@ -1129,6 +1203,9 @@
         // Clean up provider storage
         sessionStorage.removeItem('resumeradar_payment_provider');
         sessionStorage.removeItem('resumeradar_paystack_ref');
+        // Clean up cancel-redirect flow storage
+        sessionStorage.removeItem('resumeradar_cv_token');
+        sessionStorage.removeItem('resumeradar_stripe_session');
 
         // Show a download status
         builderForm.style.display = 'none';

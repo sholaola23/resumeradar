@@ -27,6 +27,7 @@ from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.cv_pdf_generator import generate_cv_pdf
 from backend.cv_docx_generator import generate_cv_docx
+import stripe
 from backend.stripe_utils import (
     create_checkout_session, verify_checkout_payment, verify_webhook_signature,
     create_bundle_checkout_session, verify_bundle_payment,
@@ -1121,13 +1122,25 @@ def build_create_checkout():
             })
 
         # ---- STRIPE PATH (default — existing flow) ----
+        # Generate one-time cancel nonce for Nigeria free-download flow
+        cancel_nonce = secrets.token_urlsafe(16)
+
         success_url = f"{base_url}/build?payment=success&token={token}&session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = f"{base_url}/build?payment=cancelled"
+        cancel_url = f"{base_url}/build?payment=cancelled&cancel_nonce={cancel_nonce}"
 
         result = create_checkout_session(token, template, success_url, cancel_url, delivery_email, format_choice)
 
         if result.get("error"):
             return jsonify({"error": result["error"]}), 500
+
+        # Store nonce → (token, session_id) AFTER session creation
+        if _redis_client:
+            try:
+                nonce_key = f"resumeradar:cancel_nonce:{cancel_nonce}"
+                nonce_data = json.dumps({"token": token, "session_id": result["session_id"]})
+                _redis_client.setex(nonce_key, 7200, nonce_data)  # 2h TTL
+            except Exception:
+                pass
 
         return jsonify({
             "success": True,
@@ -1771,6 +1784,111 @@ def build_download(token):
         except Exception:
             pass
         return jsonify({"error": "Failed to generate CV."}), 500
+
+
+# ============================================================
+# NIGERIA FREE DOWNLOAD (cancel-redirect flow)
+# ============================================================
+
+@app.route('/api/build/free-download-nigeria', methods=['POST'])
+@limiter.limit("5 per hour")
+def free_download_nigeria():
+    """
+    Grant free CV download for users who cancelled Stripe checkout.
+    3-layer verification: cancel_nonce + nonce binding + Stripe API.
+    """
+    VALID_TEMPLATES = {"classic", "modern", "minimal"}
+    VALID_FORMATS = {"pdf", "docx", "both"}
+
+    try:
+        body = request.get_json() or {}
+        token = body.get("token", "").strip()
+        session_id = body.get("session_id", "").strip()
+        cancel_nonce = body.get("cancel_nonce", "").strip()
+        template = body.get("template", "classic").strip()
+        fmt = body.get("format", "both").strip().lower()
+
+        # Input validation
+        if not token or not session_id or not cancel_nonce:
+            return jsonify({"error": "Missing required fields."}), 400
+        if template not in VALID_TEMPLATES:
+            template = "classic"
+        if fmt not in VALID_FORMATS:
+            fmt = "both"
+
+        if not _redis_client:
+            return jsonify({"error": "Service unavailable."}), 503
+
+        # Layer 1: Read nonce (non-destructive — preserves retry on transient Stripe failure)
+        nonce_key = f"resumeradar:cancel_nonce:{cancel_nonce}"
+        nonce_raw = _redis_client.get(nonce_key)
+        if not nonce_raw:
+            return jsonify({"error": "Invalid or expired cancel session."}), 400
+
+        try:
+            nonce_data = json.loads(nonce_raw)
+        except (json.JSONDecodeError, TypeError):
+            return jsonify({"error": "Invalid cancel session."}), 400
+
+        if nonce_data.get("token") != token or nonce_data.get("session_id") != session_id:
+            return jsonify({"error": "Session mismatch."}), 400
+
+        # Check CV exists
+        cv_key = f"resumeradar:cv:{token}"
+        if not _redis_client.exists(cv_key):
+            return jsonify({"error": "CV not found or expired."}), 404
+
+        # Check not already granted (idempotent) — consume nonce via CAS even on early return
+        paid_key = f"resumeradar:cv_paid:{token}"
+        if _redis_client.get(paid_key):
+            cas_result = _redis_client.eval(
+                "if redis.call('GET',KEYS[1])==ARGV[1] then redis.call('DEL',KEYS[1]) return 1 end return 0",
+                1, nonce_key, nonce_raw
+            )
+            if not cas_result:
+                return jsonify({"error": "Cancel session already used."}), 400
+            return jsonify({"already_granted": True}), 200
+
+        # Layer 3: Verify Stripe session — unpaid + token matches metadata
+        # Done BEFORE consuming nonce so transient Stripe failures allow retry
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+        except Exception:
+            return jsonify({"error": "Could not verify checkout session."}), 400
+
+        if session.payment_status == "paid":
+            return jsonify({"error": "Session already paid. Use normal download."}), 400
+
+        if session.metadata.get("cv_token") != token:
+            return jsonify({"error": "Token mismatch."}), 400
+
+        # Consume nonce atomically AFTER all checks pass (Lua CAS — race-safe)
+        consumed = _redis_client.eval(
+            "if redis.call('GET',KEYS[1])==ARGV[1] then redis.call('DEL',KEYS[1]) return 1 end return 0",
+            1, nonce_key, nonce_raw
+        )
+        if not consumed:
+            return jsonify({"error": "Cancel session already used."}), 400
+
+        # All checks passed — grant free access
+        _redis_client.setex(paid_key, 86400, "1")       # 24h TTL
+        _redis_client.expire(cv_key, 259200)             # Extend CV data to 72h
+        _redis_client.setex(f"resumeradar:cv_template:{token}", 259200, template)
+        _redis_client.setex(f"resumeradar:cv_format:{token}", 259200, fmt)
+
+        # Audit (best-effort, uses only ALLOWED_KWARGS)
+        try:
+            audit_log.log_event("free_download_nigeria", token=token, format=fmt, source="cancel_redirect")
+        except Exception:
+            pass
+
+        funnel_metrics.record("free_download_nigeria")
+
+        return jsonify({"granted": True}), 200
+
+    except Exception as e:
+        print(f"Free download Nigeria error: {str(e)}")
+        return jsonify({"error": "Could not process request."}), 500
 
 
 def _send_cv_email(email, token, template, event_id):

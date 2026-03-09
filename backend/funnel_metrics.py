@@ -27,6 +27,7 @@ VALID_EVENTS = frozenset({
     "bundle_checkout_started",
     "purchase_completed",
     "download_completed",
+    "free_download_nigeria",
 })
 
 # Subset allowed from the public POST /api/event endpoint

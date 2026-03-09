@@ -48,6 +48,8 @@ VALID_EVENTS = frozenset({
     "bundle_created",
     "bundle_credit_used",
     "bundle_exhausted",
+    # Nigeria free download
+    "free_download_nigeria",
 })
 
 ALLOWED_KWARGS = frozenset({
