@@ -40,7 +40,6 @@ def create_checkout_session(cv_token, template, success_url, cancel_url, deliver
             metadata["delivery_email"] = delivery_email
 
         session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
             line_items=[{
                 "price": price_id,
                 "quantity": 1,
@@ -123,7 +122,6 @@ def create_bundle_checkout_session(plan, bundle_token, delivery_email, success_u
         }
 
         session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
             line_items=[{
                 "price": price_id,
                 "quantity": 1,
