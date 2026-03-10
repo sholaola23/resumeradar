@@ -1421,12 +1421,13 @@ Nice to Have
         }
         // Fallback if AI summary is empty or was all artifacts
         if (!summaryText) {
+            const N = data.total_missing || 0;
             if (score >= 75) {
-                summaryText = "Strong match! Your resume aligns well with this job description. A few targeted tweaks could push you even higher.";
+                summaryText = `You're a ${score}% match — strong position. Focus on the ${N} missing keyword${N !== 1 ? 's' : ''} below to push into interview territory.`;
             } else if (score >= 50) {
-                summaryText = "Decent foundation, but there are noticeable gaps. Focus on adding the missing technical keywords and you'll see a significant jump.";
+                summaryText = `${score}% match — solid foundation. Adding the top missing keywords could significantly improve your shortlist chances.`;
             } else {
-                summaryText = "Your resume needs significant optimization for this role. Don't worry — the suggestions below will show you exactly what to add and change.";
+                summaryText = `${score}% match with ${N} gap${N !== 1 ? 's' : ''} to close. The action plan below shows exactly what to fix first.`;
             }
         }
         scoreSummary.innerHTML = `<p>${summaryText}</p>`;
@@ -2108,10 +2109,42 @@ Nice to Have
     // ============================================================
     // HELPERS
     // ============================================================
+    // Loading message rotation
+    const LOADING_STAGES = [
+        { text: 'Analyzing resume structure...', delay: 0 },
+        { text: 'Matching against job keywords...', delay: 2000 },
+        { text: 'Generating AI recommendations...', delay: 5000 },
+        { text: 'Almost there...', delay: 9000 },
+    ];
+    let loadingTimers = [];
+
     function setLoading(loading) {
         scanBtn.disabled = loading;
         scanBtnText.style.display = loading ? 'none' : 'inline';
         scanBtnLoading.style.display = loading ? 'inline' : 'none';
+        if (loading) {
+            startLoadingStages();
+        } else {
+            clearLoadingStages();
+        }
+    }
+
+    function startLoadingStages() {
+        const el = document.getElementById('loadingStageText');
+        if (!el) return;
+        el.textContent = LOADING_STAGES[0].text;
+        for (let i = 1; i < LOADING_STAGES.length; i++) {
+            loadingTimers.push(setTimeout(() => {
+                el.textContent = LOADING_STAGES[i].text;
+            }, LOADING_STAGES[i].delay));
+        }
+    }
+
+    function clearLoadingStages() {
+        loadingTimers.forEach(t => clearTimeout(t));
+        loadingTimers = [];
+        const el = document.getElementById('loadingStageText');
+        if (el) el.textContent = LOADING_STAGES[0].text;
     }
 
     function showError(msg) {
