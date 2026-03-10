@@ -19,6 +19,13 @@ function sanitizeAIText(text) {
 
 document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
+    // MODE RESOLVER — single place for feature flags
+    // ============================================================
+    const _rrMode = {
+        gate: new URLSearchParams(location.search).get('gate') === 'modal' ? 'modal' : 'inline',
+    };
+
+    // ============================================================
     // FUNNEL ANALYTICS (fire-and-forget via sendBeacon)
     // ============================================================
     function trackEvent(eventName) {
@@ -28,6 +35,39 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { /* best-effort */ }
     }
     window._rr_trackEvent = trackEvent;
+
+    // Per-scan event deduplication
+    let currentScanId = null;
+    const firedEvents = new Set();
+
+    function trackOncePerScan(eventName) {
+        if (!currentScanId) { trackEvent(eventName); return; }
+        const key = currentScanId + ':' + eventName;
+        if (firedEvents.has(key)) return;
+        firedEvents.add(key);
+        trackEvent(eventName);
+    }
+
+    // ============================================================
+    // SUBSCRIBER STATE — localStorage (persists across sessions)
+    // ============================================================
+    // One-time migration from sessionStorage to localStorage
+    if (sessionStorage.getItem('resumeradar_subscribed') === 'true') {
+        localStorage.setItem('resumeradar_subscribed', 'true');
+        sessionStorage.removeItem('resumeradar_subscribed');
+    }
+
+    function isSubscribed() {
+        return localStorage.getItem('resumeradar_subscribed') === 'true';
+    }
+
+    function markSubscribed() {
+        localStorage.setItem('resumeradar_subscribed', 'true');
+        sessionStorage.removeItem('resumeradar_subscribed');
+    }
+
+    // Per-scan skip state (resets each new scan in submit handler)
+    let gateSkippedThisScan = false;
 
     // ============================================================
     // DOM ELEMENTS
@@ -111,8 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const newsletterEmail = document.getElementById('newsletterEmail');
     const newsletterFirstName = document.getElementById('newsletterFirstName');
 
-    // Track if user has already subscribed this session
-    let hasSubscribed = sessionStorage.getItem('resumeradar_subscribed') === 'true';
+    // hasSubscribed replaced by isSubscribed() — see cross-cutting section above
 
     // ============================================================
     // NEWSLETTER POPUP (MANDATORY)
@@ -161,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         newsletterPopup.style.display = 'flex';
-        trackEvent('gate_shown');
+        // gate_shown event fired by the scan handler, not here (prevents duplicates)
         if (newsletterFirstName) newsletterFirstName.focus();
     }
 
@@ -184,8 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newsletterHeading) newsletterHeading.textContent = "You're subscribed! 🎉";
         if (newsletterSubtitle) newsletterSubtitle.textContent = "Welcome to Shola's Tech Notes — you'll get practical tech career tips, certification guides, and AI fundamentals in just 3 minutes a week.";
 
-        hasSubscribed = true;
-        sessionStorage.setItem('resumeradar_subscribed', 'true');
+        markSubscribed();
     }
 
     function closeNewsletterAfterSubscribe() {
@@ -280,6 +318,126 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnLoading) btnLoading.style.display = 'none';
                 if (submitBtn) submitBtn.disabled = false;
             }
+        });
+    }
+
+    // ============================================================
+    // INLINE GATE HANDLERS
+    // ============================================================
+    const inlineGateForm = document.getElementById('inlineGateForm');
+    const inlineGateSkip = document.getElementById('inlineGateSkip');
+
+    if (inlineGateForm) {
+        inlineGateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const firstName = document.getElementById('inlineGateFirstName').value.trim();
+            const email = document.getElementById('inlineGateEmail').value.trim();
+
+            if (!firstName) {
+                document.getElementById('inlineGateFirstName').style.borderColor = '#dc2626';
+                document.getElementById('inlineGateFirstName').focus();
+                return;
+            }
+            if (!email || !email.includes('@')) {
+                document.getElementById('inlineGateEmail').style.borderColor = '#dc2626';
+                document.getElementById('inlineGateEmail').focus();
+                return;
+            }
+
+            // Reset borders
+            document.getElementById('inlineGateFirstName').style.borderColor = '';
+            document.getElementById('inlineGateEmail').style.borderColor = '';
+
+            const submitBtn = inlineGateForm.querySelector('.inline-gate-btn');
+            const btnText = submitBtn ? submitBtn.querySelector('.gate-btn-text') : null;
+            const btnLoading = submitBtn ? submitBtn.querySelector('.gate-btn-loading') : null;
+
+            if (btnText) btnText.style.display = 'none';
+            if (btnLoading) btnLoading.style.display = 'inline';
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                const incomingUtm = new URLSearchParams(window.location.search).get('utm_source') || 'resumeradar';
+                const response = await fetch('/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, first_name: firstName, utm_source: incomingUtm }),
+                });
+
+                const result = await response.json();
+                if (!response.ok || result.error) {
+                    throw new Error(result.error || 'Subscription failed');
+                }
+
+                markSubscribed();
+                // subscribe_completed is recorded server-side in /api/subscribe
+                showToast('Subscribed! Unlocking your full report...');
+
+                if (lastScanData) renderDeepResults(lastScanData);
+
+            } catch (err) {
+                console.error('Inline gate signup error:', err);
+                window.open('https://www.sholastechnotes.com/', '_blank');
+                showToast('Opening newsletter page — subscribe there to unlock full results.');
+                // Graceful fallback: unlock anyway
+                markSubscribed();
+                if (lastScanData) renderDeepResults(lastScanData);
+            } finally {
+                if (btnText) btnText.style.display = 'inline';
+                if (btnLoading) btnLoading.style.display = 'none';
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        });
+    }
+
+    if (inlineGateSkip) {
+        inlineGateSkip.addEventListener('click', (e) => {
+            e.preventDefault();
+            gateSkippedThisScan = true;
+            trackOncePerScan('gate_skipped');
+            if (lastScanData) renderDeepResults(lastScanData);
+        });
+    }
+
+    // ============================================================
+    // COLLAPSIBLE SECTIONS (deep results)
+    // ============================================================
+    document.addEventListener('click', (e) => {
+        const toggle = e.target.closest('.card-header-toggle');
+        if (!toggle) return;
+
+        const targetId = toggle.dataset.target;
+        const section = toggle.dataset.section;
+        const content = document.getElementById(targetId);
+        const icon = toggle.querySelector('.toggle-icon');
+        if (!content) return;
+
+        const isHidden = content.style.display === 'none';
+        content.style.display = isHidden ? 'block' : 'none';
+        if (icon) icon.textContent = isHidden ? '−' : '+';
+
+        // Fire section expand event (once per scan)
+        if (isHidden && section) {
+            trackOncePerScan('section_expanded_' + section);
+        }
+    });
+
+    // ============================================================
+    // MOBILE STICKY CTA (visible when results are in viewport)
+    // ============================================================
+    const stickyCta = document.getElementById('stickyCta');
+    if (stickyCta && resultsSection && window.IntersectionObserver) {
+        const stickyObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                stickyCta.style.display = entry.isIntersecting ? 'block' : 'none';
+            });
+        }, { threshold: 0.1 });
+        stickyObserver.observe(resultsSection);
+
+        // Track sticky CTA click
+        stickyCta.querySelector('button').addEventListener('click', () => {
+            trackOncePerScan('sticky_cta_clicked');
         });
     }
 
@@ -396,6 +554,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Reset per-scan state
+        gateSkippedThisScan = false;
+        firedEvents.clear();
+
         // Show loading state
         setLoading(true);
 
@@ -425,6 +587,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Store data for report generation
             lastScanData = data;
 
+            // Set scan ID for event deduplication
+            currentScanId = data.scan_id || data.request_id || String(Date.now());
+
             // Update social proof counter after successful scan
             if (socialProof && scanCountEl) {
                 try {
@@ -438,9 +603,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (e) { /* non-critical */ }
             }
 
-            // Show newsletter popup before results (mandatory, but only once per session)
-            if (!hasSubscribed && newsletterPopup) {
+            // Gate logic — progressive inline gate (default) or legacy modal (?gate=modal)
+            if (isSubscribed() || gateSkippedThisScan) {
+                renderResults(data);
+            } else if (_rrMode.gate === 'modal' && newsletterPopup) {
                 showNewsletterPopup(data);
+                trackOncePerScan('gate_shown');
             } else {
                 renderResults(data);
             }
@@ -1063,43 +1231,160 @@ Nice to Have
     function renderResults(data) {
         // Show results section
         resultsSection.style.display = 'block';
-        trackEvent('partial_results_viewed');
+        trackOncePerScan('partial_results_viewed');
 
+        // ===== FREE TIER =====
         // 1. Score
         renderScore(data);
 
-        // 2. Category Breakdown
-        renderCategories(data.category_scores);
+        // 2. Top 3 Missing Keywords
+        renderTopMissingKeywords(data);
 
-        // 2b. Sub-score bars (Formatting + Recruiter Tips)
-        renderSubScoreBars(data);
+        // 3. Quick Wins
+        renderQuickWins(data);
 
-        // 3. Missing Keywords
-        renderKeywords('missingKeywords', data.missing_keywords, 'missing');
-
-        // 4. Matched Keywords
-        renderKeywords('matchedKeywords', data.matched_keywords, 'matched');
-
-        // 5. AI Suggestions
-        renderAISuggestions(data.ai_suggestions);
-
-        // 6. Cover Letter Key Points
-        renderCoverLetterPoints(data.ai_suggestions);
-
-        // 7. ATS Formatting
-        renderATSFormatting(data.ats_formatting);
-
-        // 7.5. Update Build CV CTA based on score
+        // 4. Build CV CTA
         renderBuildCta(data.match_score || 0);
 
-        // 8. Scan History
-        saveScanToHistory(data);
-        renderScanHistory();
+        // ===== GATE CHECK =====
+        if (isSubscribed() || gateSkippedThisScan) {
+            renderDeepResults(data);
+        } else {
+            showInlineGate();
+            trackOncePerScan('gate_shown');
+        }
 
         // Scroll to results
         setTimeout(() => {
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
+    }
+
+    function renderDeepResults(data) {
+        // Idempotent: safe to call multiple times
+        const deepContainer = document.getElementById('deepResults');
+        if (!deepContainer) return;
+
+        // Hide inline gate if visible
+        const gateCard = document.getElementById('inlineGateCard');
+        if (gateCard) gateCard.style.display = 'none';
+
+        // Show deep results container
+        deepContainer.style.display = 'block';
+
+        // Category Breakdown
+        renderCategories(data.category_scores);
+
+        // Sub-score bars (Formatting + Recruiter Tips)
+        renderSubScoreBars(data);
+
+        // Missing Keywords (full)
+        renderKeywords('missingKeywords', data.missing_keywords, 'missing');
+
+        // Matched Keywords
+        renderKeywords('matchedKeywords', data.matched_keywords, 'matched');
+
+        // AI Suggestions
+        renderAISuggestions(data.ai_suggestions);
+
+        // Cover Letter Key Points
+        renderCoverLetterPoints(data.ai_suggestions);
+
+        // ATS Formatting
+        renderATSFormatting(data.ats_formatting);
+
+        // Scan History
+        saveScanToHistory(data);
+        renderScanHistory();
+
+        trackOncePerScan('deep_results_unlocked');
+    }
+
+    function renderTopMissingKeywords(data) {
+        const card = document.getElementById('topMissingKeywords');
+        const list = document.getElementById('topMissingList');
+        if (!card || !list) return;
+
+        const missing = data.missing_keywords;
+        if (!missing) { card.style.display = 'none'; return; }
+
+        // Flatten: missing_keywords can be {category: [kw,...]} or [kw,...]
+        let flat = [];
+        if (Array.isArray(missing)) {
+            flat = missing.map(kw => ({
+                keyword: typeof kw === 'string' ? kw : (kw.keyword || kw.name || String(kw)),
+                category: (typeof kw === 'object' && kw.category) ? kw.category : '',
+            }));
+        } else if (typeof missing === 'object') {
+            // Category-keyed object: {technical_skills: [...], soft_skills: [...]}
+            // Prioritize technical_skills first
+            const order = ['technical_skills', 'certifications', 'soft_skills', 'education', 'action_verbs'];
+            const keys = order.filter(k => k in missing).concat(Object.keys(missing).filter(k => !order.includes(k)));
+            for (const cat of keys) {
+                const kwList = missing[cat];
+                if (Array.isArray(kwList)) {
+                    for (const kw of kwList) {
+                        flat.push({ keyword: String(kw), category: cat.replace(/_/g, ' ') });
+                    }
+                }
+            }
+        }
+
+        if (flat.length === 0) { card.style.display = 'none'; return; }
+
+        const top3 = flat.slice(0, 3);
+        list.innerHTML = top3.map(item =>
+            `<div class="top-missing-item">
+                <span class="top-missing-keyword">${item.keyword}</span>
+                ${item.category ? `<span class="top-missing-category">${item.category}</span>` : ''}
+            </div>`
+        ).join('');
+
+        card.style.display = 'block';
+    }
+
+    function renderQuickWins(data) {
+        const card = document.getElementById('quickWins');
+        const list = document.getElementById('quickWinsList');
+        if (!card || !list) return;
+
+        const suggestions = data.ai_suggestions;
+        if (!suggestions) {
+            card.style.display = 'none';
+            return;
+        }
+
+        // Extract quick wins from AI suggestions
+        let wins = [];
+        if (suggestions.quick_wins && Array.isArray(suggestions.quick_wins)) {
+            wins = suggestions.quick_wins.slice(0, 3);
+        } else if (suggestions.critical_improvements && Array.isArray(suggestions.critical_improvements)) {
+            wins = suggestions.critical_improvements.slice(0, 3);
+        } else if (typeof suggestions === 'string') {
+            // Fallback: split text into sentences
+            const sentences = sanitizeAIText(suggestions).split(/[.\n]/).filter(s => s.trim().length > 10);
+            wins = sentences.slice(0, 3);
+        }
+
+        if (wins.length === 0) {
+            card.style.display = 'none';
+            return;
+        }
+
+        list.innerHTML = wins.map((win, i) => {
+            const text = sanitizeAIText(typeof win === 'string' ? win : (win.suggestion || win.text || JSON.stringify(win)));
+            return `<div class="quick-win-item">
+                <span class="quick-win-number">${i + 1}</span>
+                <span class="quick-win-text">${text}</span>
+            </div>`;
+        }).join('');
+
+        card.style.display = 'block';
+    }
+
+    function showInlineGate() {
+        const gateCard = document.getElementById('inlineGateCard');
+        if (gateCard) gateCard.style.display = 'block';
     }
 
     function renderScore(data) {

@@ -1890,6 +1890,77 @@ Created a developer productivity tool with 500 GitHub stars
     except Exception as e:
         check("Projects DOCX functional: empty projects = no PROJECTS header", False, str(e))
 
+    # ---- SECTION: FUNNEL EVENTS CONSISTENCY ----
+    # Verify new Phase 1 events exist in both VALID_EVENTS and CLIENT_EVENTS
+    try:
+        from backend.funnel_metrics import VALID_EVENTS, CLIENT_EVENTS
+
+        phase1_client_events = [
+            'deep_results_unlocked',
+            'section_expanded_categories',
+            'section_expanded_ai',
+            'section_expanded_ats',
+            'sticky_cta_clicked',
+            'gate_skipped',
+        ]
+        for evt in phase1_client_events:
+            check(f"Funnel: '{evt}' in VALID_EVENTS",
+                  evt in VALID_EVENTS, "" if evt in VALID_EVENTS else "Missing from VALID_EVENTS")
+            check(f"Funnel: '{evt}' in CLIENT_EVENTS",
+                  evt in CLIENT_EVENTS, "" if evt in CLIENT_EVENTS else "Missing from CLIENT_EVENTS")
+
+        # Verify CLIENT_EVENTS is subset of VALID_EVENTS
+        diff = CLIENT_EVENTS - VALID_EVENTS
+        check("Funnel: CLIENT_EVENTS is subset of VALID_EVENTS",
+              len(diff) == 0, f"Extra in CLIENT: {diff}" if diff else "")
+    except Exception as e:
+        check("Funnel events import", False, str(e))
+
+    # Verify inline gate HTML elements exist in index.html
+    check("HTML: inline gate card present",
+          'id="inlineGateCard"' in html)
+    check("HTML: inline gate form present",
+          'id="inlineGateForm"' in html)
+    check("HTML: inline gate skip link present",
+          'id="inlineGateSkip"' in html)
+    check("HTML: deep results container present",
+          'id="deepResults"' in html)
+    check("HTML: top missing keywords container present",
+          'id="topMissingKeywords"' in html)
+    check("HTML: quick wins container present",
+          'id="quickWins"' in html)
+    check("HTML: sticky CTA bar present",
+          'id="stickyCta"' in html)
+    check("HTML: collapsible category header present",
+          'data-target="categoryContent"' in html)
+    check("HTML: collapsible AI header present",
+          'data-target="aiContent"' in html)
+    check("HTML: collapsible ATS header present",
+          'data-target="atsContent"' in html)
+
+    # Verify app.js has key Phase 1 functions
+    try:
+        with open('static/js/app.js', 'r') as f:
+            app_js = f.read()
+        check("JS: renderDeepResults function exists",
+              'function renderDeepResults(' in app_js)
+        check("JS: renderTopMissingKeywords function exists",
+              'function renderTopMissingKeywords(' in app_js)
+        check("JS: renderQuickWins function exists",
+              'function renderQuickWins(' in app_js)
+        check("JS: showInlineGate function exists",
+              'function showInlineGate(' in app_js)
+        check("JS: isSubscribed function exists",
+              'function isSubscribed(' in app_js)
+        check("JS: markSubscribed function exists",
+              'function markSubscribed(' in app_js)
+        check("JS: trackOncePerScan function exists",
+              'function trackOncePerScan(' in app_js)
+    except Exception as e:
+        for fn in ['renderDeepResults', 'renderTopMissingKeywords', 'renderQuickWins',
+                   'showInlineGate', 'isSubscribed', 'markSubscribed', 'trackOncePerScan']:
+            check(f"JS: {fn} function exists", False, str(e))
+
     elapsed = time.time() - start
 
     # ============================================================

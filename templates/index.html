@@ -247,19 +247,6 @@ Include the job title, requirements, responsibilities, qualifications — everyt
             <!-- ============ RESULTS ============ -->
             <div class="results-section" id="results" style="display: none;">
 
-                <!-- Report Actions Bar -->
-                <div class="report-actions">
-                    <button type="button" class="report-btn" id="copyReportBtn">
-                        <span class="report-btn-icon">📋</span> Copy Report
-                    </button>
-                    <button type="button" class="report-btn" id="downloadReportBtn">
-                        <span class="report-btn-icon">📥</span> Download Report
-                    </button>
-                    <button type="button" class="report-btn" id="emailReportBtn">
-                        <span class="report-btn-icon">📧</span> Email Report
-                    </button>
-                </div>
-
                 <!-- Toast notification -->
                 <div class="toast" id="toast" style="display: none;">
                     <span class="toast-icon">✅</span>
@@ -295,6 +282,22 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     </div>
                 </div>
 
+                <!-- ===== FREE TIER (always visible after scan) ===== -->
+
+                <!-- Top 3 Missing Keywords (rendered by JS) -->
+                <div class="result-card top-missing-card" id="topMissingKeywords" style="display: none;">
+                    <h2>🎯 Top Keywords to Add</h2>
+                    <p class="card-subtitle">These high-impact keywords are missing from your resume — adding them could significantly improve your ATS score.</p>
+                    <div class="top-missing-list" id="topMissingList"></div>
+                </div>
+
+                <!-- Quick Wins (rendered by JS) -->
+                <div class="result-card quick-wins-card" id="quickWins" style="display: none;">
+                    <h2>⚡ Quick Wins</h2>
+                    <p class="card-subtitle">Three actionable changes you can make right now to improve your match.</p>
+                    <div class="quick-wins-list" id="quickWinsList"></div>
+                </div>
+
                 <!-- Build CV Cross-sell CTA (score-aware messaging set by JS) -->
                 <div class="result-card build-cta-card" id="buildCtaCard">
                     <h2 id="buildCtaHeading">🚀 Get an ATS-optimized CV in seconds</h2>
@@ -306,114 +309,174 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <button type="button" class="build-cta-btn" onclick="launchBuilderFromScan()">Generate My Optimized CV — £2 →</button>
                 </div>
 
-                <!-- Category Breakdown -->
-                <div class="result-card">
-                    <h2>📊 Category Breakdown</h2>
-                    <div class="category-bars" id="categoryBars"></div>
-                </div>
-
-                <!-- Missing Keywords -->
-                <div class="result-card keywords-card">
-                    <h2>⚠️ Keywords Not Found on Your Resume</h2>
-                    <p class="card-subtitle">These keywords appear in the job description but not on your resume — ATS systems are scanning for them.</p>
-                    <div class="missing-keywords-tip">
-                        <span class="tip-icon-inline">💡</span>
-                        <span><strong>Already have these skills?</strong> Add them to your resume — ATS can only match what it sees. <strong>Don't have them yet?</strong> This could be a skill gap worth working on before applying.</span>
+                <!-- ===== INLINE GATE (shown to non-subscribers) ===== -->
+                <div class="result-card inline-gate-card" id="inlineGateCard" style="display: none;">
+                    <div class="inline-gate-header">
+                        <h2>Unlock your full ATS breakdown</h2>
+                        <p class="inline-gate-subtitle">Get the complete picture to improve your resume.</p>
                     </div>
-                    <div class="keywords-grid" id="missingKeywords"></div>
+                    <div class="inline-gate-chips">
+                        <span class="gate-chip">Full keyword map</span>
+                        <span class="gate-chip">AI section rewrites</span>
+                        <span class="gate-chip">Export &amp; email report</span>
+                    </div>
+                    <form class="inline-gate-form" id="inlineGateForm">
+                        <div class="inline-gate-fields">
+                            <input type="text" id="inlineGateFirstName" placeholder="First name" required autocomplete="given-name">
+                            <input type="email" id="inlineGateEmail" placeholder="Email address" required autocomplete="email">
+                        </div>
+                        <button type="submit" class="inline-gate-btn">
+                            <span class="gate-btn-text">Subscribe &amp; Unlock</span>
+                            <span class="gate-btn-loading" style="display: none;">
+                                <span class="spinner spinner-sm"></span> Subscribing...
+                            </span>
+                        </button>
+                    </form>
+                    <a href="#" class="inline-gate-skip" id="inlineGateSkip">Skip for now</a>
+                    <p class="inline-gate-trust">Join Shola's Tech Notes — free, 3 min/week. Unsubscribe anytime.</p>
                 </div>
 
-                <!-- Matched Keywords -->
-                <div class="result-card matched-card">
-                    <h2>✅ Matched Keywords</h2>
-                    <p class="card-subtitle">Great news — your resume already includes these job-relevant keywords.</p>
-                    <div class="keywords-grid" id="matchedKeywords"></div>
-                </div>
+                <!-- ===== DEEP TIER (hidden until subscribe or skip) ===== -->
+                <div id="deepResults" style="display: none;">
 
-                <!-- AI Suggestions -->
-                <div class="result-card ai-card">
-                    <h2>🤖 Smart Suggestions</h2>
-                    <div class="ai-badge" id="aiBadge"></div>
-                    <div id="aiSuggestions"></div>
-                </div>
-
-                <!-- Cover Letter Key Points -->
-                <div class="result-card cover-letter-card" id="coverLetterCard" style="display: none;">
-                    <h2>✉️ Cover Letter Key Points</h2>
-                    <p class="card-subtitle">Three talking points tailored to this job — use them to write a standout cover letter.</p>
-                    <div class="cover-letter-points" id="coverLetterPoints"></div>
-                    <div class="cover-letter-footer">
-                        <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">📋 Copy Points</button>
-                        <span class="cover-letter-note">No competitors offer this — you're ahead of the pack.</span>
+                    <!-- Report Actions Bar -->
+                    <div class="report-actions">
+                        <button type="button" class="report-btn" id="copyReportBtn">
+                            <span class="report-btn-icon">📋</span> Copy Report
+                        </button>
+                        <button type="button" class="report-btn" id="downloadReportBtn">
+                            <span class="report-btn-icon">📥</span> Download Report
+                        </button>
+                        <button type="button" class="report-btn" id="emailReportBtn">
+                            <span class="report-btn-icon">📧</span> Email Report
+                        </button>
                     </div>
 
-                    <!-- Full Cover Letter Generator -->
-                    <div class="cl-generator">
-                        <div class="cl-generator-cta">
-                            <p class="cl-generator-text">Want a complete, ready-to-send cover letter? Our AI writes one tailored to this job.</p>
-                            <button type="button" class="cl-generate-btn" id="generateCoverLetterBtn">
-                                <span class="cl-btn-text">Generate Full Cover Letter</span>
-                                <span class="cl-btn-free">Free — 3/day</span>
+                    <!-- Category Breakdown (collapsed by default) -->
+                    <div class="result-card">
+                        <div class="card-header-toggle" data-target="categoryContent" data-section="categories">
+                            <h2>📊 Category Breakdown</h2>
+                            <span class="toggle-icon">+</span>
+                        </div>
+                        <div id="categoryContent" style="display: none;">
+                            <div class="category-bars" id="categoryBars"></div>
+                        </div>
+                    </div>
+
+                    <!-- Missing Keywords -->
+                    <div class="result-card keywords-card">
+                        <h2>⚠️ Keywords Not Found on Your Resume</h2>
+                        <p class="card-subtitle">These keywords appear in the job description but not on your resume — ATS systems are scanning for them.</p>
+                        <div class="missing-keywords-tip">
+                            <span class="tip-icon-inline">💡</span>
+                            <span><strong>Already have these skills?</strong> Add them to your resume — ATS can only match what it sees. <strong>Don't have them yet?</strong> This could be a skill gap worth working on before applying.</span>
+                        </div>
+                        <div class="keywords-grid" id="missingKeywords"></div>
+                    </div>
+
+                    <!-- Matched Keywords -->
+                    <div class="result-card matched-card">
+                        <h2>✅ Matched Keywords</h2>
+                        <p class="card-subtitle">Great news — your resume already includes these job-relevant keywords.</p>
+                        <div class="keywords-grid" id="matchedKeywords"></div>
+                    </div>
+
+                    <!-- AI Suggestions (collapsed by default) -->
+                    <div class="result-card ai-card">
+                        <div class="card-header-toggle" data-target="aiContent" data-section="ai">
+                            <h2>🤖 Smart Suggestions</h2>
+                            <span class="toggle-icon">+</span>
+                        </div>
+                        <div id="aiContent" style="display: none;">
+                            <div class="ai-badge" id="aiBadge"></div>
+                            <div id="aiSuggestions"></div>
+                        </div>
+                    </div>
+
+                    <!-- Cover Letter Key Points -->
+                    <div class="result-card cover-letter-card" id="coverLetterCard" style="display: none;">
+                        <h2>✉️ Cover Letter Key Points</h2>
+                        <p class="card-subtitle">Three talking points tailored to this job — use them to write a standout cover letter.</p>
+                        <div class="cover-letter-points" id="coverLetterPoints"></div>
+                        <div class="cover-letter-footer">
+                            <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">📋 Copy Points</button>
+                            <span class="cover-letter-note">No competitors offer this — you're ahead of the pack.</span>
+                        </div>
+
+                        <!-- Full Cover Letter Generator -->
+                        <div class="cl-generator">
+                            <div class="cl-generator-cta">
+                                <p class="cl-generator-text">Want a complete, ready-to-send cover letter? Our AI writes one tailored to this job.</p>
+                                <button type="button" class="cl-generate-btn" id="generateCoverLetterBtn">
+                                    <span class="cl-btn-text">Generate Full Cover Letter</span>
+                                    <span class="cl-btn-free">Free — 3/day</span>
+                                </button>
+                            </div>
+                            <div class="cl-output" id="coverLetterOutput" style="display: none;">
+                                <div class="cl-output-header">
+                                    <span class="cl-output-title">Your Cover Letter</span>
+                                    <div class="cl-output-actions">
+                                        <button type="button" class="cl-action-btn" id="copyCoverLetterFull">📋 Copy</button>
+                                        <button type="button" class="cl-action-btn" id="downloadCoverLetterTxt">💾 Download .txt</button>
+                                    </div>
+                                </div>
+                                <div class="cl-output-body" id="coverLetterBody" contenteditable="true"></div>
+                                <p class="cl-output-note">You can edit the text above before copying or downloading.</p>
+                            </div>
+                            <div class="cl-loading" id="coverLetterLoading" style="display: none;">
+                                <div class="cl-spinner"></div>
+                                <span>Writing your cover letter...</span>
+                            </div>
+                            <div class="cl-error" id="coverLetterError" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- ATS Formatting (collapsed by default) -->
+                    <div class="result-card ats-card">
+                        <div class="card-header-toggle" data-target="atsContent" data-section="ats">
+                            <h2>📋 ATS Formatting Check</h2>
+                            <span class="toggle-icon">+</span>
+                        </div>
+                        <div id="atsContent" style="display: none;">
+                            <div id="atsFormatting"></div>
+                        </div>
+                    </div>
+
+                    <!-- Scan History -->
+                    <div class="result-card history-card" id="scanHistoryCard" style="display: none;">
+                        <h2>📈 Your Scan History</h2>
+                        <p class="card-subtitle">Track your progress as you optimize your resume. Data is stored locally on your device.</p>
+                        <div class="history-chart" id="historyChart"></div>
+                        <div class="history-list" id="historyList"></div>
+                        <button type="button" class="history-clear-btn" id="clearHistoryBtn">Clear History</button>
+                    </div>
+
+                    <!-- Share Results -->
+                    <div class="result-card share-card">
+                        <h2>📣 Found this useful?</h2>
+                        <p class="card-subtitle">Help someone else beat the ATS — share ResumeRadar with your network.</p>
+                        <div class="share-buttons">
+                            <button type="button" class="share-btn share-linkedin" id="shareLinkedIn">
+                                <svg class="share-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                                Share on LinkedIn
+                            </button>
+                            <button type="button" class="share-btn share-whatsapp" id="shareWhatsApp">
+                                <svg class="share-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                Share on WhatsApp
+                            </button>
+                            <button type="button" class="share-btn share-copy" id="shareCopyLink">
+                                <span class="share-icon-emoji">🔗</span>
+                                Copy Link
                             </button>
                         </div>
-                        <div class="cl-output" id="coverLetterOutput" style="display: none;">
-                            <div class="cl-output-header">
-                                <span class="cl-output-title">Your Cover Letter</span>
-                                <div class="cl-output-actions">
-                                    <button type="button" class="cl-action-btn" id="copyCoverLetterFull">📋 Copy</button>
-                                    <button type="button" class="cl-action-btn" id="downloadCoverLetterTxt">💾 Download .txt</button>
-                                </div>
-                            </div>
-                            <div class="cl-output-body" id="coverLetterBody" contenteditable="true"></div>
-                            <p class="cl-output-note">You can edit the text above before copying or downloading.</p>
-                        </div>
-                        <div class="cl-loading" id="coverLetterLoading" style="display: none;">
-                            <div class="cl-spinner"></div>
-                            <span>Writing your cover letter...</span>
-                        </div>
-                        <div class="cl-error" id="coverLetterError" style="display: none;"></div>
                     </div>
-                </div>
 
-                <!-- ATS Formatting -->
-                <div class="result-card ats-card">
-                    <h2>📋 ATS Formatting Check</h2>
-                    <div id="atsFormatting"></div>
-                </div>
-
-                <!-- Scan History -->
-                <div class="result-card history-card" id="scanHistoryCard" style="display: none;">
-                    <h2>📈 Your Scan History</h2>
-                    <p class="card-subtitle">Track your progress as you optimize your resume. Data is stored locally on your device.</p>
-                    <div class="history-chart" id="historyChart"></div>
-                    <div class="history-list" id="historyList"></div>
-                    <button type="button" class="history-clear-btn" id="clearHistoryBtn">Clear History</button>
-                </div>
-
-                <!-- Share Results -->
-                <div class="result-card share-card">
-                    <h2>📣 Found this useful?</h2>
-                    <p class="card-subtitle">Help someone else beat the ATS — share ResumeRadar with your network.</p>
-                    <div class="share-buttons">
-                        <button type="button" class="share-btn share-linkedin" id="shareLinkedIn">
-                            <svg class="share-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                            Share on LinkedIn
-                        </button>
-                        <button type="button" class="share-btn share-whatsapp" id="shareWhatsApp">
-                            <svg class="share-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                            Share on WhatsApp
-                        </button>
-                        <button type="button" class="share-btn share-copy" id="shareCopyLink">
-                            <span class="share-icon-emoji">🔗</span>
-                            Copy Link
-                        </button>
+                    <!-- Scan Again -->
+                    <div class="scan-again-wrapper">
+                        <button type="button" class="scan-again-btn" id="scanAgainBtn">↑ Scan Another Resume</button>
                     </div>
-                </div>
 
-                <!-- Scan Again -->
-                <div class="scan-again-wrapper">
-                    <button type="button" class="scan-again-btn" id="scanAgainBtn">↑ Scan Another Resume</button>
-                </div>
+                </div><!-- /deepResults -->
             </div>
         </div>
     </main>
@@ -515,6 +578,11 @@ Include the job title, requirements, responsibilities, qualifications — everyt
         </div>
     </footer>
 
-    <script src="/static/js/app.js"></script>
+    <!-- Mobile Sticky CTA (visible in results viewport on mobile) -->
+    <div class="sticky-cta-bar" id="stickyCta" style="display: none;">
+        <button type="button" onclick="launchBuilderFromScan()">Generate Optimized CV — £2</button>
+    </div>
+
+    <script src="/static/js/app.js?v=2"></script>
 </body>
 </html>
