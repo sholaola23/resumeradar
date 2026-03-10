@@ -387,6 +387,24 @@ def run_tests():
     check("Payment content flex-wrap for email row",
           'flex-wrap' in builder_css and 'payment-email' in builder_css)
 
+    # ---- Phase 3: Builder Wizard (step-by-step) ----
+    check("Wizard step indicator present in build page",
+          'wizard-steps' in build_html)
+    check("Builder step containers present in build page",
+          'builder-step' in build_html)
+    check("Wizard nav buttons present (wizardToTemplate)",
+          'wizardToTemplate' in build_html)
+    check("Centralized visibility controller (showBuilderView)",
+          'showBuilderView' in builder_js)
+    check("Step navigation function (goToStep)",
+          'goToStep' in builder_js)
+    check("Feature flag resolver (_rrMode)",
+          '_rrMode' in builder_js)
+    check("Payment return uses showBuilderView",
+          "showBuilderView('payment-return')" in builder_js)
+    check("Wizard CSS styles present",
+          '.wizard-steps' in builder_css and '.wizard-nav-btn' in builder_css)
+
     # ---- SECTION 12: E2E SCENARIOS ----
 
     with app.test_client() as c:

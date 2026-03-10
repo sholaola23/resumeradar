@@ -71,6 +71,32 @@
         </div>
     </div>
 
+    <!-- ============ WIZARD STEP INDICATOR ============ -->
+    <div class="wizard-steps" id="wizardSteps" style="display: none;">
+        <div class="wizard-step active" data-step="1">
+            <div class="wizard-step-number">1</div>
+            <div class="wizard-step-label">Input</div>
+        </div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" data-step="2">
+            <div class="wizard-step-number">2</div>
+            <div class="wizard-step-label">Preview</div>
+        </div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" data-step="3">
+            <div class="wizard-step-number">3</div>
+            <div class="wizard-step-label">Template</div>
+        </div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step" data-step="4">
+            <div class="wizard-step-number">4</div>
+            <div class="wizard-step-label">Download</div>
+        </div>
+    </div>
+
+    <!-- ============ STEP 1: INPUT ============ -->
+    <div class="builder-step" data-step="1">
+
     <!-- ============ UPLOAD CV SECTION (DEFAULT) ============ -->
     <section class="builder-section" id="uploadSection">
         <div class="container">
@@ -325,30 +351,41 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
         </div>
     </main>
 
+    </div><!-- /builder-step[data-step="1"] -->
+
     <!-- ============ PREVIEW SECTION (outside manualFormSection so it's always accessible) ============ -->
     <section class="builder-section" id="previewWrapper" style="display: none;">
         <div class="container">
-            <div class="preview-section" id="previewSection" style="display: none;">
-                <div class="builder-card">
-                    <div class="preview-header">
-                        <h2>Your Polished CV</h2>
-                        <button type="button" class="edit-btn" id="editBtn">Edit & Regenerate</button>
+
+            <!-- Step 2: Preview -->
+            <div class="builder-step" data-step="2" style="display: none;">
+                <div class="preview-section" id="previewSection" style="display: none;">
+                    <div class="builder-card">
+                        <div class="preview-header">
+                            <h2>Your Polished CV</h2>
+                            <button type="button" class="edit-btn" id="editBtn">Edit & Regenerate</button>
+                        </div>
+
+                        <div class="ai-polish-badge" id="aiPolishBadge" style="display: none;">
+                            Polished by AI
+                        </div>
+
+                        <div class="preview-content" id="previewContent"></div>
                     </div>
 
-                    <div class="ai-polish-badge" id="aiPolishBadge" style="display: none;">
-                        Polished by AI
+                    <!-- Extraction quality warning (hidden by default, shown by JS) -->
+                    <div class="extraction-warning-banner" id="extractionWarning" style="display: none;">
+                        <strong>⚠ Some sections may be incomplete</strong>
+                        <p id="extractionWarningText">We detected qualifications in your CV that weren't fully captured. Please review the preview above and use the Edit form to add any missing entries before downloading.</p>
                     </div>
-
-                    <div class="preview-content" id="previewContent"></div>
                 </div>
-
-                <!-- Extraction quality warning (hidden by default, shown by JS) -->
-                <div class="extraction-warning-banner" id="extractionWarning" style="display: none;">
-                    <strong>⚠ Some sections may be incomplete</strong>
-                    <p id="extractionWarningText">We detected qualifications in your CV that weren't fully captured. Please review the preview above and use the Edit form to add any missing entries before downloading.</p>
+                <div class="wizard-nav">
+                    <button type="button" class="wizard-nav-btn wizard-next-btn" id="wizardToTemplate">Choose Template →</button>
                 </div>
+            </div>
 
-                <!-- Template Picker -->
+            <!-- Step 3: Template -->
+            <div class="builder-step" data-step="3" style="display: none;">
                 <div class="builder-card">
                     <h2>Choose a Template</h2>
                     <div class="template-picker">
@@ -408,7 +445,14 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                         </label>
                     </div>
                 </div>
+                <div class="wizard-nav">
+                    <button type="button" class="wizard-nav-btn wizard-back-btn" id="wizardBackToPreview">← Back to Preview</button>
+                    <button type="button" class="wizard-nav-btn wizard-next-btn" id="wizardToDownload">Continue to Download →</button>
+                </div>
+            </div>
 
+            <!-- Step 4: Download -->
+            <div class="builder-step" data-step="4" style="display: none;">
                 <!-- Bundle Credits Banner (shown by JS when active bundle) -->
                 <div class="builder-card bundle-banner" id="bundleBanner" style="display: none;">
                     <div class="bundle-banner-content">
@@ -597,7 +641,11 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                     </div>
                 </div>
 
+                <div class="wizard-nav">
+                    <button type="button" class="wizard-nav-btn wizard-back-btn" id="wizardBackToTemplate">← Back to Template</button>
+                </div>
             </div>
+
         </div>
     </section>
 
@@ -610,6 +658,6 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
         </div>
     </footer>
 
-    <script src="/static/js/builder.js"></script>
+    <script src="/static/js/builder.js?v=3"></script>
 </body>
 </html>

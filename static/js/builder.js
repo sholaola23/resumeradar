@@ -28,6 +28,12 @@
     let loadingInterval = null;
     let loadingMsgIndex = 0;
 
+    // Wizard mode: step-by-step builder flow (?wizard=off disables)
+    const _rrMode = {
+        wizard: new URLSearchParams(location.search).get('wizard') !== 'off',
+    };
+    let currentStep = 1;
+
     // ============================================================
     // PAYSTACK: PROVIDER DETECTION (Stripe default, Nigeria opt-in)
     // ============================================================
@@ -100,20 +106,102 @@
     const showUploadLink = document.getElementById('showUploadSection');
 
     // ============================================================
+    // WIZARD: CENTRALIZED VISIBILITY CONTROLLER
+    // ============================================================
+
+    /**
+     * Central visibility controller. All section show/hide goes through here.
+     * In wizard mode: also manages step containers.
+     * In flat mode (!_rrMode.wizard): original behavior — direct show/hide.
+     *
+     * @param {'input-upload'|'input-form'|'preview'|'payment-return'} view
+     */
+    function showBuilderView(view) {
+        switch (view) {
+            case 'input-upload':
+                if (uploadSection) uploadSection.style.display = 'block';
+                if (manualFormSection) manualFormSection.style.display = 'none';
+                if (previewWrapper) previewWrapper.style.display = 'none';
+                if (_rrMode.wizard) goToStep(1);
+                break;
+
+            case 'input-form':
+                if (uploadSection) uploadSection.style.display = 'none';
+                if (manualFormSection) {
+                    manualFormSection.style.display = 'block';
+                    builderForm.style.display = 'block';
+                }
+                if (previewWrapper) previewWrapper.style.display = 'none';
+                if (_rrMode.wizard) goToStep(1);
+                break;
+
+            case 'preview':
+                if (uploadSection) uploadSection.style.display = 'none';
+                if (manualFormSection) manualFormSection.style.display = 'none';
+                if (previewWrapper) previewWrapper.style.display = 'block';
+                previewSection.style.display = 'block';
+                if (_rrMode.wizard) goToStep(2);
+                break;
+
+            case 'payment-return':
+                if (uploadSection) uploadSection.style.display = 'none';
+                if (manualFormSection) manualFormSection.style.display = 'none';
+                if (previewWrapper) previewWrapper.style.display = 'block';
+                if (_rrMode.wizard) {
+                    goToStep(4);
+                } else {
+                    previewSection.style.display = 'block';
+                }
+                break;
+        }
+    }
+
+    /**
+     * Wizard-only: switch to a specific step, updating step containers and indicator.
+     */
+    function goToStep(step) {
+        if (!_rrMode.wizard) return;
+        currentStep = step;
+
+        // Show/hide step containers
+        document.querySelectorAll('.builder-step').forEach(function (el) {
+            el.style.display = parseInt(el.dataset.step) === step ? 'block' : 'none';
+        });
+
+        // For step >= 2, ensure previewSection is visible inside step 2
+        if (step >= 2) {
+            previewSection.style.display = 'block';
+        }
+
+        // Update step indicator dots
+        document.querySelectorAll('.wizard-step').forEach(function (el) {
+            var s = parseInt(el.dataset.step);
+            el.classList.toggle('active', s === step);
+            el.classList.toggle('completed', s < step);
+        });
+
+        // Show wizard indicator
+        var indicator = document.getElementById('wizardSteps');
+        if (indicator) indicator.style.display = 'flex';
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ============================================================
     // INIT: CHECK FOR POST-SCAN OR POST-PAYMENT
     // ============================================================
-    document.addEventListener('DOMContentLoaded', function () {
+    function _builderInit() {
         const params = new URLSearchParams(window.location.search);
 
         // Post-scan: hide upload section, auto-generate CV from scan data
         if (params.get('from') === 'scan') {
-            if (uploadSection) uploadSection.style.display = 'none';
+            if (uploadSection) uploadSection.style.display = 'none'; // immediate hide, autoGenerate calls showBuilderView on success
             autoGenerateFromScan();
         }
 
-        // Post-payment download — hide upload section (supports Stripe + Paystack)
+        // Post-payment download — show step 4 UI BEFORE handlePostPayment
         if (params.get('payment') === 'success') {
-            if (uploadSection) uploadSection.style.display = 'none';
+            showBuilderView('payment-return');
             var token = params.get('token');
             var sessionId = params.get('session_id');
             var provider = params.get('provider') || sessionStorage.getItem('resumeradar_payment_provider') || 'stripe';
@@ -127,6 +215,7 @@
 
         // Payment cancelled — restore token from sessionStorage, show cancel banner
         if (params.get('payment') === 'cancelled') {
+            showBuilderView('payment-return');
             var storedToken = sessionStorage.getItem('resumeradar_cv_token');
             var storedSession = sessionStorage.getItem('resumeradar_stripe_session');
             var cancelNonce = params.get('cancel_nonce') || '';
@@ -180,7 +269,37 @@
                 }
             });
         }
-    });
+
+        // ---- WIZARD: Init + nav button handlers ----
+        if (!_rrMode.wizard) {
+            // Flat mode: ensure all step containers are visible (override inline display:none)
+            document.querySelectorAll('.builder-step').forEach(function (el) {
+                el.style.display = '';
+            });
+            // Hide wizard UI
+            document.querySelectorAll('.wizard-nav').forEach(function (el) {
+                el.style.display = 'none';
+            });
+        }
+
+        // Nav button handlers (null-safe via ?.)
+        document.getElementById('wizardToTemplate')?.addEventListener('click', function () { goToStep(3); });
+        document.getElementById('wizardToDownload')?.addEventListener('click', function () { goToStep(4); });
+        document.getElementById('wizardBackToPreview')?.addEventListener('click', function () { goToStep(2); });
+        document.getElementById('wizardBackToTemplate')?.addEventListener('click', function () { goToStep(3); });
+
+        // Show wizard indicator on default page load (skip if payment/scan already set a step)
+        if (_rrMode.wizard && document.getElementById('wizardSteps')?.style.display === 'none') {
+            goToStep(1);
+        }
+    }
+
+    // Run init: immediately if DOM ready, otherwise on DOMContentLoaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _builderInit);
+    } else {
+        _builderInit();
+    }
 
     // ============================================================
     // POST-SCAN: SKIP FORM, AUTO-GENERATE CV FROM SCAN DATA
@@ -190,7 +309,7 @@
             const scanDataRaw = sessionStorage.getItem('resumeradar_scan_for_builder');
             if (!scanDataRaw) {
                 // No scan data — show upload section as fallback
-                if (uploadSection) uploadSection.style.display = 'block';
+                showBuilderView('input-upload');
                 return;
             }
 
@@ -204,14 +323,13 @@
 
             if (!resumeText || !jobDescription) {
                 // Missing data — show upload section as fallback
-                if (uploadSection) uploadSection.style.display = 'block';
+                showBuilderView('input-upload');
                 return;
             }
 
             // Hide the form, show a generating state
             builderForm.style.display = 'none';
-            if (previewWrapper) previewWrapper.style.display = 'block';
-            previewSection.style.display = 'block';
+            showBuilderView('preview');
             previewContent.innerHTML = `
                 <div class="scan-generating">
                     <div class="spinner"></div>
@@ -397,8 +515,7 @@
     if (showManualFormLink) {
         showManualFormLink.addEventListener('click', function (e) {
             e.preventDefault();
-            if (uploadSection) uploadSection.style.display = 'none';
-            if (manualFormSection) manualFormSection.style.display = 'block';
+            showBuilderView('input-form');
             window.scrollTo({ top: manualFormSection.offsetTop - 20, behavior: 'smooth' });
         });
     }
@@ -407,8 +524,7 @@
     if (showUploadLink) {
         showUploadLink.addEventListener('click', function (e) {
             e.preventDefault();
-            if (manualFormSection) manualFormSection.style.display = 'none';
-            if (uploadSection) uploadSection.style.display = 'block';
+            showBuilderView('input-upload');
             window.scrollTo({ top: uploadSection.offsetTop - 20, behavior: 'smooth' });
         });
     }
@@ -575,16 +691,13 @@
                 }
 
                 // Hide upload section, show preview
-                if (uploadSection) uploadSection.style.display = 'none';
-                if (previewWrapper) previewWrapper.style.display = 'block';
-                previewSection.style.display = 'block';
+                showBuilderView('preview');
                 renderPreview(result.polished);
 
                 // Show extraction quality warnings if any
                 showExtractionWarnings(result.polished);
 
                 if (editBtn) editBtn.style.display = 'inline-block';
-                window.scrollTo({ top: previewSection.offsetTop - 20, behavior: 'smooth' });
 
             } catch (e) {
                 console.error('Upload generate error:', e);
@@ -748,12 +861,7 @@
             renderPreview(currentPolished);
 
             // Show preview section, hide form + upload
-            if (uploadSection) uploadSection.style.display = 'none';
-            if (manualFormSection) manualFormSection.style.display = 'none';
-            builderForm.style.display = 'none';
-            if (previewWrapper) previewWrapper.style.display = 'block';
-            previewSection.style.display = 'block';
-            window.scrollTo({ top: previewSection.offsetTop - 20, behavior: 'smooth' });
+            showBuilderView('preview');
 
         } catch (err) {
             console.error('Generate error:', err);
@@ -1024,11 +1132,7 @@
         }
 
         // Hide upload section, show manual form (pre-populated)
-        if (uploadSection) uploadSection.style.display = 'none';
-        if (manualFormSection) manualFormSection.style.display = 'block';
-        if (previewWrapper) previewWrapper.style.display = 'none';
-        previewSection.style.display = 'none';
-        builderForm.style.display = 'block';
+        showBuilderView('input-form');
         window.scrollTo({ top: manualFormSection.offsetTop - 20, behavior: 'smooth' });
     });
 
@@ -1264,9 +1368,8 @@
         sessionStorage.removeItem('resumeradar_cv_token');
         sessionStorage.removeItem('resumeradar_stripe_session');
 
-        // Show a download status
+        // Show download status (showBuilderView already called before handlePostPayment)
         builderForm.style.display = 'none';
-        if (previewWrapper) previewWrapper.style.display = 'block';
         previewSection.style.display = 'block';
         previewContent.innerHTML = '<div class="download-status"><span class="spinner"></span> Preparing your CV download...</div>';
 
