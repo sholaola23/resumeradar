@@ -1651,6 +1651,43 @@ textarea::placeholder {
     box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
 }
 
+/* ---- SUBTLE MID-FLOW CV CTA ---- */
+.build-cta-inline-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 14px 16px;
+}
+
+.build-cta-inline-text {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--gray-700);
+    font-weight: 500;
+}
+
+.build-cta-inline-btn {
+    background: white;
+    color: var(--primary);
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+    font-family: inherit;
+}
+
+.build-cta-inline-btn:hover {
+    border-color: var(--primary);
+    background: #eff6ff;
+}
+
 /* ---- SHARE BUTTONS ---- */
 .share-card {
     text-align: center;
@@ -2357,6 +2394,15 @@ textarea::placeholder {
 
     .share-btn {
         justify-content: center;
+        width: 100%;
+    }
+
+    .build-cta-inline-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .build-cta-inline-btn {
         width: 100%;
     }
 
