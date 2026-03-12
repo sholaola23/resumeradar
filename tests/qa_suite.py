@@ -1939,8 +1939,8 @@ Created a developer productivity tool with 500 GitHub stars
           'id="inlineGateCard"' in html)
     check("HTML: inline gate form present",
           'id="inlineGateForm"' in html)
-    check("HTML: inline gate skip link present",
-          'id="inlineGateSkip"' in html)
+    check("HTML: inline gate skip link removed",
+          'id="inlineGateSkip"' not in html)
     check("HTML: deep results container present",
           'id="deepResults"' in html)
     check("HTML: top missing keywords container present",
@@ -1949,6 +1949,8 @@ Created a developer productivity tool with 500 GitHub stars
           'id="quickWins"' in html)
     check("HTML: sticky CTA bar present",
           'id="stickyCta"' in html)
+    check("HTML: build CTA appears after deep results container",
+          html.find('id=\"buildCtaCard\"') > html.find('id=\"deepResults\"'))
     check("HTML: collapsible category header present",
           'data-target="categoryContent"' in html)
     check("HTML: collapsible AI header present",

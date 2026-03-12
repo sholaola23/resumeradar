@@ -66,9 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('resumeradar_subscribed');
     }
 
-    // Per-scan skip state (resets each new scan in submit handler)
-    let gateSkippedThisScan = false;
-
     // ============================================================
     // DOM ELEMENTS
     // ============================================================
@@ -325,7 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // INLINE GATE HANDLERS
     // ============================================================
     const inlineGateForm = document.getElementById('inlineGateForm');
-    const inlineGateSkip = document.getElementById('inlineGateSkip');
 
     if (inlineGateForm) {
         inlineGateForm.addEventListener('submit', async (e) => {
@@ -388,15 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btnLoading) btnLoading.style.display = 'none';
                 if (submitBtn) submitBtn.disabled = false;
             }
-        });
-    }
-
-    if (inlineGateSkip) {
-        inlineGateSkip.addEventListener('click', (e) => {
-            e.preventDefault();
-            gateSkippedThisScan = true;
-            trackOncePerScan('gate_skipped');
-            if (lastScanData) renderDeepResults(lastScanData);
         });
     }
 
@@ -554,8 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Reset per-scan state
-        gateSkippedThisScan = false;
+        // Reset per-scan events
         firedEvents.clear();
 
         // Show loading state
@@ -604,9 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Gate logic — progressive inline gate (default) or legacy modal (?gate=modal)
-            if (isSubscribed() || gateSkippedThisScan) {
-                renderResults(data);
-            } else if (_rrMode.gate === 'modal' && newsletterPopup) {
+            if (!isSubscribed() && _rrMode.gate === 'modal' && newsletterPopup) {
                 showNewsletterPopup(data);
                 trackOncePerScan('gate_shown');
             } else {
@@ -1243,11 +1227,8 @@ Nice to Have
         // 3. Quick Wins
         renderQuickWins(data);
 
-        // 4. Build CV CTA
-        renderBuildCta(data.match_score || 0);
-
         // ===== GATE CHECK =====
-        if (isSubscribed() || gateSkippedThisScan) {
+        if (isSubscribed()) {
             renderDeepResults(data);
         } else {
             showInlineGate();
@@ -1292,6 +1273,9 @@ Nice to Have
 
         // ATS Formatting
         renderATSFormatting(data.ats_formatting);
+
+        // Build CTA (intentionally shown only after deep results unlock)
+        renderBuildCta(data.match_score || 0);
 
         // Scan History
         saveScanToHistory(data);
@@ -1384,6 +1368,8 @@ Nice to Have
 
     function showInlineGate() {
         const gateCard = document.getElementById('inlineGateCard');
+        const deepContainer = document.getElementById('deepResults');
+        if (deepContainer) deepContainer.style.display = 'none';
         if (gateCard) gateCard.style.display = 'block';
     }
 
