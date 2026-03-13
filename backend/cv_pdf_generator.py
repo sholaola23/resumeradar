@@ -17,6 +17,8 @@ Key ATS formatting rules applied:
 - No images, icons, graphics, or decorative elements
 """
 
+from collections import OrderedDict
+
 from fpdf import FPDF
 
 
@@ -70,6 +72,122 @@ def _flatten_skills(skills):
     return []
 
 
+# ============================================================
+# SKILL GROUPING
+# ============================================================
+
+# Category mapping: ordered by display priority.
+# Each set contains lowercase skill terms that belong to that category.
+_SKILL_CATEGORIES = OrderedDict([
+    ("Cloud & Infrastructure", {
+        "aws", "azure", "gcp", "google cloud", "amazon web services", "cloud computing",
+        "ec2", "s3", "lambda", "rds", "vpc", "iam", "cloudformation", "cloudwatch",
+        "terraform", "ansible", "puppet", "chef", "infrastructure as code", "iac",
+        "docker", "kubernetes", "k8s", "containers", "ecs", "eks", "fargate",
+        "openshift", "helm", "container orchestration", "cloudfront", "route 53",
+    }),
+    ("CI/CD & DevOps", {
+        "ci/cd", "cicd", "jenkins", "github actions", "gitlab ci", "circleci",
+        "devops", "devsecops", "continuous integration", "continuous delivery",
+        "continuous deployment", "argocd", "spinnaker", "codepipeline",
+    }),
+    ("Programming", {
+        "python", "javascript", "typescript", "java", "c#", "c++", "go", "golang",
+        "rust", "ruby", "php", "swift", "kotlin", "scala", "r", "matlab",
+        "bash", "shell scripting", "powershell",
+    }),
+    ("Web & Frontend", {
+        "react", "reactjs", "react.js", "angular", "vue", "vuejs", "vue.js",
+        "next.js", "nextjs", "node.js", "nodejs", "express", "html", "css",
+        "tailwind", "bootstrap", "sass", "webpack", "vite",
+    }),
+    ("Backend & APIs", {
+        "rest", "restful", "graphql", "api", "apis", "microservices",
+        "serverless", "flask", "django", "spring boot", "fastapi",
+        "http", "https", "http/https",
+    }),
+    ("Data & Databases", {
+        "sql", "nosql", "postgresql", "mysql", "mongodb", "dynamodb", "redis",
+        "elasticsearch", "cassandra", "oracle", "database", "data modeling",
+        "etl", "data pipeline", "data warehouse", "redshift", "bigquery",
+        "snowflake", "apache spark", "kafka", "airflow",
+    }),
+    ("AI & Data Science", {
+        "machine learning", "deep learning", "artificial intelligence", "ai",
+        "ml", "nlp", "natural language processing", "computer vision",
+        "tensorflow", "pytorch", "scikit-learn", "llm", "large language model",
+        "generative ai", "llms", "prompt optimization", "ai agent orchestration",
+        "ai-assisted workflows",
+    }),
+    ("Security & Compliance", {
+        "security", "cybersecurity", "encryption", "oauth", "sso", "identity",
+        "access management", "zero trust", "penetration testing", "siem",
+        "compliance", "gdpr", "hipaa", "soc2", "soc 2", "data security",
+    }),
+    ("Tools & Platforms", {
+        "git", "github", "gitlab", "bitbucket", "version control",
+        "jira", "confluence", "figma", "notion",
+        "linux", "windows server", "unix", "macos",
+        "monitoring", "observability", "logging", "prometheus", "grafana",
+        "datadog", "splunk", "new relic", "elk stack", "cloudtrail",
+    }),
+    ("Methodologies", {
+        "agile", "scrum", "kanban", "waterfall", "sdlc", "lean", "sprint",
+        "testing", "unit testing", "integration testing", "test automation",
+        "selenium", "cypress", "jest", "pytest", "qa", "quality assurance",
+        "agile ceremonies and delivery", "backlog refinement", "roadmap execution",
+        "product strategy",
+    }),
+    ("Soft Skills", {
+        "communication", "leadership", "teamwork", "collaboration",
+        "problem solving", "problem-solving", "critical thinking", "analytical",
+        "attention to detail", "time management", "project management",
+        "stakeholder management", "mentoring", "coaching", "presentation",
+        "public speaking", "negotiation", "conflict resolution",
+        "decision making", "decision-making", "adaptability", "flexibility",
+        "creativity", "innovation", "strategic thinking", "strategic planning",
+        "customer facing", "cross-functional", "cross functional",
+        "self-motivated", "self-starter", "results-driven", "results driven",
+        "detail-oriented", "detail oriented", "fast-paced", "multitasking",
+        "prioritization", "organizational", "interpersonal",
+        "written communication", "verbal communication",
+        "emotional intelligence", "relationship building",
+        "cross-functional leadership", "user engagement",
+        "data-driven decisions", "scalability", "integration",
+    }),
+])
+
+
+def _group_skills(skills):
+    """Group a flat list of skills into categories for structured rendering.
+
+    Returns an OrderedDict of {category_label: [original_case_skills]}.
+    Skills that don't match any category go into 'Other'.
+    Empty categories are omitted.
+    """
+    grouped = OrderedDict()
+    used = set()
+
+    for cat_label, cat_terms in _SKILL_CATEGORIES.items():
+        matched = []
+        for skill in skills:
+            if skill in used:
+                continue
+            low = skill.lower().strip()
+            if low in cat_terms:
+                matched.append(skill)
+                used.add(skill)
+        if matched:
+            grouped[cat_label] = matched
+
+    # Remaining skills → "Other"
+    remaining = [s for s in skills if s not in used]
+    if remaining:
+        grouped["Other"] = remaining
+
+    return grouped
+
+
 def generate_cv_pdf(cv_data, template="classic"):
     """
     Generate an ATS-friendly resume PDF.
@@ -96,17 +214,47 @@ def generate_cv_pdf(cv_data, template="classic"):
     # form flow returns a flat list of strings
     skills = _flatten_skills(raw_skills)
 
-    if template == "modern":
-        return _render_modern(personal, summary, experience, education, skills, certifications, projects)
-    elif template == "minimal":
-        return _render_minimal(personal, summary, experience, education, skills, certifications, projects)
-    else:
-        return _render_classic(personal, summary, experience, education, skills, certifications, projects)
+    render_fn = {
+        "modern": _render_modern,
+        "minimal": _render_minimal,
+    }.get(template, _render_classic)
+
+    args = (personal, summary, experience, education, skills, certifications, projects)
+
+    # First pass: normal spacing
+    pdf = render_fn(*args, compact=False)
+
+    # If content spills to 3+ pages and last page is mostly empty, retry compact
+    if pdf.pages_count >= 3:
+        last_page_fill = pdf.get_y() / pdf.h
+        if last_page_fill < 0.4:
+            pdf = render_fn(*args, compact=True)
+
+    return pdf.output()
 
 
 # ============================================================
 # SHARED HELPERS
 # ============================================================
+
+def _render_grouped_skills(pdf, skills, line_height=5.5):
+    """Render skills grouped by category with bold labels.
+
+    Each category on its own line: **Category:** skill1, skill2, skill3
+    """
+    grouped = _group_skills(skills)
+    for category, cat_skills in grouped.items():
+        x_start = pdf.get_x()
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.set_text_color(31, 41, 55)
+        label = _safe(f"{category}: ")
+        pdf.write(line_height, label)
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(55, 65, 81)
+        # multi_cell from current x position for the rest of the line
+        skills_text = _safe(", ".join(cat_skills))
+        pdf.multi_cell(0, line_height, skills_text, align='L')
+
 
 def _format_contact_line(personal, separator=" | "):
     """Build a contact info line from personal data."""
@@ -165,11 +313,12 @@ def _render_bullet_point(pdf, text, indent_x=22, text_width=170, line_height=5.5
 # Inspired by Ismail Oyeleke & Mayowa Ojo CV styles.
 # ============================================================
 
-def _render_classic(personal, summary, experience, education, skills, certifications, projects=None):
+def _render_classic(personal, summary, experience, education, skills, certifications, projects=None, compact=False):
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    m = 13 if compact else 15
+    pdf.set_auto_page_break(auto=True, margin=m)
     pdf.add_page()
-    pdf.set_margins(15, 15, 15)
+    pdf.set_margins(m, m, m)
 
     # -- Name (centered, 18pt bold) --
     pdf.set_font('Helvetica', 'B', 18)
@@ -197,9 +346,7 @@ def _render_classic(personal, summary, experience, education, skills, certificat
     # -- Skills (placed BEFORE experience per 2025 ATS best practices) --
     if skills:
         _classic_section_header(pdf, "SKILLS")
-        pdf.set_font('Helvetica', '', 10)
-        pdf.set_text_color(55, 65, 81)
-        pdf.multi_cell(0, 5.5, _safe(", ".join(skills)), align='L')
+        _render_grouped_skills(pdf, skills, line_height=5.5)
         pdf.ln(2)
 
     # -- Professional Experience --
@@ -349,12 +496,14 @@ def _render_classic(personal, summary, experience, education, skills, certificat
                 line += f" ({date})"
             _render_bullet_point(pdf, line, indent_x=22, text_width=173)
 
-    return pdf.output()
+    return pdf
 
 
-def _classic_section_header(pdf, title):
+def _classic_section_header(pdf, title, compact=False):
     """Section header with full-width underline separator."""
-    pdf.set_font('Helvetica', 'B', 13)
+    if pdf.get_y() > 40:
+        pdf.ln(5 if compact else 8)
+    pdf.set_font('Helvetica', 'B', 14)
     pdf.set_text_color(31, 41, 55)
     pdf.cell(0, 7, _safe(title), new_x='LMARGIN', new_y='NEXT')
     # Full-width underline
@@ -371,11 +520,12 @@ def _classic_section_header(pdf, title):
 # Inspired by Billy Soomro CV style with accent elements.
 # ============================================================
 
-def _render_modern(personal, summary, experience, education, skills, certifications, projects=None):
+def _render_modern(personal, summary, experience, education, skills, certifications, projects=None, compact=False):
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=20)
+    m = 13 if compact else 15
+    pdf.set_auto_page_break(auto=True, margin=18 if compact else 20)
     pdf.add_page()
-    pdf.set_margins(15, 15, 15)  # ATS minimum: 15mm (~0.6in)
+    pdf.set_margins(m, m, m)
 
     # -- Name (bold, blue accent, left-aligned) --
     pdf.set_font('Helvetica', 'B', 20)
@@ -418,9 +568,7 @@ def _render_modern(personal, summary, experience, education, skills, certificati
         _modern_section_header(pdf, "SKILLS")
 
         def render_skills():
-            pdf.set_font('Helvetica', '', 10)
-            pdf.set_text_color(55, 65, 81)
-            pdf.multi_cell(0, 5.5, _safe(", ".join(skills)), align='L')
+            _render_grouped_skills(pdf, skills, line_height=5.5)
 
         _modern_accent_block(pdf, render_skills)
 
@@ -533,12 +681,13 @@ def _render_modern(personal, summary, experience, education, skills, certificati
 
             _modern_accent_block(pdf, render_cert)
 
-    return pdf.output()
+    return pdf
 
 
-def _modern_section_header(pdf, title):
+def _modern_section_header(pdf, title, compact=False):
     """Uppercase section header in blue, no underline."""
-    pdf.ln(4)
+    if pdf.get_y() > 40:
+        pdf.ln(5 if compact else 8)
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(37, 99, 235)
     pdf.cell(0, 7, _safe(title), new_x='LMARGIN', new_y='NEXT')
@@ -576,11 +725,12 @@ def _modern_accent_block(pdf, render_fn):
 # Executive / design-adjacent feel.
 # ============================================================
 
-def _render_minimal(personal, summary, experience, education, skills, certifications, projects=None):
+def _render_minimal(personal, summary, experience, education, skills, certifications, projects=None, compact=False):
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=25)
+    m = 18 if compact else 20
+    pdf.set_auto_page_break(auto=True, margin=22 if compact else 25)
     pdf.add_page()
-    pdf.set_margins(20, 20, 20)
+    pdf.set_margins(m, m, m)
 
     # -- Name (regular weight, 18pt — clean executive style) --
     pdf.set_font('Helvetica', '', 18)
@@ -608,9 +758,7 @@ def _render_minimal(personal, summary, experience, education, skills, certificat
     # -- Skills (placed BEFORE experience per 2025 ATS best practices) --
     if skills:
         _minimal_section_header(pdf, "Skills")
-        pdf.set_font('Helvetica', '', 10)
-        pdf.set_text_color(55, 65, 81)
-        pdf.multi_cell(0, 6, _safe(", ".join(skills)), align='L')
+        _render_grouped_skills(pdf, skills, line_height=6)
         pdf.ln(6)
 
     # -- Experience --
@@ -743,13 +891,14 @@ def _render_minimal(personal, summary, experience, education, skills, certificat
             pdf.set_x(20)
             pdf.multi_cell(170, 6, line, align='L')
 
-    return pdf.output()
+    return pdf
 
 
-def _minimal_section_header(pdf, title):
+def _minimal_section_header(pdf, title, compact=False):
     """Simple bold header with generous spacing above, no separator."""
-    pdf.ln(6)
-    pdf.set_font('Helvetica', 'B', 12)
+    if pdf.get_y() > 40:
+        pdf.ln(6 if compact else 10)
+    pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(31, 41, 55)
     pdf.cell(0, 7, _safe(title), new_x='LMARGIN', new_y='NEXT')
     pdf.ln(3)

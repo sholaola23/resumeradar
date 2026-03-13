@@ -21,7 +21,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn, nsdecls
 from docx.oxml import parse_xml, OxmlElement
 
-from backend.cv_pdf_generator import _flatten_skills, _format_contact_line, _format_date_range
+from backend.cv_pdf_generator import _flatten_skills, _format_contact_line, _format_date_range, _group_skills
 
 
 # ============================================================
@@ -158,6 +158,19 @@ def _set_run_font(run, name='Calibri', size=None, bold=False, color=None):
         run.font.color.rgb = color
 
 
+def _render_grouped_skills_docx(doc, skills):
+    """Render skills grouped by category: bold label + regular skill list per line."""
+    grouped = _group_skills(skills)
+    for cat_label, cat_skills in grouped.items():
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(1)
+        p.paragraph_format.space_before = Pt(1)
+        label_run = p.add_run(f"{cat_label}: ")
+        _set_run_font(label_run, size=10, bold=True, color=COLOR_BODY)
+        skills_run = p.add_run(_docx_safe(", ".join(cat_skills)))
+        _set_run_font(skills_run, size=10, color=COLOR_BODY)
+
+
 # ============================================================
 # TEMPLATE 1: CLASSIC
 # Traditional single-column, underline separators, standard corporate.
@@ -195,10 +208,7 @@ def _render_classic(personal, summary, experience, education, skills, certificat
     # -- Skills --
     if skills:
         _classic_section_header(doc, "SKILLS")
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(4)
-        run = p.add_run(_docx_safe(", ".join(skills)))
-        _set_run_font(run, size=10, color=COLOR_BODY)
+        _render_grouped_skills_docx(doc, skills)
 
     # -- Professional Experience --
     if experience:
@@ -335,10 +345,10 @@ def _render_classic(personal, summary, experience, education, skills, certificat
 def _classic_section_header(doc, title):
     """Section header with full-width bottom border (underline separator)."""
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(10)
+    p.paragraph_format.space_before = Pt(14)
     p.paragraph_format.space_after = Pt(4)
     run = p.add_run(_docx_safe(title))
-    _set_run_font(run, size=13, bold=True, color=COLOR_DARK)
+    _set_run_font(run, size=14, bold=True, color=COLOR_DARK)
     _add_paragraph_border_bottom(p, color="1f2937", width="4")
 
 
@@ -397,7 +407,11 @@ def _render_modern(personal, summary, experience, education, skills, certificati
     # -- Skills --
     if skills:
         _modern_section_header(doc, "SKILLS")
-        _modern_accent_block(doc, [(_docx_safe(", ".join(skills)), 10, False, COLOR_BODY)])
+        # Build grouped skill lines for modern accent block
+        _accent_lines = []
+        for _cat, _cat_skills in _group_skills(skills).items():
+            _accent_lines.append((f"{_cat}: " + _docx_safe(", ".join(_cat_skills)), 10, False, COLOR_BODY))
+        _modern_accent_block(doc, _accent_lines)
 
     # -- Experience --
     if experience:
@@ -492,7 +506,7 @@ def _render_modern(personal, summary, experience, education, skills, certificati
 def _modern_section_header(doc, title):
     """Uppercase section header in blue."""
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(10)
+    p.paragraph_format.space_before = Pt(14)
     p.paragraph_format.space_after = Pt(4)
     run = p.add_run(_docx_safe(title))
     _set_run_font(run, size=13, bold=True, color=COLOR_BLUE)
@@ -597,10 +611,7 @@ def _render_minimal(personal, summary, experience, education, skills, certificat
     # -- Skills --
     if skills:
         _minimal_section_header(doc, "Skills")
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(10)
-        run = p.add_run(_docx_safe(", ".join(skills)))
-        _set_run_font(run, size=10, color=COLOR_BODY)
+        _render_grouped_skills_docx(doc, skills)
 
     # -- Experience --
     if experience:
@@ -734,7 +745,7 @@ def _render_minimal(personal, summary, experience, education, skills, certificat
 def _minimal_section_header(doc, title):
     """Simple bold header with generous spacing, no separator."""
     p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(14)
+    p.paragraph_format.space_before = Pt(18)
     p.paragraph_format.space_after = Pt(6)
     run = p.add_run(_docx_safe(title))
-    _set_run_font(run, size=12, bold=True, color=COLOR_DARK)
+    _set_run_font(run, size=13, bold=True, color=COLOR_DARK)
