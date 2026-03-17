@@ -13,6 +13,19 @@ from backend import ai_budget
 from backend import ai_metrics
 
 
+def _safe_truncate(text, max_chars):
+    """Truncate text at a sentence boundary to avoid mid-sentence cuts."""
+    if len(text) <= max_chars:
+        return text
+    # Look for last sentence-ending punctuation before the limit
+    truncated = text[:max_chars]
+    for end in ('.', '\n', ';', ')'):
+        pos = truncated.rfind(end)
+        if pos > max_chars * 0.7:  # don't cut too aggressively
+            return truncated[:pos + 1]
+    return truncated
+
+
 def get_ai_suggestions(resume_text, job_description, keyword_results):
     """
     Use Claude API to generate intelligent, personalized resume suggestions.
@@ -48,10 +61,10 @@ Today's date is {today}. Any dates from 2025 or earlier are in the PAST, not the
 Analyze this resume against the job description and provide specific, actionable suggestions.
 
 RESUME:
-{resume_text[:3000]}
+{_safe_truncate(resume_text, 6000)}
 
 JOB DESCRIPTION:
-{job_description[:2000]}
+{_safe_truncate(job_description, 3000)}
 
 KEYWORD ANALYSIS RESULTS:
 - Overall Match Score: {match_score}%
@@ -243,10 +256,10 @@ Using the resume and job description below, write a compelling 3-4 paragraph cov
 5. Uses a professional but warm tone
 
 RESUME:
-{resume_text[:3000]}
+{_safe_truncate(resume_text, 6000)}
 
 JOB DESCRIPTION:
-{job_description[:2000]}
+{_safe_truncate(job_description, 3000)}
 
 Today's date: {today}
 
@@ -406,10 +419,10 @@ def generate_resume_summary(resume_text, job_description):
         prompt = f"""You are a resume writing expert. Write a professional summary paragraph for the top of a resume.
 
 RESUME CONTENT:
-{resume_text[:2000]}
+{_safe_truncate(resume_text, 4000)}
 
 TARGET JOB:
-{job_description[:1000]}
+{_safe_truncate(job_description, 2000)}
 
 Rules:
 - Write 3-4 sentences (50-80 words)
