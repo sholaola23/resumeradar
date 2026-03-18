@@ -110,9 +110,10 @@ EDUCATION_KEYWORDS = {
 # Education terms that are equivalent for matching purposes.
 # If a JD says "bachelor" and a resume says "bsc", that's a match.
 EDUCATION_EQUIVALENCES = [
-    {"bachelor", "bsc", "b.s.", "b.a.", "ba", "bs"},
-    {"master", "msc", "m.s.", "m.a.", "ma", "ms"},
-    {"phd", "doctorate", "ph.d."},
+    {"bachelor", "bsc", "b.s.", "b.a.", "ba", "bs", "degree"},
+    {"master", "msc", "m.s.", "m.a.", "ma", "ms", "degree"},
+    {"phd", "doctorate", "ph.d.", "degree"},
+    {"mba", "degree"},
 ]
 
 # Technical keywords that are also common English words.
