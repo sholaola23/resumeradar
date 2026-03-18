@@ -297,8 +297,11 @@ def calculate_match(resume_keywords, job_keywords):
         job_set = job_keywords.get(category, set())
         resume_set = resume_keywords.get(category, set())
 
-        # Education: expand both sets with equivalences so "bsc" matches "bachelor"
+        # Education: expand both sets with equivalences so "bsc" matches "bachelor".
+        # Keep originals for display; use expanded sets for scoring.
         if category == "education":
+            original_job_edu = set(job_set)
+            original_resume_edu = set(resume_set)
             job_set = _expand_education(job_set)
             resume_set = _expand_education(resume_set)
 
@@ -357,9 +360,30 @@ def calculate_match(resume_keywords, job_keywords):
             "weight": weights[category],
         }
 
-        results["matched_keywords"][category] = sorted(matched)
-        results["missing_keywords"][category] = sorted(missing)
-        results["extra_keywords"][category] = sorted(extra)
+        # For education, display only the original terms and fix score counts
+        if category == "education":
+            edu_matched_display = sorted(
+                original_job_edu - (original_job_edu - _expand_education(original_resume_edu)))
+            edu_missing_display = sorted(
+                original_job_edu - _expand_education(original_resume_edu))
+            results["matched_keywords"][category] = edu_matched_display
+            results["missing_keywords"][category] = edu_missing_display
+            results["extra_keywords"][category] = sorted(
+                original_resume_edu - _expand_education(original_job_edu))
+            # Fix score to use original JD term count, not expanded
+            orig_total = len(original_job_edu)
+            orig_matched = len(edu_matched_display)
+            category_score = (orig_matched / orig_total * 100) if orig_total else 100
+            results["category_scores"][category] = {
+                "score": round(category_score, 1),
+                "matched": orig_matched,
+                "total": orig_total,
+                "weight": weights[category],
+            }
+        else:
+            results["matched_keywords"][category] = sorted(matched)
+            results["missing_keywords"][category] = sorted(missing)
+            results["extra_keywords"][category] = sorted(extra)
 
         total_job_keywords += len(job_set)
         total_matched += len(matched)
