@@ -3,12 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ResumeRadar — Beat the Scan. Land the Interview.</title>
-    <meta name="description" content="Free ATS resume scanner. Upload your resume, paste a job description, and get instant feedback on keyword matches, gaps, and how to optimize for Applicant Tracking Systems.">
+    {% if role %}
+    <title>ATS Resume Checker for {{ role.title }}s — Free Scan | ResumeRadar</title>
+    <meta name="description" content="{{ role.desc }}">
+    {% else %}
+    <title>Free ATS Resume Checker — Scan & Score Your Resume | ResumeRadar</title>
+    <meta name="description" content="Free ATS resume scanner — upload your resume, paste a job description, and instantly see your keyword match score, missing skills, and AI-powered fixes. No signup required.">
+    {% endif %}
 
     <!-- Open Graph (for LinkedIn/social sharing) -->
+    {% if role %}
+    <meta property="og:title" content="ATS Resume Checker for {{ role.title }}s | ResumeRadar">
+    <meta property="og:description" content="{{ role.desc }}">
+    {% else %}
     <meta property="og:title" content="ResumeRadar — Beat the Scan. Land the Interview.">
     <meta property="og:description" content="Free tool: upload your resume + paste a job description = instant ATS match score, missing keywords, and actionable fixes. Stop applying blind.">
+    {% endif %}
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_US">
     <meta property="og:url" content="https://resumeradar.sholastechnotes.com">
@@ -26,7 +36,11 @@
     <meta name="google-site-verification" content="KqX11IIxOs2-SgSLaSNmMACVS0ROpGk8E7o9BCt1M6g">
 
     <!-- Canonical URL -->
+    {% if role %}
+    <link rel="canonical" href="https://resumeradar.sholastechnotes.com/ats-resume-checker/{{ role_slug }}">
+    {% else %}
     <link rel="canonical" href="https://resumeradar.sholastechnotes.com/">
+    {% endif %}
 
     <!-- Favicon -->
     <link rel="icon" href="/static/favicon.ico" sizes="any">
@@ -67,6 +81,87 @@
         }
     }
     </script>
+
+    <!-- FAQ Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is an ATS and why does it matter?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "An Applicant Tracking System (ATS) is software that employers use to filter resumes before a human ever sees them. Over 90% of large companies use one. If your resume doesn't contain the right keywords and formatting, it gets rejected automatically — even if you're qualified."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How does ResumeRadar work?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Upload your resume (PDF or DOCX) and paste the job description. ResumeRadar extracts keywords from both, calculates your match score, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to improve your chances — all in about 30 seconds."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is ResumeRadar free?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. The ATS resume scan is completely free with no signup required. You get your match score, missing keywords, formatting check, and AI suggestions at no cost."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is my resume stored or shared?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "No. Your resume is analysed in real-time and never stored on our servers. Your data stays yours."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What file formats are supported?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "ResumeRadar supports PDF and DOCX files. For best ATS compatibility, we recommend submitting your resume as a PDF."
+                }
+            }
+        ]
+    }
+    </script>
+
+    <!-- HowTo Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "How to Check if Your Resume is ATS-Friendly",
+        "description": "Use ResumeRadar to scan your resume against a job description and get your ATS match score in 30 seconds.",
+        "step": [
+            {
+                "@type": "HowToStep",
+                "name": "Upload your resume",
+                "text": "Upload your resume as a PDF or DOCX file."
+            },
+            {
+                "@type": "HowToStep",
+                "name": "Paste the job description",
+                "text": "Copy and paste the job description from the listing you want to apply to."
+            },
+            {
+                "@type": "HowToStep",
+                "name": "Get your ATS score",
+                "text": "Click Scan and get your keyword match score, missing keywords, formatting issues, and AI-powered improvement suggestions."
+            }
+        ],
+        "tool": {
+            "@type": "HowToTool",
+            "name": "ResumeRadar ATS Scanner"
+        }
+    }
+    </script>
 </head>
 <body>
     <!-- ============ HEADER ============ -->
@@ -89,8 +184,19 @@
     <!-- ============ HERO ============ -->
     <section class="hero">
         <div class="container">
+            {% if role %}
+            <h1>{{ role.h1 }}</h1>
+            <p class="hero-sub">Most {{ role.title }} resumes never reach a recruiter — ATS software rejects them first. Upload yours with a job description and see which keywords you're missing in 30 seconds.</p>
+            <div class="role-keywords">
+                <span class="role-keywords-label">Top keywords ATS looks for:</span>
+                {% for kw in role.keywords[:10] %}
+                <span class="role-keyword-tag">{{ kw }}</span>
+                {% endfor %}
+            </div>
+            {% else %}
             <h1>Your resume is getting <span class="highlight">filtered out</span>. Find out why.</h1>
             <p class="hero-sub">Most resumes never reach a human — ATS software rejects them first. Upload yours with a job description and get your match score, missing keywords, and AI-powered fixes in 30 seconds.</p>
+            {% endif %}
         </div>
     </section>
 
@@ -573,6 +679,39 @@ Include the job title, requirements, responsibilities, qualifications — everyt
             </div>
         </div>
     </div>
+
+    <!-- ============ FAQ ============ -->
+    <section class="faq-section" id="faq">
+        <div class="container">
+            <h2 class="faq-title">Frequently Asked Questions</h2>
+            <div class="faq-list">
+                <details class="faq-item">
+                    <summary>What is an ATS and why does it matter?</summary>
+                    <p>An Applicant Tracking System (ATS) is software that employers use to filter resumes before a human ever sees them. Over 90% of large companies use one. If your resume doesn't contain the right keywords and formatting, it gets rejected automatically — even if you're perfectly qualified for the role.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>How does ResumeRadar work?</summary>
+                    <p>Upload your resume (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, calculates your match score, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to improve your chances — all in about 30 seconds.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Is ResumeRadar free?</summary>
+                    <p>Yes. The ATS resume scan is completely free with no signup required. You get your match score, missing keywords, formatting check, and AI suggestions at no cost.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Is my resume stored or shared?</summary>
+                    <p>No. Your resume is analysed in real-time and never stored on our servers. Your data stays yours.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>What file formats are supported?</summary>
+                    <p>ResumeRadar supports PDF and DOCX files. For best ATS compatibility, we recommend submitting your resume as a PDF.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>How do I improve my ATS score?</summary>
+                    <p>After scanning, look at the "Keywords Not Found" section — these are terms the job description mentions that aren't on your resume. Add the relevant ones to your skills section or experience bullets. Also check the AI suggestions for specific rewording tips.</p>
+                </details>
+            </div>
+        </div>
+    </section>
 
     <!-- ============ FOOTER ============ -->
     <footer class="footer">

@@ -224,7 +224,119 @@ def index():
         'high': 'og-score-high.png',
     }
     og_image = og_images.get(score_tier, 'og-image.png')
-    return render_template('index.html', og_image=og_image)
+    return render_template('index.html', og_image=og_image, role=None, role_slug=None)
+
+
+# ── Programmatic SEO: role-specific landing pages ──────────────────
+ROLE_PAGES = {
+    "software-engineer": {
+        "title": "Software Engineer",
+        "h1": "Is your software engineering resume getting past ATS filters?",
+        "desc": "Free ATS resume checker for Software Engineers. Scan your resume against any software engineering job description and see your keyword match score instantly.",
+        "keywords": ["Python", "Java", "JavaScript", "TypeScript", "React", "Node.js", "AWS", "Docker", "Kubernetes", "CI/CD", "Git", "SQL", "REST APIs", "Agile", "microservices"],
+    },
+    "data-analyst": {
+        "title": "Data Analyst",
+        "h1": "Is your data analyst resume making it past ATS screening?",
+        "desc": "Free ATS resume checker for Data Analysts. Upload your resume and a job description to instantly see missing keywords like SQL, Tableau, and Python.",
+        "keywords": ["SQL", "Python", "Tableau", "Power BI", "Excel", "data visualization", "ETL", "statistics", "A/B testing", "data modeling", "R", "Looker", "BigQuery", "stakeholder management"],
+    },
+    "project-manager": {
+        "title": "Project Manager",
+        "h1": "Is your project manager resume optimized for ATS systems?",
+        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles — Agile, Scrum, stakeholder management, and more.",
+        "keywords": ["Agile", "Scrum", "PMP", "PRINCE2", "stakeholder management", "Jira", "Confluence", "risk management", "budgeting", "Kanban", "sprint planning", "cross-functional", "roadmap"],
+    },
+    "product-manager": {
+        "title": "Product Manager",
+        "h1": "Does your product manager resume pass ATS keyword checks?",
+        "desc": "Free ATS resume scanner for Product Managers. Check if your resume includes the keywords recruiters and ATS systems look for in PM roles.",
+        "keywords": ["product strategy", "roadmap", "user research", "A/B testing", "Agile", "Scrum", "Jira", "data-driven", "stakeholder management", "OKRs", "KPIs", "market research", "PRD"],
+    },
+    "cloud-engineer": {
+        "title": "Cloud Engineer",
+        "h1": "Is your cloud engineer resume getting filtered out by ATS?",
+        "desc": "Free ATS resume checker for Cloud Engineers. Scan your resume for critical keywords like AWS, Azure, Terraform, and Kubernetes that ATS systems look for.",
+        "keywords": ["AWS", "Azure", "GCP", "Terraform", "Kubernetes", "Docker", "CI/CD", "CloudFormation", "Linux", "networking", "IAM", "serverless", "Lambda", "EC2", "S3"],
+    },
+    "devops-engineer": {
+        "title": "DevOps Engineer",
+        "h1": "Is your DevOps resume making it past applicant tracking systems?",
+        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords — CI/CD, Kubernetes, Terraform, Docker, and more.",
+        "keywords": ["CI/CD", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions", "AWS", "Linux", "monitoring", "Prometheus", "Grafana", "infrastructure as code", "Python", "Bash"],
+    },
+    "data-scientist": {
+        "title": "Data Scientist",
+        "h1": "Is your data science resume optimized for ATS filters?",
+        "desc": "Free ATS resume checker for Data Scientists. Upload your resume and see if it includes key terms like machine learning, Python, TensorFlow, and NLP.",
+        "keywords": ["Python", "machine learning", "deep learning", "TensorFlow", "PyTorch", "NLP", "SQL", "statistics", "scikit-learn", "data visualization", "A/B testing", "R", "Spark", "pandas"],
+    },
+    "ux-designer": {
+        "title": "UX Designer",
+        "h1": "Is your UX design resume getting past ATS screening?",
+        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords — user research, Figma, wireframing, prototyping, and more.",
+        "keywords": ["user research", "Figma", "wireframing", "prototyping", "usability testing", "design thinking", "information architecture", "user flows", "accessibility", "Sketch", "Adobe XD", "responsive design"],
+    },
+    "cybersecurity-analyst": {
+        "title": "Cybersecurity Analyst",
+        "h1": "Is your cybersecurity resume making it through ATS systems?",
+        "desc": "Free ATS resume checker for Cybersecurity professionals. Scan for critical keywords like SIEM, penetration testing, incident response, and compliance.",
+        "keywords": ["SIEM", "penetration testing", "incident response", "vulnerability assessment", "firewall", "IDS/IPS", "SOC", "compliance", "NIST", "ISO 27001", "risk assessment", "threat intelligence", "encryption"],
+    },
+    "business-analyst": {
+        "title": "Business Analyst",
+        "h1": "Is your business analyst resume ATS-optimized?",
+        "desc": "Free ATS resume checker for Business Analysts. See if your resume includes requirements gathering, stakeholder management, SQL, and other key BA terms.",
+        "keywords": ["requirements gathering", "stakeholder management", "SQL", "data analysis", "process mapping", "Jira", "Confluence", "user stories", "UAT", "business intelligence", "Power BI", "Agile"],
+    },
+    "solutions-architect": {
+        "title": "Solutions Architect",
+        "h1": "Is your solutions architect resume passing ATS filters?",
+        "desc": "Free ATS resume checker for Solutions Architects. Check for critical keywords like AWS, Azure, microservices, and system design.",
+        "keywords": ["AWS", "Azure", "GCP", "microservices", "system design", "cloud architecture", "Terraform", "Kubernetes", "API design", "security", "networking", "high availability", "scalability", "serverless"],
+    },
+    "frontend-developer": {
+        "title": "Frontend Developer",
+        "h1": "Is your frontend developer resume getting past ATS?",
+        "desc": "Free ATS resume checker for Frontend Developers. See if your resume includes React, TypeScript, CSS, and other key frontend keywords.",
+        "keywords": ["React", "TypeScript", "JavaScript", "HTML", "CSS", "Next.js", "Vue", "Angular", "Tailwind", "responsive design", "accessibility", "Git", "REST APIs", "testing", "webpack"],
+    },
+    "backend-developer": {
+        "title": "Backend Developer",
+        "h1": "Is your backend developer resume optimized for ATS?",
+        "desc": "Free ATS resume checker for Backend Developers. Scan for keywords like Python, Java, Node.js, microservices, and SQL.",
+        "keywords": ["Python", "Java", "Node.js", "Go", "SQL", "PostgreSQL", "MongoDB", "REST APIs", "microservices", "Docker", "AWS", "Redis", "message queues", "CI/CD", "testing"],
+    },
+    "scrum-master": {
+        "title": "Scrum Master",
+        "h1": "Is your Scrum Master resume making it past ATS?",
+        "desc": "Free ATS resume checker for Scrum Masters. Check for Agile, sprint planning, retrospectives, and other key Scrum terms.",
+        "keywords": ["Scrum", "Agile", "sprint planning", "retrospectives", "Jira", "Confluence", "Kanban", "SAFe", "coaching", "facilitation", "user stories", "velocity", "burndown", "cross-functional teams"],
+    },
+    "machine-learning-engineer": {
+        "title": "Machine Learning Engineer",
+        "h1": "Is your ML engineer resume getting filtered by ATS?",
+        "desc": "Free ATS resume checker for Machine Learning Engineers. Scan for PyTorch, TensorFlow, MLOps, and other critical ML keywords.",
+        "keywords": ["Python", "PyTorch", "TensorFlow", "MLOps", "deep learning", "NLP", "computer vision", "Kubernetes", "Docker", "AWS SageMaker", "model deployment", "feature engineering", "scikit-learn", "LLM"],
+    },
+}
+
+
+@app.route('/ats-resume-checker/<role_slug>')
+@limiter.exempt
+def role_landing(role_slug):
+    """Serve role-specific landing page for programmatic SEO."""
+    role = ROLE_PAGES.get(role_slug)
+    if not role:
+        return render_template('404.html'), 404
+    score_tier = request.args.get('score_tier', '')
+    og_images = {
+        'low': 'og-score-low.png',
+        'mid': 'og-score-mid.png',
+        'high': 'og-score-high.png',
+    }
+    og_image = og_images.get(score_tier, 'og-image.png')
+    return render_template('index.html', og_image=og_image, role=role, role_slug=role_slug)
 
 
 @app.route('/favicon.ico')
@@ -259,6 +371,9 @@ def sitemap_xml():
         {'loc': f'{base}/', 'priority': '1.0', 'changefreq': 'weekly'},
         {'loc': f'{base}/build', 'priority': '0.8', 'changefreq': 'monthly'},
     ]
+    # Add programmatic SEO role pages
+    for slug in ROLE_PAGES:
+        pages.append({'loc': f'{base}/ats-resume-checker/{slug}', 'priority': '0.7', 'changefreq': 'monthly'})
     xml_entries = '\n'.join(
         f'  <url>\n'
         f'    <loc>{p["loc"]}</loc>\n'
