@@ -5,7 +5,7 @@ Extracts keywords from job descriptions and matches them against resumes.
 """
 
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 
 # ============================================================
 # KEYWORD CATEGORIES
@@ -107,6 +107,56 @@ EDUCATION_KEYWORDS = {
     "bsc", "msc", "b.s.", "m.s.", "b.a.", "m.a.",
 }
 
+# Education terms that are equivalent for matching purposes.
+# If a JD says "bachelor" and a resume says "bsc", that's a match.
+EDUCATION_EQUIVALENCES = [
+    {"bachelor", "bsc", "b.s.", "b.a.", "ba", "bs"},
+    {"master", "msc", "m.s.", "m.a.", "ma", "ms"},
+    {"phd", "doctorate", "ph.d."},
+]
+
+# Technical keywords that are also common English words.
+# When extracting from JDs (strict mode), these need case-sensitive
+# or compound-context matching to avoid false positives like
+# "scalable" → "scala" or "rest of the team" → "rest".
+_AMBIGUOUS_TECH = {
+    "react":    re.compile(r'\bReact(?:\.?js)?\b'),
+    "scala":    re.compile(r'\bScala\b'),
+    "express":  re.compile(r'\bExpress(?:\.?js)?\b'),
+    "rest":     re.compile(r'\bREST(?:ful)?\b|\brest\s*api\b|\brest\s*endpoint'),
+    "identity": re.compile(r'\bidentity\s+(?:management|provider|access|federation|platform|governance|service|verification)\b', re.IGNORECASE),
+    "go":       re.compile(r'\bGo(?:lang)?\b(?!\s+to\b|\s+ahead\b|\s+through\b|\s+over\b|\s+back\b|\s+on\b|\s+for\b|\s+with\b|\s+beyond\b)|\bgolang\b', re.IGNORECASE),
+    "r":        re.compile(r'(?:^|[\s,;(/])\bR\b(?=[\s,;)/]|$)(?!.*&\s*D)'),
+    "rust":     re.compile(r'\bRust\b'),
+    "ruby":     re.compile(r'\bRuby\b'),
+    "swift":    re.compile(r'\bSwift\b'),
+    "chef":     re.compile(r'\bChef\b'),
+    "puppet":   re.compile(r'\bPuppet\b'),
+    "helm":     re.compile(r'\bHelm\b'),
+    "flask":    re.compile(r'\bFlask\b'),
+    "lean":     re.compile(r'\blean\s+(?:methodology|agile|six|management|startup|approach)\b|\bLean\b', re.IGNORECASE),
+    "sprint":   re.compile(r'\bsprint(?:s)?\s+(?:planning|review|retro|goal|backlog|cycle|velocity)\b|\bsprints\b', re.IGNORECASE),
+}
+
+
+def _strip_jd_boilerplate(text):
+    """Remove EEO/legal boilerplate sections from job description text."""
+    markers = [
+        r'equal\s+(?:opportunity|employment)',
+        r'we\s+are\s+(?:an?\s+)?(?:equal|committed\s+to\s+(?:diversity|equal))',
+        r'(?:does\s+not|will\s+not)\s+discriminate',
+        r'affirmative\s+action',
+        r'reasonable\s+accommodation',
+        r'applicants\s+are\s+considered\s+without\s+regard',
+    ]
+    for marker in markers:
+        match = re.search(marker, text, re.IGNORECASE)
+        if match:
+            text = text[:match.start()]
+            break
+    return text
+
+
 ACTION_VERBS = {
     "led", "managed", "developed", "designed", "implemented", "built",
     "created", "launched", "delivered", "improved", "optimized", "reduced",
@@ -117,11 +167,24 @@ ACTION_VERBS = {
 }
 
 
-def extract_keywords_from_text(text):
+def extract_keywords_from_text(text, *, strict=False):
     """
     Extract all identifiable keywords from a piece of text.
     Returns a dict categorized by type.
+
+    Args:
+        strict: When True (use for JD text), applies stricter matching:
+                - Strips EEO/legal boilerplate before extraction
+                - Disables stem matching for technical skills
+                - Uses case-sensitive/context patterns for ambiguous keywords
+                This prevents false positives like "scalable" → "scala" or
+                "rest of the team" → "rest".
     """
+    original_text = text  # preserve case for ambiguous keyword checks
+    if strict:
+        text = _strip_jd_boilerplate(text)
+        original_text = text
+
     text_lower = text.lower()
 
     found = {
@@ -132,10 +195,15 @@ def extract_keywords_from_text(text):
         "action_verbs": set(),
     }
 
-    # Check each category
+    # Technical skills: in strict mode, use case-sensitive patterns for
+    # ambiguous keywords and disable stemming to avoid false positives.
     for skill in TECHNICAL_SKILLS:
-        if _keyword_in_text(skill, text_lower):
-            found["technical_skills"].add(skill)
+        if strict and skill in _AMBIGUOUS_TECH:
+            if _AMBIGUOUS_TECH[skill].search(original_text):
+                found["technical_skills"].add(skill)
+        else:
+            if _keyword_in_text(skill, text_lower, use_stemming=not strict):
+                found["technical_skills"].add(skill)
 
     for skill in SOFT_SKILLS:
         if _keyword_in_text(skill, text_lower):
@@ -156,9 +224,15 @@ def extract_keywords_from_text(text):
     return found
 
 
-def _keyword_in_text(keyword, text):
+def _keyword_in_text(keyword, text, *, use_stemming=True):
     """Check if a keyword exists in text using word boundary matching.
-    Also checks common variations (e.g., collaborate/collaboration/collaborated)."""
+    Also checks common variations (e.g., collaborate/collaboration/collaborated).
+
+    Args:
+        use_stemming: When False, skip stem variation matching.  Disabled for
+                      technical skills where stems cause false positives
+                      (e.g., "scala" stem "scal" matching "scalable").
+    """
     # Escape special regex characters in the keyword
     escaped = re.escape(keyword)
     # Use word boundaries for accurate matching
@@ -166,15 +240,27 @@ def _keyword_in_text(keyword, text):
     if re.search(pattern, text, re.IGNORECASE):
         return True
 
-    # Check stem variations for common word forms
-    # e.g., "collaboration" should match "collaborate", "collaborated", "collaborating"
-    stem = keyword.rstrip('esiond').rstrip('at').rstrip('ing')
-    if len(stem) >= 4:
-        stem_pattern = r'\b' + re.escape(stem) + r'\w*\b'
-        if re.search(stem_pattern, text, re.IGNORECASE):
-            return True
+    if use_stemming:
+        # Check stem variations for common word forms
+        # e.g., "collaboration" should match "collaborate", "collaborated", "collaborating"
+        stem = keyword.rstrip('esiond').rstrip('at').rstrip('ing')
+        if len(stem) >= 4:
+            stem_pattern = r'\b' + re.escape(stem) + r'\w*\b'
+            if re.search(stem_pattern, text, re.IGNORECASE):
+                return True
 
     return False
+
+
+def _expand_education(keywords):
+    """Expand education keywords with equivalences.
+    E.g., if 'bachelor' is in the set, also add 'bsc', 'b.s.', 'b.a.' so
+    that a resume with 'bsc' matches a JD requiring 'bachelor'."""
+    expanded = set(keywords)
+    for group in EDUCATION_EQUIVALENCES:
+        if expanded & group:  # any overlap
+            expanded |= group
+    return expanded
 
 
 def calculate_match(resume_keywords, job_keywords):
@@ -210,6 +296,11 @@ def calculate_match(resume_keywords, job_keywords):
     for category in ["technical_skills", "soft_skills", "certifications", "education", "action_verbs"]:
         job_set = job_keywords.get(category, set())
         resume_set = resume_keywords.get(category, set())
+
+        # Education: expand both sets with equivalences so "bsc" matches "bachelor"
+        if category == "education":
+            job_set = _expand_education(job_set)
+            resume_set = _expand_education(resume_set)
 
         # Action verbs are special: we check if the RESUME uses strong verbs,
         # not whether the JD mentions them (JDs don't use action verbs).

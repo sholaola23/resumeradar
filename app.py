@@ -340,7 +340,7 @@ def scan_resume():
 
         # 4. Extract keywords from both resume and job description
         resume_keywords = extract_keywords_from_text(extracted_resume_text)
-        job_keywords = extract_keywords_from_text(job_description)
+        job_keywords = extract_keywords_from_text(job_description, strict=True)
 
         # 5. Calculate match
         match_results = calculate_match(resume_keywords, job_keywords)
