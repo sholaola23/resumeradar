@@ -56,17 +56,17 @@ def _today_key():
 def _get_cost_limit():
     """Daily cost limit in USD. Default $5.00."""
     try:
-        return float(os.getenv("AI_DAILY_COST_LIMIT_USD", "5.00"))
+        return float(os.getenv("AI_DAILY_COST_LIMIT_USD", "50.00"))
     except (ValueError, TypeError):
-        return 5.00
+        return 50.00
 
 
 def _get_call_limit():
     """Daily call count limit. Default 500."""
     try:
-        return int(os.getenv("AI_DAILY_CALL_LIMIT", "500"))
+        return int(os.getenv("AI_DAILY_CALL_LIMIT", "5000"))
     except (ValueError, TypeError):
-        return 500
+        return 5000
 
 
 def _estimate_cost(input_tokens, output_tokens):

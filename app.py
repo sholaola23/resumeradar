@@ -393,7 +393,7 @@ def sitemap_xml():
 
 
 @app.route('/api/scan', methods=['POST'])
-@limiter.limit("60 per hour")
+@limiter.limit("120 per hour")
 def scan_resume():
     """
     Main API endpoint: analyze resume against job description.
@@ -809,7 +809,7 @@ def email_report():
 
 
 @app.route('/api/subscribe', methods=['POST'])
-@limiter.limit("30 per hour")
+@limiter.limit("60 per hour")
 def subscribe_newsletter():
     """
     Subscribe a user to the Beehiiv newsletter.
