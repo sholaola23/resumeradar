@@ -557,10 +557,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('resume_text', resumeText);
             }
 
-            const response = await fetch('/api/scan', {
-                method: 'POST',
-                body: formData,
-            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+            let response;
+            try {
+                response = await fetch('/api/scan', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal,
+                });
+            } catch (err) {
+                clearTimeout(timeoutId);
+                if (err.name === 'AbortError') {
+                    showError('The scan is taking too long. Please try again in a moment.');
+                    setLoading(false);
+                    return;
+                }
+                throw err;
+            }
+            clearTimeout(timeoutId);
 
             const data = await response.json();
 
@@ -2101,6 +2117,8 @@ Nice to Have
         { text: 'Matching against job keywords...', delay: 2000 },
         { text: 'Generating AI recommendations...', delay: 5000 },
         { text: 'Almost there...', delay: 9000 },
+        { text: 'Taking a bit longer than usual — hang tight...', delay: 15000 },
+        { text: 'Still working on it — almost done...', delay: 22000 },
     ];
     let loadingTimers = [];
 
