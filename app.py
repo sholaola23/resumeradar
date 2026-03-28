@@ -851,11 +851,15 @@ def subscribe_newsletter():
                     'reactivate_existing': True,
                     'send_welcome_email': True,
                     'utm_source': utm_source,
+                    'automation_ids': ['b229d598-5e0b-45fc-a034-7b11a12f9588'],
                 }
+                subscription_data['custom_fields'] = [
+                    {'name': 'source_product', 'value': 'resumeradar'}
+                ]
                 if first_name:
-                    subscription_data['custom_fields'] = [
+                    subscription_data['custom_fields'].append(
                         {'name': 'first_name', 'value': first_name}
-                    ]
+                    )
                 resp = http_requests.post(
                     f'https://api.beehiiv.com/v2/publications/{pub_id}/subscriptions',
                     headers={
