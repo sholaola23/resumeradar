@@ -17,8 +17,10 @@ from datetime import datetime, timezone
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score
@@ -59,36 +61,15 @@ app = Flask(
 app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
-# Rate limiting — protect API credits and prevent abuse
-# Use X-Forwarded-For header behind Render's proxy to get real client IP
-def get_real_ip():
-    """Get the real client IP behind Render's single reverse proxy.
-
-    Render's proxy sets X-Forwarded-For to: <client_ip>[, <cdn_ip>, ...].
-    With one trusted proxy (Render), the second-to-last entry is the real
-    client IP. If there's only one entry, that IS the client IP (set by
-    Render). We never trust the first entry in a multi-hop chain because
-    a client can prepend spoofed values.
-
-    Falls back to remote_addr if X-Forwarded-For is missing or invalid.
-    """
-    forwarded = request.headers.get('X-Forwarded-For', '')
-    if forwarded:
-        parts = [p.strip() for p in forwarded.split(',') if p.strip()]
-        if parts:
-            # Single trusted proxy (Render): client IP is second-to-last.
-            # If only 1 entry, Render set it directly — that's the client.
-            idx = max(0, len(parts) - 1) if len(parts) <= 1 else len(parts) - 2
-            ip = parts[idx]
-            # Basic validation: must look like an IP (IPv4 or IPv6), not garbage
-            if re_module.match(r'^[\d.:a-fA-F]+$', ip):
-                return ip
-    return request.remote_addr or '127.0.0.1'
+# Trust exactly one X-Forwarded-* hop from Render's proxy. ProxyFix strips
+# any client-supplied values, so attackers can't spoof X-Forwarded-For to
+# bypass per-IP rate limits.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 _redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
-    key_func=get_real_ip,
+    key_func=get_remote_address,
     default_limits=["5000 per day", "2000 per hour"],
     storage_uri=_redis_limiter_uri,
 )
@@ -127,7 +108,14 @@ try:
     _redis_url = os.getenv('REDIS_URL')
     if _redis_url:
         import redis
-        _redis_client = redis.from_url(_redis_url, decode_responses=True)
+        _redis_client = redis.from_url(
+            _redis_url,
+            decode_responses=True,
+            socket_timeout=2.0,
+            socket_connect_timeout=2.0,
+            health_check_interval=30,
+            retry_on_timeout=False,
+        )
         _redis_client.ping()  # Verify connection
         # Seed the counter if it doesn't exist yet
         if _redis_client.get(_REDIS_KEY) is None:

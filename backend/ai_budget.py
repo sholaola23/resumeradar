@@ -93,7 +93,9 @@ def check_budget():
 
     Returns:
         True if under budget (safe to proceed), False if either limit exceeded.
-        Always returns True if Redis is unavailable (fail-open for availability).
+        Fails CLOSED on Redis errors (returns False) — protects unbounded
+        spend if the budget store is unreachable. Returns True if Redis was
+        never configured (no _redis client at all).
     """
     try:
         if not _redis:
@@ -116,8 +118,10 @@ def check_budget():
                 return False
 
         return True
-    except Exception:
-        return True  # Fail-open: don't block users due to budget check errors
+    except Exception as e:
+        import logging
+        logging.warning(f"ai_budget check_budget redis error, failing closed: {e}")
+        return False  # Fail-closed: protect spend over availability
 
 
 def record_usage(input_tokens=None, output_tokens=None, model=None):

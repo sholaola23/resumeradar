@@ -607,10 +607,11 @@ def run_tests():
           'REDIS_URL' in app_source and "memory://" in app_source)
     check("Checkout limit raised to 30/hour",
           app_source.count('"30 per hour"') >= 2)
-    check("get_real_ip uses second-to-last for multi-proxy chains",
-          'len(parts) - 2' in app_source)
-    check("get_real_ip validates IP format with regex",
-          "re_module.match" in app_source and r"[\d.:a-fA-F]" in app_source)
+    check("ProxyFix wraps WSGI app with x_for=1 (single Render proxy)",
+          'ProxyFix(app.wsgi_app' in app_source and 'x_for=1' in app_source)
+    check("Limiter uses Flask-Limiter's get_remote_address",
+          'from flask_limiter.util import get_remote_address' in app_source
+          and 'key_func=get_remote_address' in app_source)
 
     # --- Startup logging (module-level, visible under Gunicorn) ---
     check("Startup logs Stripe Checkout status",
