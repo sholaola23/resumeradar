@@ -13,9 +13,10 @@ from backend import ai_budget
 from backend import ai_metrics
 
 # Free /api/scan stays on Haiku (high-volume, free tier).
-# Paid features (cover letter, bullet enhance, summary) run on Sonnet.
+# Paid features used to run on Sonnet 4.6 but were reverted after the
+# 2026-05-09 incident — see backend/cv_builder.py for the same revert.
 MODEL_FREE = "claude-haiku-4-5-20251001"
-MODEL_PAID = "claude-sonnet-4-6"
+MODEL_PAID = "claude-haiku-4-5-20251001"
 
 
 def _safe_truncate(text, max_chars):

@@ -11,8 +11,11 @@ from anthropic import Anthropic
 
 from backend import ai_budget
 
-# Paid CV builder runs on Sonnet for higher-quality polish.
-MODEL = "claude-sonnet-4-6"
+# Paid CV builder. Reverted to Haiku 4.5 after Sonnet 4.6 model ID
+# returned 500s on production — see incident 2026-05-09. Re-attempt
+# Sonnet upgrade only after confirming the exact model ID works against
+# the production Anthropic key.
+MODEL = "claude-haiku-4-5-20251001"
 
 
 # ============================================================
