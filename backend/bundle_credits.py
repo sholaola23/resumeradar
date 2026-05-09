@@ -24,6 +24,7 @@ import os
 import json
 import hmac as hmac_module
 import hashlib
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -233,6 +234,14 @@ def use_credit(bundle_token, credit_type, cv_token=None):
     field = "cv_remaining" if credit_type == "cv" else "cl_remaining"
 
     try:
+        # Belt-and-braces: for CV credits, ensure the cv_token actually exists
+        # before stamping cv_paid. Stops a forged token from unlocking a
+        # second download for free.
+        if credit_type == "cv" and cv_token:
+            cv_key = f"resumeradar:cv:{cv_token}"
+            if not _redis.exists(cv_key):
+                return {"error": "invalid_cv_token"}
+
         bundle_key = f"{_BUNDLE_PREFIX}{bundle_token}"
 
         if _lua_script:
@@ -381,10 +390,16 @@ def redeem_exchange_token(exchange_id):
 # ---------------------------------------------------------------------------
 def check_operation_idempotency(operation_id, fingerprint):
     """
-    Check if an operation has already been processed.
+    Atomically claim an operation_id or return its stored result (H3, P0-3).
+
+    Uses SET NX EX to atomically claim the key with a "pending" placeholder
+    so two concurrent requests with the same operation_id can't both pass
+    and double-decrement. The first claims; the second sees the pending
+    marker, polls briefly for the real result, and returns it.
 
     Returns:
-        None if new operation (key claimed via SETNX)
+        None if new operation (caller proceeds and must call
+            store_operation_result OR release_operation_claim)
         dict with stored response if duplicate with matching fingerprint
         {"error": "conflict"} if key exists with different fingerprint (409)
     """
@@ -393,19 +408,39 @@ def check_operation_idempotency(operation_id, fingerprint):
 
     try:
         op_key = f"{_OP_PREFIX}{operation_id}"
-        existing = _redis.get(op_key)
+        pending = json.dumps({
+            "fingerprint": fingerprint,
+            "pending": True,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        })
 
-        if existing is None:
-            # New operation — will be stored after processing
+        # Atomic claim — the only path that returns None.
+        claimed = _redis.set(op_key, pending, nx=True, ex=_OP_TTL)
+        if claimed:
             return None
 
-        stored = json.loads(existing)
-        if stored.get("fingerprint") == fingerprint:
-            # Duplicate with same fingerprint — return stored response
-            return stored.get("response", {})
-        else:
-            # Same key, different fingerprint — conflict (H3)
-            return {"error": "conflict"}
+        # Someone else owns the key. Poll briefly for the real response —
+        # the in-flight peer should finish within a few hundred ms.
+        deadline = time.monotonic() + 2.0
+        while True:
+            existing_raw = _redis.get(op_key)
+            if existing_raw is None:
+                # Claim expired or was released — claim it ourselves.
+                claimed = _redis.set(op_key, pending, nx=True, ex=_OP_TTL)
+                if claimed:
+                    return None
+                continue
+
+            stored = json.loads(existing_raw)
+            if stored.get("fingerprint") != fingerprint:
+                return {"error": "conflict"}
+            if not stored.get("pending"):
+                return stored.get("response", {})
+            if time.monotonic() >= deadline:
+                # Peer is taking too long; treat as conflict so the client
+                # can retry with a fresh operation_id.
+                return {"error": "conflict"}
+            time.sleep(0.05)
 
     except Exception:
         return None  # Fail-open
@@ -413,7 +448,8 @@ def check_operation_idempotency(operation_id, fingerprint):
 
 def store_operation_result(operation_id, fingerprint, response):
     """
-    Store the result of an operation for idempotency.
+    Store the result of an operation for idempotency, replacing the pending
+    claim placeholder set by check_operation_idempotency.
     """
     if not _redis or not operation_id:
         return
@@ -426,6 +462,27 @@ def store_operation_result(operation_id, fingerprint, response):
             "ts": datetime.now(timezone.utc).isoformat(),
         })
         _redis.setex(op_key, _OP_TTL, data)
+    except Exception:
+        pass  # Best-effort
+
+
+def release_operation_claim(operation_id, fingerprint):
+    """
+    Release a pending operation claim so a corrected retry can succeed.
+    Only deletes the key if it still holds OUR pending placeholder — never
+    a real stored result and never another caller's claim.
+    """
+    if not _redis or not operation_id:
+        return
+
+    try:
+        op_key = f"{_OP_PREFIX}{operation_id}"
+        existing_raw = _redis.get(op_key)
+        if not existing_raw:
+            return
+        stored = json.loads(existing_raw)
+        if stored.get("pending") and stored.get("fingerprint") == fingerprint:
+            _redis.delete(op_key)
     except Exception:
         pass  # Best-effort
 

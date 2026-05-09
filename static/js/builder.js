@@ -1598,6 +1598,35 @@
         return div.innerHTML;
     }
 
+    // RFC 4122 v4 UUID. Server validates `is_valid_uuid4`, so the fallback
+    // must produce a real v4, not just a random-looking string.
+    function generateUuidV4() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        var bytes;
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+            bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+        } else {
+            bytes = new Array(16);
+            for (var i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+        }
+        bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+        bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+        var hex = [];
+        for (var j = 0; j < 16; j++) {
+            hex.push(('0' + bytes[j].toString(16)).slice(-2));
+        }
+        return (
+            hex.slice(0, 4).join('') + '-' +
+            hex.slice(4, 6).join('') + '-' +
+            hex.slice(6, 8).join('') + '-' +
+            hex.slice(8, 10).join('') + '-' +
+            hex.slice(10, 16).join('')
+        );
+    }
+
     // ============================================================
     // AI MICRO-TOOLS (Bullet Enhancer + Summary Generator)
     // ============================================================
@@ -1947,8 +1976,10 @@
                 bundleDownloadBtn.disabled = true;
 
                 try {
-                    // 1. Use bundle credit
-                    var operationId = crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).substr(2, 8));
+                    // 1. Use bundle credit. operation_id is REQUIRED by the
+                    // server (UUIDv4) — it's the only thing protecting us
+                    // from a double-spend race on a double-click.
+                    var operationId = generateUuidV4();
                     var useResp = await fetch('/api/build/bundle-use', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

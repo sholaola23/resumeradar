@@ -18,6 +18,8 @@ import os
 import re
 import json
 import time
+import threading
+import uuid
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1988,6 +1990,9 @@ Created a developer productivity tool with 500 GitHub stars
                    'showInlineGate', 'isSubscribed', 'markSubscribed', 'trackOncePerScan']:
             check(f"JS: {fn} function exists", False, str(e))
 
+    # ---- SECTION: BUNDLE-USE DOUBLE-SPEND RACE (P0-3) ----
+    _run_bundle_use_race_tests()
+
     elapsed = time.time() - start
 
     # ============================================================
@@ -2025,6 +2030,194 @@ Created a developer productivity tool with 500 GitHub stars
     print()
 
     return FAIL
+
+
+class _MockRedis:
+    """
+    Minimal thread-safe in-memory Redis stand-in for the bundle-use race test.
+    Implements only the operations the route + bundle_credits module touch:
+    get, set (with nx/ex), setex, ttl, expire, exists, delete.
+
+    Lua decrement is bypassed — we set bundle_credits._lua_script to None and
+    let the module's Python fallback path run, which uses these methods.
+    """
+
+    def __init__(self):
+        self._data = {}
+        self._ttl = {}
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            return self._data.get(key)
+
+    def set(self, key, value, nx=False, ex=None):
+        with self._lock:
+            if nx and key in self._data:
+                return None
+            self._data[key] = value
+            if ex is not None:
+                self._ttl[key] = int(ex)
+            return True
+
+    def setex(self, key, ttl, value):
+        with self._lock:
+            self._data[key] = value
+            self._ttl[key] = int(ttl)
+            return True
+
+    def ttl(self, key):
+        with self._lock:
+            return int(self._ttl.get(key, -1))
+
+    def expire(self, key, ttl):
+        with self._lock:
+            if key in self._data:
+                self._ttl[key] = int(ttl)
+                return True
+            return False
+
+    def exists(self, key):
+        with self._lock:
+            return 1 if key in self._data else 0
+
+    def delete(self, *keys):
+        with self._lock:
+            removed = 0
+            for k in keys:
+                if k in self._data:
+                    self._data.pop(k, None)
+                    self._ttl.pop(k, None)
+                    removed += 1
+            return removed
+
+    def ping(self):
+        return True
+
+
+def _run_bundle_use_race_tests():
+    """
+    P0-3: bundle-use must reject requests without operation_id, and two
+    concurrent requests with the same operation_id must only consume one
+    credit (second returns the cached response).
+    """
+    import app as app_module
+    from backend import bundle_credits
+
+    # Snapshot real state so we can restore it.
+    saved_app_redis = app_module._redis_client
+    saved_bc_redis = bundle_credits._redis
+    saved_bc_lua = bundle_credits._lua_script
+    saved_limiter_enabled = app_module.limiter.enabled
+    mock = _MockRedis()
+    try:
+        app_module._redis_client = mock
+        bundle_credits._redis = mock
+        bundle_credits._lua_script = None  # force Python fallback path
+        # Disable the rate limiter so its Redis backend (which may point at
+        # a dev-local Redis that isn't running) doesn't 500 the test.
+        app_module.limiter.enabled = False
+
+        bundle_token = "qa-bundle-" + uuid.uuid4().hex
+        cv_token = "qa-cv-" + uuid.uuid4().hex
+        # Seed the bundle (5 CV credits, jobhunt plan).
+        mock.setex(
+            f"resumeradar:bundle:{bundle_token}",
+            172800,
+            json.dumps({
+                "plan": "jobhunt",
+                "cv_remaining": 5,
+                "cl_remaining": 5,
+                "created_at": "2026-05-09T00:00:00+00:00",
+                "provider": "stripe",
+                "email_hash": "",
+            }),
+        )
+        # Seed the CV token (required by the new cv_token validation).
+        mock.setex(f"resumeradar:cv:{cv_token}", 7200, json.dumps({"name": "QA"}))
+
+        # --- Test 1: missing operation_id → 400 ---
+        with app_module.app.test_client() as c:
+            r = c.post(
+                "/api/build/bundle-use",
+                json={
+                    "bundle_token": bundle_token,
+                    "cv_token": cv_token,
+                    "type": "cv",
+                },
+            )
+            check(
+                "bundle-use: missing operation_id returns 400",
+                r.status_code == 400,
+                f"got {r.status_code}: {r.get_json()}",
+            )
+
+        # Snapshot remaining BEFORE the race so we can compare.
+        bundle_before = json.loads(mock.get(f"resumeradar:bundle:{bundle_token}"))
+        cv_remaining_before = bundle_before["cv_remaining"]
+
+        # --- Test 2: two concurrent calls with the SAME operation_id consume only one credit ---
+        op_id = str(uuid.uuid4())
+        results = []
+        results_lock = threading.Lock()
+        barrier = threading.Barrier(2)
+
+        def fire():
+            barrier.wait()  # release both threads simultaneously
+            with app_module.app.test_client() as c:
+                r = c.post(
+                    "/api/build/bundle-use",
+                    json={
+                        "bundle_token": bundle_token,
+                        "cv_token": cv_token,
+                        "type": "cv",
+                        "operation_id": op_id,
+                    },
+                )
+            with results_lock:
+                results.append((r.status_code, r.get_json()))
+
+        threads = [threading.Thread(target=fire) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        bundle_after = json.loads(mock.get(f"resumeradar:bundle:{bundle_token}"))
+        cv_remaining_after = bundle_after["cv_remaining"]
+        decremented = cv_remaining_before - cv_remaining_after
+
+        statuses = sorted([code for code, _ in results])
+        bodies = [body for _, body in results]
+        success_count = sum(1 for _, body in results if body and body.get("success"))
+
+        check(
+            "bundle-use: concurrent same operation_id decrements exactly once",
+            decremented == 1,
+            f"decremented {decremented} (before={cv_remaining_before}, after={cv_remaining_after}); "
+            f"statuses={statuses}; bodies={bodies}",
+        )
+        check(
+            "bundle-use: concurrent same operation_id returns success on both calls",
+            statuses == [200, 200] and success_count == 2,
+            f"statuses={statuses}; success_count={success_count}; bodies={bodies}",
+        )
+        # Both successful responses should report the same remaining count
+        # (the second call returns the cached response from the first).
+        remainings = [(b or {}).get("remaining") for b in bodies]
+        check(
+            "bundle-use: both responses agree on remaining (cached replay)",
+            len(remainings) == 2
+            and remainings[0] is not None
+            and remainings[0] == remainings[1] == cv_remaining_after,
+            f"remainings={remainings}; bundle_after={cv_remaining_after}",
+        )
+
+    finally:
+        app_module._redis_client = saved_app_redis
+        bundle_credits._redis = saved_bc_redis
+        bundle_credits._lua_script = saved_bc_lua
+        app_module.limiter.enabled = saved_limiter_enabled
 
 
 if __name__ == '__main__':

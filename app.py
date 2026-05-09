@@ -1521,26 +1521,30 @@ def bundle_use():
         if credit_type == "cv" and not cv_token:
             return jsonify({"error": "Missing CV token."}), 400
 
-        # Validate operation_id as UUIDv4 (polish item)
-        if operation_id and not bundle_credits.is_valid_uuid4(operation_id):
+        # operation_id is REQUIRED to prevent double-spend race (P0-3).
+        # Two concurrent requests without an idempotency key both pass the
+        # decrement check and both stamp cv_paid — billing for two credits
+        # but delivering one CV.
+        if not operation_id:
+            return jsonify({"error": "Missing operation ID."}), 400
+        if not bundle_credits.is_valid_uuid4(operation_id):
             return jsonify({"error": "Invalid operation ID format."}), 400
 
-        # Idempotency check (H3)
-        if operation_id:
-            fingerprint = bundle_credits.compute_fingerprint(
-                "bundle-use",
-                bundle_token=bundle_token,
-                cv_token=cv_token,
-                type=credit_type,
-            )
-            existing = bundle_credits.check_operation_idempotency(operation_id, fingerprint)
-            if existing is not None:
-                if existing.get("error") == "conflict":
-                    return jsonify({"error": "Idempotency key reused with different request."}), 409
-                # Return stored response (safe retry)
-                resp = jsonify(existing)
-                resp.headers['Cache-Control'] = 'no-store'
-                return resp
+        # Idempotency check (H3) — atomic SETNX claim inside.
+        fingerprint = bundle_credits.compute_fingerprint(
+            "bundle-use",
+            bundle_token=bundle_token,
+            cv_token=cv_token,
+            type=credit_type,
+        )
+        existing = bundle_credits.check_operation_idempotency(operation_id, fingerprint)
+        if existing is not None:
+            if existing.get("error") == "conflict":
+                return jsonify({"error": "Idempotency key reused with different request."}), 409
+            # Return stored response (safe retry / concurrent same-id request)
+            resp = jsonify(existing)
+            resp.headers['Cache-Control'] = 'no-store'
+            return resp
 
         # Atomic credit consumption
         result = bundle_credits.use_credit(bundle_token, credit_type, cv_token=cv_token)
@@ -1551,15 +1555,18 @@ def bundle_use():
                 status = 410  # Gone
             elif error == "exhausted":
                 status = 402  # Payment Required
+            elif error == "invalid_cv_token":
+                status = 400
             else:
                 status = 500
+            # Release the pending claim so a corrected retry can succeed.
+            bundle_credits.release_operation_claim(operation_id, fingerprint)
             return jsonify({"error": error}), status
 
         response_data = {"success": True, "remaining": result.get("remaining")}
 
-        # Store for idempotency (H3)
-        if operation_id:
-            bundle_credits.store_operation_result(operation_id, fingerprint, response_data)
+        # Store for idempotency (H3) — replaces the pending claim
+        bundle_credits.store_operation_result(operation_id, fingerprint, response_data)
 
         # AUDIT: bundle credit used
         try:
