@@ -12,6 +12,11 @@ from backend import ai_cache
 from backend import ai_budget
 from backend import ai_metrics
 
+# Free /api/scan stays on Haiku (high-volume, free tier).
+# Paid features (cover letter, bullet enhance, summary) run on Sonnet.
+MODEL_FREE = "claude-haiku-4-5-20251001"
+MODEL_PAID = "claude-sonnet-4-6"
+
 
 def _safe_truncate(text, max_chars):
     """Truncate text at a sentence boundary to avoid mid-sentence cuts."""
@@ -114,7 +119,7 @@ IMPORTANT COACHING FOCUS:
 Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, max 2 rewrite_suggestions, max 4 quick_wins, exactly 3 cover_letter_points. Keep each value SHORT. Cover letter points should be specific and actionable, not generic."""
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=MODEL_FREE,
             max_tokens=3000,
             messages=[
                 {"role": "user", "content": prompt}
@@ -274,7 +279,7 @@ RULES:
 Write the cover letter body now:"""
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=MODEL_PAID,
             max_tokens=1500,
             messages=[
                 {"role": "user", "content": prompt}
@@ -287,7 +292,7 @@ Write the cover letter body now:"""
         usage = getattr(message, 'usage', None)
         input_tok = getattr(usage, 'input_tokens', None) if usage else None
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
-        ai_budget.record_usage(input_tok, output_tok)
+        ai_budget.record_usage(input_tok, output_tok, model=MODEL_PAID)
 
         cover_letter = message.content[0].text.strip()
 
@@ -360,7 +365,7 @@ Rules:
 Rewritten bullet:"""
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=MODEL_PAID,
             max_tokens=200,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -370,7 +375,7 @@ Rewritten bullet:"""
         usage = getattr(message, 'usage', None)
         input_tok = getattr(usage, 'input_tokens', None) if usage else None
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
-        ai_budget.record_usage(input_tok, output_tok)
+        ai_budget.record_usage(input_tok, output_tok, model=MODEL_PAID)
 
         enhanced = message.content[0].text.strip()
         if enhanced.startswith('- '):
@@ -436,7 +441,7 @@ Rules:
 Professional Summary:"""
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=MODEL_PAID,
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -446,7 +451,7 @@ Professional Summary:"""
         usage = getattr(message, 'usage', None)
         input_tok = getattr(usage, 'input_tokens', None) if usage else None
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
-        ai_budget.record_usage(input_tok, output_tok)
+        ai_budget.record_usage(input_tok, output_tok, model=MODEL_PAID)
 
         summary = message.content[0].text.strip()
         result = {"summary": summary}

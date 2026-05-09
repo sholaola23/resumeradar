@@ -1,6 +1,6 @@
 """
 ResumeRadar -- CV Builder AI Module
-Uses Claude Haiku to polish CV sections for ATS optimization.
+Uses Claude Sonnet to polish CV sections for ATS optimization.
 Follows same pattern as ai_analyzer.py.
 """
 
@@ -8,6 +8,11 @@ import os
 import json
 import re
 from anthropic import Anthropic
+
+from backend import ai_budget
+
+# Paid CV builder runs on Sonnet for higher-quality polish.
+MODEL = "claude-sonnet-4-6"
 
 
 # ============================================================
@@ -504,7 +509,7 @@ Respond with ONLY valid JSON in this exact structure:
 CRITICAL: Same number of experience and education entries as input. Do NOT invent new jobs, degrees, skills, or metrics. You are optimizing WORDING, not fabricating content."""
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=MODEL,
             max_tokens=5000,
             messages=[
                 {"role": "user", "content": prompt}
@@ -716,7 +721,7 @@ Respond with ONLY valid JSON:
 }}"""
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=MODEL,
             max_tokens=5000,
             messages=[
                 {"role": "user", "content": prompt}

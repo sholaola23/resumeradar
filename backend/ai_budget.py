@@ -24,9 +24,16 @@ _COST_PREFIX = "resumeradar:ai_cost:"
 _BUDGET_PREFIX = "resumeradar:ai_budget:"
 _DAY_TTL = 86400  # 24 hours
 
-# Claude Haiku pricing (USD per million tokens)
-_HAIKU_INPUT_PER_MTOK = 0.80
-_HAIKU_OUTPUT_PER_MTOK = 4.00
+# Per-model pricing (USD per million tokens) — (input, output)
+_PRICING = {
+    "claude-haiku-4-5-20251001": (0.80, 4.00),
+    "claude-haiku-4-5": (0.80, 4.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-7": (15.00, 75.00),
+}
+# Conservative default if model is unknown (falls back to Sonnet rate so the
+# daily cap fires sooner rather than later — better to over-protect spend).
+_DEFAULT_PRICING = (3.00, 15.00)
 
 BUDGET_EXCEEDED_MESSAGE = (
     "This tool is temporarily unavailable due to high demand. "
@@ -69,10 +76,11 @@ def _get_call_limit():
         return 5000
 
 
-def _estimate_cost(input_tokens, output_tokens):
-    """Estimate USD cost from token counts."""
-    inp = (input_tokens or 0) / 1_000_000 * _HAIKU_INPUT_PER_MTOK
-    out = (output_tokens or 0) / 1_000_000 * _HAIKU_OUTPUT_PER_MTOK
+def _estimate_cost(input_tokens, output_tokens, model=None):
+    """Estimate USD cost from token counts using the model's actual pricing."""
+    inp_rate, out_rate = _PRICING.get(model, _DEFAULT_PRICING)
+    inp = (input_tokens or 0) / 1_000_000 * inp_rate
+    out = (output_tokens or 0) / 1_000_000 * out_rate
     return inp + out
 
 
@@ -112,7 +120,7 @@ def check_budget():
         return True  # Fail-open: don't block users due to budget check errors
 
 
-def record_usage(input_tokens=None, output_tokens=None):
+def record_usage(input_tokens=None, output_tokens=None, model=None):
     """
     Record a Claude API call. Increments call count and adds estimated cost.
 
@@ -122,6 +130,8 @@ def record_usage(input_tokens=None, output_tokens=None):
     Args:
         input_tokens: actual input_tokens from response.usage (or None)
         output_tokens: actual output_tokens from response.usage (or None)
+        model: Claude model id used for the call (drives the cost rate).
+            If None, the conservative default (Sonnet rate) is applied.
     """
     try:
         if not _redis:
@@ -138,7 +148,7 @@ def record_usage(input_tokens=None, output_tokens=None):
 
         # Add estimated cost (only if we have token data)
         if input_tokens is not None or output_tokens is not None:
-            cost = _estimate_cost(input_tokens or 0, output_tokens or 0)
+            cost = _estimate_cost(input_tokens or 0, output_tokens or 0, model)
             if cost > 0:
                 cost_key = f"{_COST_PREFIX}{today}"
                 pipe = _redis.pipeline(transaction=True)
