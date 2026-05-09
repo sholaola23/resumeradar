@@ -362,16 +362,51 @@
                 }),
             });
 
+            // Helper: render the scan-error block via DOM (no innerHTML on
+            // user-controlled values) with a retry button that re-runs the
+            // polish call without reloading — preserves the user's
+            // resumeradar_scan_for_builder sessionStorage payload.
+            const renderScanError = (msg) => {
+                stopLoadingRotation();
+                previewContent.textContent = '';
+                const wrap = document.createElement('div');
+                wrap.className = 'scan-generating scan-error';
+                const p = document.createElement('p');
+                p.textContent = msg;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn-retry';
+                btn.textContent = 'Try Again';
+                btn.addEventListener('click', () => autoGenerateFromScan());
+                wrap.appendChild(p);
+                wrap.appendChild(btn);
+                previewContent.appendChild(wrap);
+            };
+
+            // Rate-limit: parse Retry-After and show wait guidance —
+            // never reload (would destroy resumeradar_scan_for_builder).
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After');
+                let mins = 5;
+                if (retryAfter) {
+                    const secs = parseInt(retryAfter, 10);
+                    if (!isNaN(secs)) {
+                        mins = Math.max(1, Math.ceil(secs / 60));
+                    } else {
+                        const retryDate = new Date(retryAfter);
+                        if (!isNaN(retryDate.getTime())) {
+                            mins = Math.max(1, Math.ceil((retryDate - Date.now()) / 60000));
+                        }
+                    }
+                }
+                renderScanError(`Too many requests. Please wait ${mins} minute${mins > 1 ? 's' : ''} and try again.`);
+                return;
+            }
+
             const result = await response.json();
 
             if (!response.ok || result.error) {
-                stopLoadingRotation();
-                previewContent.innerHTML = `
-                    <div class="scan-generating scan-error">
-                        <p>${result.error || 'Something went wrong. Please try again.'}</p>
-                        <button type="button" class="btn-retry" onclick="location.reload()">Try Again</button>
-                    </div>
-                `;
+                renderScanError(result.error || 'Something went wrong. Please try again.');
                 return;
             }
 

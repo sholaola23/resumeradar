@@ -10,11 +10,13 @@ import re
 from anthropic import Anthropic
 
 from backend import ai_budget
+from backend import ai_metrics
 
 # Paid CV builder runs on Sonnet for higher-quality polish.
 # (Verified 2026-05-09: claude-sonnet-4-6 listed in /v1/models for the
 # production Anthropic key after the auth incident was resolved.)
 MODEL = "claude-sonnet-4-6"
+TOOL = ai_metrics.TOOL_CV_POLISH
 
 
 # ============================================================
@@ -407,10 +409,20 @@ def polish_cv_sections(cv_data):
     Returns:
         dict with polished CV sections in the same structure
     """
+    ai_metrics.record_request(TOOL)
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
 
     if not api_key or api_key == "your-anthropic-api-key-here":
+        ai_metrics.record_error(TOOL)
         return _get_fallback(cv_data)
+
+    if not ai_budget.check_budget():
+        ai_metrics.record_budget_reject(TOOL)
+        return {
+            "error": ai_budget.BUDGET_EXCEEDED_MESSAGE,
+            "ai_polished": False,
+        }
 
     try:
         client = Anthropic(api_key=api_key)
@@ -518,6 +530,13 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
             ]
         )
 
+        ai_metrics.record_claude_call(TOOL)
+
+        usage = getattr(message, "usage", None)
+        input_tok = getattr(usage, "input_tokens", None) if usage else None
+        output_tok = getattr(usage, "output_tokens", None) if usage else None
+        ai_budget.record_usage(input_tok, output_tok, model=MODEL)
+
         response_text = message.content[0].text
 
         # Parse JSON -- same pattern as ai_analyzer.py
@@ -576,11 +595,13 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
             return result
 
         except (json.JSONDecodeError, ValueError) as parse_error:
+            ai_metrics.record_error(TOOL)
             print(f"CV Builder JSON parse error: {parse_error}")
             print(f"Raw response (first 300 chars): {response_text[:300]}")
             return _get_fallback(cv_data)
 
     except Exception as e:
+        ai_metrics.record_error(TOOL)
         print(f"CV Builder Claude API error: {str(e)}")
         return _get_fallback(cv_data)
 
@@ -602,9 +623,19 @@ def extract_and_polish(resume_text, job_description, scan_keywords=None):
     Returns:
         dict with full structured, polished CV data
     """
+    ai_metrics.record_request(TOOL)
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your-anthropic-api-key-here":
+        ai_metrics.record_error(TOOL)
         return {"error": "AI service unavailable.", "ai_polished": False}
+
+    if not ai_budget.check_budget():
+        ai_metrics.record_budget_reject(TOOL)
+        return {
+            "error": ai_budget.BUDGET_EXCEEDED_MESSAGE,
+            "ai_polished": False,
+        }
 
     try:
         client = Anthropic(api_key=api_key)
@@ -730,6 +761,13 @@ Respond with ONLY valid JSON:
             ]
         )
 
+        ai_metrics.record_claude_call(TOOL)
+
+        usage = getattr(message, "usage", None)
+        input_tok = getattr(usage, "input_tokens", None) if usage else None
+        output_tok = getattr(usage, "output_tokens", None) if usage else None
+        ai_budget.record_usage(input_tok, output_tok, model=MODEL)
+
         response_text = message.content[0].text
 
         # Parse JSON — same repair logic as polish_cv_sections
@@ -774,10 +812,12 @@ Respond with ONLY valid JSON:
             return result
 
         except (json.JSONDecodeError, ValueError) as parse_error:
+            ai_metrics.record_error(TOOL)
             print(f"CV extract+polish JSON parse error: {parse_error}")
             return {"error": "Failed to parse AI response.", "ai_polished": False}
 
     except Exception as e:
+        ai_metrics.record_error(TOOL)
         print(f"CV extract+polish API error: {str(e)}")
         return {"error": "AI processing failed. Please try again.", "ai_polished": False}
 

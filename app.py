@@ -959,6 +959,10 @@ def build_generate():
         # Polish with AI
         polished = polish_cv_sections(cv_data)
 
+        if polished.get("error"):
+            status = 503 if polished["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
+            return jsonify({"error": polished["error"]}), status
+
         # Generate a token and store in Redis
         token = uuid.uuid4().hex
         cv_redis_key = f"resumeradar:cv:{token}"
@@ -1028,7 +1032,8 @@ def build_generate_from_scan():
         polished = extract_and_polish(resume_text, job_description, scan_keywords)
 
         if polished.get("error"):
-            return jsonify({"error": polished["error"]}), 500
+            status = 503 if polished["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
+            return jsonify({"error": polished["error"]}), status
 
         # Generate token and store
         token = uuid.uuid4().hex
@@ -1124,7 +1129,8 @@ def build_generate_from_upload():
         polished = extract_and_polish(resume_text, job_description)
 
         if polished.get("error"):
-            return jsonify({"error": polished["error"]}), 500
+            status = 503 if polished["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
+            return jsonify({"error": polished["error"]}), status
 
         # Generate token and store (same pattern as generate-from-scan)
         token = uuid.uuid4().hex

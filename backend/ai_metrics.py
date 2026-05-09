@@ -22,6 +22,7 @@ _METRICS_TTL = 604800  # 7 days
 TOOL_COVER_LETTER = "cover_letter"
 TOOL_ENHANCE_BULLET = "enhance_bullet"
 TOOL_GENERATE_SUMMARY = "generate_summary"
+TOOL_CV_POLISH = "cv_polish"
 
 # ---------------------------------------------------------------------------
 # Module-level Redis reference (set via init())
