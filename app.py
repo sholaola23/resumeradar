@@ -89,7 +89,7 @@ _redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
     key_func=get_real_ip,
-    default_limits=["5000 per day", "1000 per hour"],
+    default_limits=["5000 per day", "2000 per hour"],
     storage_uri=_redis_limiter_uri,
 )
 
@@ -932,7 +932,7 @@ def build_page():
 
 
 @app.route('/api/build/generate', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("30 per hour")
 def build_generate():
     """
     Accept CV form data, polish with AI, store in Redis, return preview + token.
@@ -998,7 +998,7 @@ def build_generate():
 
 
 @app.route('/api/build/generate-from-scan', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("30 per hour")
 def build_generate_from_scan():
     """
     One-shot scan-to-CV: extract structured data from raw resume text
@@ -1067,7 +1067,7 @@ def build_generate_from_scan():
 
 
 @app.route('/api/build/generate-from-upload', methods=['POST'])
-@limiter.limit("5 per hour")
+@limiter.limit("30 per hour")
 def build_generate_from_upload():
     """
     Accept a resume file upload + job description, parse the file,
