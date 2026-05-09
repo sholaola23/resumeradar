@@ -509,9 +509,11 @@ def run_tests():
           '_redis_client.delete(f"resumeradar:cv_emailed:' in app_source or
           '_redis_client.delete(dedup_key)' in app_source)
 
-    # E2E-6: Redis degradation path — verify graceful handling
+    # E2E-6: Redis degradation path — verify graceful handling.
+    # Behaviour: when Redis is up, ignore client_cv_data (anti-abuse, H-2);
+    # only fall back to client_cv_data in the no-Redis branch.
     check("Download falls back to client data when Redis unavailable",
-          'client_cv_data' in app_source and 'not cv_data and client_cv_data' in app_source)
+          'client_cv_data' in app_source and 'storage:client mode only' in app_source)
     check("Email skipped when Redis unavailable",
           'if not _redis_client:' in app_source)
 

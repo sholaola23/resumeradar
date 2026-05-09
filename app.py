@@ -59,7 +59,19 @@ app = Flask(
     static_folder='static'
 )
 app.secret_key = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
-CORS(app)
+
+# CORS: lock to known production origins. Webhook routes are POST-from-Stripe/
+# Paystack/Resend (validated by signature), so origin doesn't gate them.
+_ALLOWED_ORIGINS = [
+    "https://resumeradar.sholastechnotes.com",
+    "https://resumeradar.io",
+    "https://www.resumeradar.io",
+]
+CORS(
+    app,
+    resources={r"/api/*": {"origins": _ALLOWED_ORIGINS}},
+    supports_credentials=False,
+)
 
 # Trust exactly one X-Forwarded-* hop from Render's proxy. ProxyFix strips
 # any client-supplied values, so attackers can't spoof X-Forwarded-For to
@@ -1770,7 +1782,13 @@ def build_download(token):
         if dl_format not in VALID_FORMATS:
             dl_format = "pdf"
 
-        # Get CV data: try Redis first, fall back to client-provided data
+        # Get CV data. Trust model:
+        #   - When Redis is up, the canonical CV is server-side. NEVER honour
+        #     client_cv_data — otherwise a paid token holder could swap in
+        #     arbitrary CV content and re-render unlimited variants, breaking
+        #     the "1 token = 1 CV" contract.
+        #   - When Redis is unavailable (storage:client mode), fall back to
+        #     client-supplied cv_data — no server copy exists to compare to.
         cv_data = None
         if _redis_client:
             try:
@@ -1788,10 +1806,11 @@ def build_download(token):
                     _redis_client.expire(dl_key, 7200)
             except Exception as redis_err:
                 print(f"Redis retrieve error: {redis_err}")
-
-        # Fallback: use CV data from client (sessionStorage)
-        if not cv_data and client_cv_data:
-            cv_data = client_cv_data
+        else:
+            # storage:client mode only: server has no Redis, so the client's
+            # sessionStorage copy is the only available source.
+            if client_cv_data:
+                cv_data = client_cv_data
 
         if not cv_data:
             return jsonify({"error": "CV data not found. It may have expired. Please regenerate."}), 404
@@ -2540,10 +2559,36 @@ def build_webhook_resend():
         return jsonify({"received": True}), 200  # Always 200 to prevent infinite retries
 
 
+def _origin_allowed(origin_or_referer):
+    """Return True if the supplied Origin/Referer header matches an allowed
+    production origin. Permissive: empty/missing returns False (caller logs)."""
+    if not origin_or_referer:
+        return False
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin_or_referer)
+        if not parsed.scheme or not parsed.netloc:
+            return False
+        candidate = f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        return False
+    return candidate in _ALLOWED_ORIGINS
+
+
 @app.route('/api/event', methods=['POST'])
-@limiter.limit("60 per minute")
+@limiter.limit("60 per hour")
 def track_client_event():
-    """Accept client-side funnel events. Always returns 204 (silent)."""
+    """Accept client-side funnel events. Always returns 204 (silent).
+
+    Gated by Origin/Referer to keep funnel analytics clean against drive-by
+    POSTs from outside the app. Mismatches are logged + rejected (no 5xx).
+    """
+    origin = request.headers.get('Origin', '') or request.headers.get('Referer', '')
+    if not _origin_allowed(origin):
+        # Reject silently with 204 so we don't reveal the gate or trigger retries.
+        # Log for visibility into abuse patterns.
+        print(f"[/api/event] origin rejected: {origin or '<missing>'}")
+        return '', 204
     try:
         data = request.get_json(silent=True) or {}
         event = data.get('event', '')
