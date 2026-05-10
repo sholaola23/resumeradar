@@ -2181,7 +2181,7 @@ def _send_bundle_email(email, bundle_token, plan):
         plan_display = plan_names.get(plan, plan.title())
 
         plan_details = {
-            "jobhunt": "5 CV downloads + 5 cover letters (valid for 48 hours)",
+            "jobhunt": "5 CV downloads + 5 cover letters (valid for 30 days)",
             "sprint": "Unlimited CV downloads + cover letters (valid for 7 days)",
         }
         details = plan_details.get(plan, "")

@@ -42,12 +42,17 @@ PLANS = {
     "jobhunt": {
         "cv_remaining": 5,
         "cl_remaining": 5,
-        "ttl": 172800,       # 48 hours
+        "ttl": 2592000,      # 30 days — was 48h, but a "5 CVs over a job hunt"
+                             # product needs to span the actual hunt (multi-week);
+                             # 48h caused a customer outage on 2026-05-08 (Tsakani
+                             # Sambo case): paid Fri, AI key bug burned ~36h of
+                             # the window, bundle expired ~12h after she got
+                             # to test. 30d gives real headroom.
     },
     "sprint": {
         "cv_remaining": -1,  # unlimited
         "cl_remaining": -1,  # unlimited
-        "ttl": 604800,       # 7 days
+        "ttl": 604800,       # 7 days — "sprint" is intentionally short-window
     },
 }
 
