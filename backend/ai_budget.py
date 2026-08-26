@@ -126,6 +126,33 @@ def check_budget():
         return False  # Fail-closed: protect spend over availability
 
 
+def spent_fraction():
+    """
+    Fraction of today's COST budget consumed (0.0 → 1.0+).
+
+    Drives tiered degradation (e.g. free scans drop from Sonnet to Haiku
+    past a threshold) — cost only, deliberately not the call-count limit:
+    switching to a cheaper model saves money but not calls, so the call
+    cap is no useful signal here.
+
+    Returns 0.0 when Redis was never configured; 1.0 on Redis errors
+    (same fail-closed posture as check_budget).
+    """
+    try:
+        if not _redis:
+            return 0.0
+        cost_raw = _redis.get(f"{_COST_PREFIX}{_today_key()}")
+        current_cost = float(cost_raw) if cost_raw is not None else 0.0
+        limit = _get_cost_limit()
+        if limit <= 0:
+            return 1.0
+        return current_cost / limit
+    except Exception as e:
+        import logging
+        logging.warning(f"ai_budget spent_fraction redis error, failing closed: {e}")
+        return 1.0
+
+
 def record_usage(input_tokens=None, output_tokens=None, model=None):
     """
     Record a Claude API call. Increments call count and adds estimated cost.

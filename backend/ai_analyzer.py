@@ -13,11 +13,16 @@ from backend import ai_budget
 from backend import ai_metrics
 
 # Both gates run Sonnet 5 — cheaper AND stronger than Sonnet 4.6
-# ($2/$10 vs $3/$15 per MTok). Free scans are budget-guarded and degrade to
-# rule-based suggestions when the daily cap trips. To dial free-tier spend
-# back down fast, set MODEL_FREE = "claude-haiku-4-5-20251001".
+# ($2/$10 vs $3/$15 per MTok). Free scans degrade in tiers as the daily
+# cost budget fills: Sonnet 5 → Haiku 4.5 past FREE_ECONOMY_THRESHOLD →
+# rule-based suggestions at the hard cap (no AI spend past the cap).
 MODEL_FREE = "claude-sonnet-5"
+MODEL_FREE_ECONOMY = "claude-haiku-4-5-20251001"
 MODEL_PAID = "claude-sonnet-5"
+
+# Past this fraction of the daily cost budget, free scans switch to the
+# economy model. Paid tools keep MODEL_PAID until the hard cap.
+FREE_ECONOMY_THRESHOLD = 0.60
 
 # Sonnet 5 defaults to adaptive thinking; these are short structured calls,
 # so keep thinking off for deterministic cost and latency. Passed via
@@ -70,12 +75,17 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
     if not api_key or api_key == "your-anthropic-api-key-here":
         return _get_fallback_suggestions(keyword_results)
 
-    # Free tier degrades gracefully to rule-based suggestions when the daily
-    # AI budget trips — this path was previously invisible to the cost guard.
+    # Free tier degrades in tiers: past the hard cap, no AI spend at all
+    # (rule-based suggestions); past FREE_ECONOMY_THRESHOLD of the daily
+    # cost budget, drop from Sonnet to the economy model.
     if not ai_budget.check_budget():
         fallback = _get_fallback_suggestions(keyword_results)
         fallback["api_error"] = "AI analysis temporarily unavailable. Showing rule-based suggestions."
         return fallback
+
+    scan_model = MODEL_FREE
+    if ai_budget.spent_fraction() >= FREE_ECONOMY_THRESHOLD:
+        scan_model = MODEL_FREE_ECONOMY
 
     try:
         client = make_client(api_key)
@@ -148,7 +158,7 @@ IMPORTANT COACHING FOCUS:
 Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, max 2 rewrite_suggestions, max 4 quick_wins, exactly 3 cover_letter_points. Keep each value SHORT. Cover letter points should be specific and actionable, not generic."""
 
         message = client.messages.create(
-            model=MODEL_FREE,
+            model=scan_model,
             max_tokens=3000,
             messages=[
                 {"role": "user", "content": prompt}
@@ -159,7 +169,7 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
         usage = getattr(message, 'usage', None)
         input_tok = getattr(usage, 'input_tokens', None) if usage else None
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
-        ai_budget.record_usage(input_tok, output_tok, model=MODEL_FREE)
+        ai_budget.record_usage(input_tok, output_tok, model=scan_model)
 
         # Parse the response
         response_text = first_text(message)
