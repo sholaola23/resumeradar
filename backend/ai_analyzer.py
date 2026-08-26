@@ -116,6 +116,8 @@ KEYWORD ANALYSIS RESULTS:
 - Missing Soft Skills: {', '.join(missing_soft[:10]) if missing_soft else 'None'}
 - Missing Certifications: {', '.join(missing_certs[:5]) if missing_certs else 'None'}
 
+SCORE RULE: {match_score}% is the ONLY score the user sees. If you mention a match percentage anywhere in your response, use exactly {match_score}% — never compute, estimate, or cite any other percentage (no technical-match ratios, no category sub-scores). Percentages the user's own resume states (e.g. "reduced costs by 30%") are fine to reference.
+
 IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:
 {{
     "summary": "2-3 sentence overall assessment",

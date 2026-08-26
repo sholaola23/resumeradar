@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=4">
+    <link rel="stylesheet" href="/static/css/style.css?v=5">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -433,17 +433,25 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- ===== DEEP TIER (hidden until subscribed) ===== -->
                 <div id="deepResults" style="display: none;">
 
-                    <!-- Report Actions Bar -->
-                    <div class="report-actions">
-                        <button type="button" class="report-btn" id="copyReportBtn">
-                            <span class="report-btn-icon">📋</span> Copy Report
-                        </button>
-                        <button type="button" class="report-btn" id="downloadReportBtn">
-                            <span class="report-btn-icon">📥</span> Download Report
-                        </button>
-                        <button type="button" class="report-btn" id="emailReportBtn">
-                            <span class="report-btn-icon">📧</span> Email Report
-                        </button>
+                    <!-- Report Actions (collapsed — the £2 build CTA is the primary action) -->
+                    <div class="result-card">
+                        <div class="card-header-toggle" data-target="reportActionsContent" data-section="report_actions">
+                            <h2>📄 Save or Share Your Report</h2>
+                            <span class="toggle-icon">+</span>
+                        </div>
+                        <div id="reportActionsContent" style="display: none;">
+                            <div class="report-actions">
+                                <button type="button" class="report-btn" id="copyReportBtn">
+                                    <span class="report-btn-icon">📋</span> Copy Report
+                                </button>
+                                <button type="button" class="report-btn" id="downloadReportBtn">
+                                    <span class="report-btn-icon">📥</span> Download Report
+                                </button>
+                                <button type="button" class="report-btn" id="emailReportBtn">
+                                    <span class="report-btn-icon">📧</span> Email Report
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Category Breakdown (collapsed by default) -->
@@ -551,9 +559,13 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         <button type="button" class="history-clear-btn" id="clearHistoryBtn">Clear History</button>
                     </div>
 
-                    <!-- Share Results -->
+                    <!-- Share Results (collapsed — secondary action) -->
                     <div class="result-card share-card">
-                        <h2>📣 Found this useful?</h2>
+                        <div class="card-header-toggle" data-target="shareContent" data-section="share">
+                            <h2>📣 Found this useful?</h2>
+                            <span class="toggle-icon">+</span>
+                        </div>
+                        <div id="shareContent" style="display: none;">
                         <p class="card-subtitle">Help someone else beat the ATS — share ResumeRadar with your network.</p>
                         <div class="share-buttons">
                             <button type="button" class="share-btn share-linkedin" id="shareLinkedIn">
@@ -568,6 +580,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                                 <span class="share-icon-emoji">🔗</span>
                                 Copy Link
                             </button>
+                        </div>
                         </div>
                     </div>
 
@@ -727,6 +740,6 @@ Include the job title, requirements, responsibilities, qualifications — everyt
         <button type="button" onclick="launchBuilderFromScan()">Generate Optimized CV — £2</button>
     </div>
 
-    <script src="/static/js/app.js?v=4"></script>
+    <script src="/static/js/app.js?v=5"></script>
 </body>
 </html>

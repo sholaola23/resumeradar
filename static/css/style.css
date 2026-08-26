@@ -2979,3 +2979,11 @@ textarea::placeholder {
         padding: 5px 10px;
     }
 }
+
+/* Mobile header: wordmark collided with nav pills at 375px */
+@media (max-width: 480px) {
+    .logo-icon { font-size: 22px; }
+    .logo-text { font-size: 17px; letter-spacing: -0.3px; }
+    .nav-link { font-size: 13px; padding: 5px 10px; }
+    .tagline { font-size: 12px; }
+}

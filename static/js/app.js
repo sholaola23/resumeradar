@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('resumeradar_subscribed');
     }
 
+
     // ============================================================
     // DOM ELEMENTS
     // ============================================================
@@ -395,6 +396,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // NOTE (26 Aug 2026): a "skip for now" link was considered here per the
+    // Mar 8 UX spec, but commit 14b9ef1 (Mar 12) deliberately removed the
+    // skip path to make the subscribe gate primary — decision stands unless
+    // the owner reverses it. QA asserts the skip link stays absent.
 
     // ============================================================
     // COLLAPSIBLE SECTIONS (deep results)
