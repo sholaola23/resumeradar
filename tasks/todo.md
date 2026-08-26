@@ -38,6 +38,14 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 - [ ] D5. DECISION: own domain vs subdomain — before first backlink lands
 - [ ] D6. LinkedIn posts (after A ships): build-story w/ receipts → anti-subscription → myth-busting → data series
 
+## Batch D-UI — UX fixes — implemented + verified on staging 26 Aug (rides deploy 4)
+- [x] U1. Score consistency: AI may cite only the (rounded) headline score; verified on novel + demo scans
+- [x] U2. CTA de-noising: report + share actions collapsed; £2 build CTA is the single dominant action
+- [x] U3. "Skip for now" reinstated per owner (reverses 14b9ef1) — quiet 12px link, session-only unlock, gate_skipped tracked
+- [x] U4. Mobile header: no logo/nav collision at 375px, one-line pills (verified via screenshot)
+- [x] U5. FAQ myth reframe (visible + FAQPage JSON-LD) — "rejected automatically" now 0 occurrences sitewide
+- [x] U6. Asset versioning discipline: v7; never re-serve a changed file under the same version
+
 ## Batch E — £5 "Pro Review" tier on Opus 5 (APPROVED 26 Aug, after Batch C)
 Evidence: head-to-head on production polish prompt — same rewrite quality, but Opus coaching clearly deeper
 (8 JD-tied tips vs 5; caught Terraform-in-skills-but-never-in-bullets gap). ~$0.05-0.15 model cost vs ~£4.75 net.
