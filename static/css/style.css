@@ -2987,3 +2987,22 @@ textarea::placeholder {
     .nav-link { font-size: 13px; padding: 5px 10px; }
     .tagline { font-size: 12px; }
 }
+
+/* Skip-for-now: deliberately quiet (owner: "there, but not prominent") */
+.inline-gate-skip {
+    display: block;
+    margin: 8px auto 0;
+    background: none;
+    border: none;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--gray-400, #9ca3af);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    padding: 4px 8px;
+}
+
+.inline-gate-skip:hover {
+    color: var(--gray-500);
+}

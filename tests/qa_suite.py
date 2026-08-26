@@ -1946,8 +1946,10 @@ Created a developer productivity tool with 500 GitHub stars
           'id="inlineGateCard"' in html)
     check("HTML: inline gate form present",
           'id="inlineGateForm"' in html)
-    check("HTML: inline gate skip link removed",
-          'id="inlineGateSkip"' not in html)
+    # Skip link removed in 14b9ef1 (Mar 12), reinstated by owner 26 Aug 2026
+    # as a deliberately low-key session-only unlock.
+    check("HTML: inline gate skip link present",
+          'id="inlineGateSkip"' in html)
     check("HTML: subtle inline build CTA present",
           'id="inlineBuildCtaCard"' in html)
     check("HTML: deep results container present",

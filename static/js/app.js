@@ -75,6 +75,14 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('resumeradar_subscribed');
     }
 
+    function gateSkipped() {
+        try {
+            return sessionStorage.getItem('resumeradar_gate_skipped') === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
 
     // ============================================================
     // DOM ELEMENTS
@@ -397,10 +405,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // NOTE (26 Aug 2026): a "skip for now" link was considered here per the
-    // Mar 8 UX spec, but commit 14b9ef1 (Mar 12) deliberately removed the
-    // skip path to make the subscribe gate primary — decision stands unless
-    // the owner reverses it. QA asserts the skip link stays absent.
+    // Skip-for-now: session-only unlock, deliberately low-key styling.
+    // History: removed in 14b9ef1 (Mar 12, gate-primary funnel decision);
+    // owner reinstated it 26 Aug 2026 — "there, but not prominent".
+    const inlineGateSkip = document.getElementById('inlineGateSkip');
+    if (inlineGateSkip) {
+        inlineGateSkip.addEventListener('click', () => {
+            try {
+                sessionStorage.setItem('resumeradar_gate_skipped', '1');
+            } catch (e) { /* private mode — unlock still works this render */ }
+            trackOncePerScan('gate_skipped');
+            if (lastScanData) renderDeepResults(lastScanData);
+        });
+    }
 
     // ============================================================
     // COLLAPSIBLE SECTIONS (deep results)
@@ -1259,7 +1276,7 @@ Nice to Have
         renderQuickWins(data);
 
         // ===== GATE CHECK =====
-        if (isSubscribed()) {
+        if (isSubscribed() || gateSkipped()) {
             renderDeepResults(data);
         } else {
             showInlineGate();

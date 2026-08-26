@@ -94,7 +94,10 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
         missing_technical = keyword_results.get("missing_keywords", {}).get("technical_skills", [])
         missing_soft = keyword_results.get("missing_keywords", {}).get("soft_skills", [])
         missing_certs = keyword_results.get("missing_keywords", {}).get("certifications", [])
-        match_score = keyword_results.get("overall_score", 0)
+        # Round to match the UI's score circle display — the AI must cite the
+        # exact number the user sees (69.6 in prompt vs "70%" on screen reads
+        # as two different scores).
+        match_score = round(keyword_results.get("overall_score", 0) or 0)
 
         from datetime import datetime
         today = datetime.now().strftime('%B %Y')
