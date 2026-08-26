@@ -2882,17 +2882,23 @@ textarea::placeholder {
     cursor: not-allowed;
 }
 
+/* Deliberately quiet (owner, 26 Aug 2026: "there, but not prominent") */
 .inline-gate-skip {
-    display: inline-block;
-    margin-top: 12px;
-    color: var(--gray-500);
-    font-size: 13px;
+    display: block;
+    margin: 8px auto 0;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    color: var(--gray-400);
+    font-size: 12px;
+    font-weight: 400;
     text-decoration: underline;
+    text-underline-offset: 3px;
     cursor: pointer;
 }
 
 .inline-gate-skip:hover {
-    color: var(--gray-700);
+    color: var(--gray-500);
 }
 
 .inline-gate-trust {
@@ -2986,23 +2992,4 @@ textarea::placeholder {
     .logo-text { font-size: 17px; letter-spacing: -0.3px; }
     .nav-link { font-size: 13px; padding: 5px 10px; }
     .tagline { font-size: 12px; }
-}
-
-/* Skip-for-now: deliberately quiet (owner: "there, but not prominent") */
-.inline-gate-skip {
-    display: block;
-    margin: 8px auto 0;
-    background: none;
-    border: none;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--gray-400, #9ca3af);
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    padding: 4px 8px;
-}
-
-.inline-gate-skip:hover {
-    color: var(--gray-500);
 }
