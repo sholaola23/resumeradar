@@ -2988,8 +2988,10 @@ textarea::placeholder {
 
 /* Mobile header: wordmark collided with nav pills at 375px */
 @media (max-width: 480px) {
-    .logo-icon { font-size: 22px; }
-    .logo-text { font-size: 17px; letter-spacing: -0.3px; }
-    .nav-link { font-size: 13px; padding: 5px 10px; }
+    .logo { gap: 6px; }
+    .logo-icon { font-size: 20px; }
+    .logo-text { font-size: 16px; letter-spacing: -0.3px; }
+    .nav-link { font-size: 13px; padding: 5px 8px; white-space: nowrap; }
+    .nav-links { flex-shrink: 0; }
     .tagline { font-size: 12px; }
 }
