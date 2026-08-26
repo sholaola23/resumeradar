@@ -1,3 +1,46 @@
+# ResumeRadar — Working Plan (from 26 Aug 2026 Deep Scan review)
+
+Source report: https://claude.ai/code/artifact/903f89f2-fdf0-411b-92a4-cd6ff1db857a
+Discipline: batch deploys (max 2-3/day), QA before every push, canary after every deploy.
+
+## Batch A — P0 hotfix (deploy 1) — IN PROGRESS
+- [ ] A1. Fix `get_real_ip()` NameError at app.py:554/594/634 → `request.remote_addr` (3 endpoints 500ing since 9 May)
+- [ ] A2. `/api/email-report`: int-coerce numerics + `html.escape()` summary (HTML-injection relay)
+- [ ] A3. Hero reframe — index.html:189 (role pages) + :198 (homepage): drop debunked "ATS rejects them first" claim, reframe to AI-screening/ranking
+- [ ] A4. Limiter resilience: `swallow_errors=True, in_memory_fallback_enabled=True` (Redis outage currently 500s all rate-limited routes)
+- [ ] A5. Hygiene: delete dump.rdb + .DS_Store, git rm dead scan_count.json, add .venv/ to .gitignore
+- [ ] A6. QA quick suite green → commit → USER GO → push → prod canary (verify 3 endpoints return 200/429, email escaping, hero copy live)
+
+## Batch B — AI model upgrade (deploy 2, after A verified)
+Decision: paid gate Sonnet 4.6 → **Sonnet 5** (`claude-sonnet-5`, $2/$10 vs $3/$15 — better AND ~33% cheaper).
+Free gate: **stays Haiku 4.5** ($1/$5) — still the cheapest current model; nothing cheaper has arrived.
+- [ ] B1. MODEL_PAID (ai_analyzer.py:18) + MODEL (cv_builder.py:18) → `claude-sonnet-5`
+- [ ] B2. ai_budget._PRICING: add `claude-sonnet-5: (2.00, 10.00)`; correct haiku-4-5 to (1.00, 5.00)
+- [ ] B3. Robust text extraction (all 6 `message.content[0].text` sites → first text block) — guards against thinking blocks
+- [ ] B4. Keep paid calls thinking-off via `extra_body={"thinking": {"type": "disabled"}}` (Sonnet 5 defaults to adaptive thinking; deterministic cost/latency, SDK 0.43-compatible)
+- [ ] B5. Shared Anthropic client factory with `timeout=60.0, max_retries=1` (P1-5: hung call currently kills gunicorn worker at 120s)
+- [ ] B6. QA + staging check → USER GO → deploy → canary paid path (lesson from 82fc110: model-ID changes have broken prod before)
+
+## Batch C — P1 remainder (deploy 3)
+- [ ] C1. XSS: port `escapeHtml` into app.js, wrap all AI-derived `innerHTML` values (~8 sites); add CSP header
+- [ ] C2. Budget hooks on free /api/scan path (check_budget + record_usage with MODEL_FREE)
+- [ ] C3. README regenerate from current code + add MIT LICENCE file
+- [ ] C4. Nigeria endpoint: server-side geo via CF-IPCountry header (currently worldwide £2 bypass)
+- [ ] C5. Webhook fail-loud: Stripe webhook returns 500 when Redis down (so Stripe retries); alert on _send_cv_email silent skip
+
+## Batch D — SEO & growth backlog (parallel, non-deploy-critical)
+- [ ] D1. Role pages → real content (400+ words from ROLE_PAGES data, role-specific FAQs in schema, related-role links)
+- [ ] D2. /ats-resume-checker/ hub + footer links + honest per-page lastmod (kill datetime.now() in sitemap)
+- [ ] D3. llms.txt (content ready in tasks/seo-organic-discovery-strategy.md §7)
+- [ ] D4. Directory blitz: ToolPilot (stuck since 8 Mar) → AlternativeTo → SaaSHub → uNeed → Peerlist → PH/Show HN
+- [ ] D5. DECISION: own domain vs subdomain — before first backlink lands
+- [ ] D6. LinkedIn posts (after A ships): build-story w/ receipts → anti-subscription → myth-busting → data series
+
+## Later (quarter)
+- [ ] Blueprint split of app.py · pytest + GitHub Actions CI (quick suite, AI mocked) · /jobscan-alternative page · per-JD tracking + score deltas · Unicode TTF for PDFs · pypdf migration · CF cache rule for /static
+
+---
+
 # ResumeRadar — Implementation Progress
 
 ## Phase 1: Value Features (No New Paid Entitlements)

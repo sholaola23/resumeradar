@@ -186,7 +186,7 @@
         <div class="container">
             {% if role %}
             <h1>{{ role.h1 }}</h1>
-            <p class="hero-sub">Most {{ role.title }} resumes never reach a recruiter — ATS software rejects them first. Upload yours with a job description and see which keywords you're missing in 30 seconds.</p>
+            <p class="hero-sub">Hundreds of {{ role.title }} applicants chase every opening — and AI screening ranks you before a recruiter ever scrolls. Upload yours with a job description and see which keywords you're missing in 30 seconds.</p>
             <div class="role-keywords">
                 <span class="role-keywords-label">Top keywords ATS looks for:</span>
                 {% for kw in role.keywords[:10] %}
@@ -195,7 +195,7 @@
             </div>
             {% else %}
             <h1>Your resume is getting <span class="highlight">filtered out</span>. Find out why.</h1>
-            <p class="hero-sub">Most resumes never reach a human — ATS software rejects them first. Upload yours with a job description and get your match score, missing keywords, and AI-powered fixes in 30 seconds.</p>
+            <p class="hero-sub">Recruiters get 300+ applications per role — and AI screening ranks you before anyone scrolls. Upload yours with a job description and see exactly how you rank: match score, missing keywords, and AI-powered fixes in 30 seconds.</p>
             {% endif %}
         </div>
     </section>

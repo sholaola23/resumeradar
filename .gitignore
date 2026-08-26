@@ -9,3 +9,7 @@ CV Templates/
 *.docx
 .secrets
 .claude/
+.omc/
+dump.rdb
+*.rdb
+.venv/

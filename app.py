@@ -84,6 +84,9 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["5000 per day", "1500 per hour"],
     storage_uri=_redis_limiter_uri,
+    # Redis blip must degrade rate limiting, not 500 every limited route
+    swallow_errors=True,
+    in_memory_fallback_enabled=True,
 )
 
 # Exempt static assets from rate limiting — they'd burn through global limits during spikes
@@ -551,7 +554,7 @@ def generate_cover_letter_endpoint():
             # If bundle exhausted/expired, fall through to free tier (H6 rule 4)
 
         if not bundle_bypass:
-            ip = get_real_ip()
+            ip = request.remote_addr
             if not ai_ratelimit.check_and_increment("cover_letter", ip):
                 ai_metrics.record_rate_reject(ai_metrics.TOOL_COVER_LETTER)
                 return jsonify({"error": "Daily limit reached (3 per day). Try again tomorrow."}), 429
@@ -591,7 +594,7 @@ def enhance_bullet_endpoint():
             return jsonify({"error": "Bullet point is too long (max 500 characters)."}), 400
 
         # In-handler daily rate limit (H7)
-        ip = get_real_ip()
+        ip = request.remote_addr
         if not ai_ratelimit.check_and_increment("enhance_bullet", ip):
             ai_metrics.record_rate_reject(ai_metrics.TOOL_ENHANCE_BULLET)
             return jsonify({"error": "Daily limit reached (10 per day). Try again tomorrow."}), 429
@@ -631,7 +634,7 @@ def generate_summary_endpoint():
             return jsonify({"error": "Please provide a job description."}), 400
 
         # In-handler daily rate limit (H7)
-        ip = get_real_ip()
+        ip = request.remote_addr
         if not ai_ratelimit.check_and_increment("generate_summary", ip):
             ai_metrics.record_rate_reject(ai_metrics.TOOL_GENERATE_SUMMARY)
             return jsonify({"error": "Daily limit reached (5 per day). Try again tomorrow."}), 429
@@ -720,9 +723,22 @@ def email_report():
         # Generate the PDF attachment
         pdf_bytes = bytes(generate_pdf_report(scan_data))
 
-        score = scan_data.get('match_score', 0)
+        # Coerce numerics and escape text — scan_data is client-supplied JSON and is
+        # interpolated into HTML sent from our domain (open-relay injection otherwise)
+        from html import escape as html_escape
+
+        def _as_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return 0
+
+        score = _as_int(scan_data.get('match_score', 0))
+        total_matched = _as_int(scan_data.get('total_matched', 0))
+        total_missing = _as_int(scan_data.get('total_missing', 0))
+        total_job_keywords = _as_int(scan_data.get('total_job_keywords', 0))
         ai = scan_data.get('ai_suggestions', {}) or {}
-        summary = ai.get('summary', 'Your ATS scan report is ready.')
+        summary = str(ai.get('summary', 'Your ATS scan report is ready.'))
 
         # Sanitize summary — strip any JSON/markdown artifacts that may have leaked through
         if summary and ('```' in summary or '"summary"' in summary or summary.strip().startswith('{')):
@@ -731,6 +747,7 @@ def email_report():
             summary = summary.strip().strip('"').strip()
             if not summary:
                 summary = 'Your ATS scan report is ready.'
+        summary = html_escape(summary)
 
         # Build the HTML email body
         html_body = f"""
@@ -751,15 +768,15 @@ def email_report():
 
                 <div style="display: flex; justify-content: space-around; margin: 24px 0; text-align: center;">
                     <div>
-                        <div style="font-size: 24px; font-weight: 800; color: #059669;">{scan_data.get('total_matched', 0)}</div>
+                        <div style="font-size: 24px; font-weight: 800; color: #059669;">{total_matched}</div>
                         <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Matched</div>
                     </div>
                     <div>
-                        <div style="font-size: 24px; font-weight: 800; color: #dc2626;">{scan_data.get('total_missing', 0)}</div>
+                        <div style="font-size: 24px; font-weight: 800; color: #dc2626;">{total_missing}</div>
                         <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Missing</div>
                     </div>
                     <div>
-                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">{scan_data.get('total_job_keywords', 0)}</div>
+                        <div style="font-size: 24px; font-weight: 800; color: #1f2937;">{total_job_keywords}</div>
                         <div style="font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px;">Total</div>
                     </div>
                 </div>
