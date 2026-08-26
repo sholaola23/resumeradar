@@ -112,7 +112,9 @@ def run_tests():
         r = c.get('/')
         check("X-Content-Type-Options header", r.headers.get('X-Content-Type-Options') == 'nosniff')
         check("X-Frame-Options header", r.headers.get('X-Frame-Options') == 'SAMEORIGIN')
-        check("X-XSS-Protection header", r.headers.get('X-XSS-Protection') == '1; mode=block')
+        # X-XSS-Protection is deprecated and intentionally removed (26 Aug 2026);
+        # CSP (Report-Only for now) replaces it.
+        check("CSP Report-Only header", "default-src 'self'" in (r.headers.get('Content-Security-Policy-Report-Only') or ''))
         check("Referrer-Policy header", 'strict-origin' in (r.headers.get('Referrer-Policy') or ''))
         check("Permissions-Policy header", bool(r.headers.get('Permissions-Policy')))
 

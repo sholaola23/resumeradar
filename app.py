@@ -1967,6 +1967,16 @@ def free_download_nigeria():
         # Input validation
         if not token or not session_id or not cancel_nonce:
             return jsonify({"error": "Missing required fields."}), 400
+
+        # Server-side geo check — the client-side timezone gate is trivially
+        # bypassed (endpoint name ships in public JS). Cloudflare sets
+        # CF-IPCountry when IP Geolocation is enabled; when the header is
+        # absent we allow (no worse than before) but log so it's visible.
+        cf_country = request.headers.get('CF-IPCountry', '').upper()
+        if cf_country and cf_country != 'NG':
+            return jsonify({"error": "This offer is only available in Nigeria."}), 403
+        if not cf_country:
+            print("free-download-nigeria: CF-IPCountry absent — geo not enforced (enable IP Geolocation in Cloudflare)")
         if template not in VALID_TEMPLATES:
             template = "classic"
         if fmt not in VALID_FORMATS:
@@ -2055,6 +2065,7 @@ def _send_cv_email(email, token, template, event_id):
     """
     try:
         if not _redis_client:
+            print(f"ERROR: CV email skipped — Redis unavailable (event {event_id})")
             return
 
         # Strict idempotency: SETNX on event.id, 72h TTL matches Stripe retry window
@@ -2066,6 +2077,7 @@ def _send_cv_email(email, token, template, event_id):
         # Read CV data (TTL extended to 72h by webhook caller)
         cv_data_raw = _redis_client.get(f"resumeradar:cv:{token}")
         if not cv_data_raw:
+            print(f"ERROR: CV email skipped — cv data missing/expired for token (event {event_id})")
             _redis_client.delete(dedup_key)  # Release so retry can try again
             return
 
@@ -2348,13 +2360,27 @@ def build_webhook():
                 template = metadata.get('template', 'classic')
                 delivery_email = metadata.get('delivery_email', '')
 
-                if cv_token and _redis_client:
-                    try:
-                        paid_key = f"resumeradar:cv_paid:{cv_token}"
-                        _redis_client.setex(paid_key, 7200, "1")
-                        _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
-                    except Exception:
-                        pass
+                if cv_token:
+                    stamp_error = None
+                    if _redis_client:
+                        try:
+                            paid_key = f"resumeradar:cv_paid:{cv_token}"
+                            _redis_client.setex(paid_key, 7200, "1")
+                            _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                        except Exception as e:
+                            stamp_error = str(e)
+                    else:
+                        stamp_error = "Redis unavailable"
+                    if stamp_error:
+                        # Customer paid but can't download — fail loudly and
+                        # release the event dedup so Stripe's retry can succeed
+                        # (same pattern as the bundle path above).
+                        print(f"ERROR: cv_paid stamp failed ({stamp_error}) for session {session.get('id', '')}")
+                        try:
+                            _redis_client.delete(dedup_key)
+                        except Exception:
+                            pass
+                        return jsonify({"error": "Payment recorded but activation failed; retry."}), 500
 
                 # AUDIT: payment confirmed
                 try:
@@ -2478,11 +2504,17 @@ def build_webhook_paystack():
                         _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
                         _redis_client.setex(f"resumeradar:cv_paystack_ref:{cv_token}", 259200, reference)
                     except Exception as redis_err:
-                        print(f"Paystack webhook Redis error: {redis_err}")
+                        # Customer paid but can't download — fail loudly, release
+                        # dedup, and 500 so Paystack retries the webhook.
+                        print(f"ERROR: Paystack cv_paid stamp failed ({redis_err}) for ref {reference}")
                         try:
                             _redis_client.delete(dedup_key)
                         except Exception:
                             pass
+                        return jsonify({"error": "Activation failed; retry."}), 500
+                elif cv_token:
+                    print(f"ERROR: Redis unavailable — Paystack cv_paid not stamped for ref {reference}")
+                    return jsonify({"error": "Activation failed; retry."}), 500
 
                 try:
                     audit_log.log_event(
@@ -2729,8 +2761,19 @@ def add_security_headers(response):
     """Add security headers to every response."""
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    # Report-Only first: surfaces violations in the browser console without
+    # breaking anything. Flip to enforcing Content-Security-Policy once a
+    # week of real traffic shows no unexpected violations.
+    response.headers['Content-Security-Policy-Report-Only'] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self'"
+    )
     response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
     # Cache static assets for 1 hour (not longer — filenames aren't fingerprinted)
     if request.path.startswith('/static/'):

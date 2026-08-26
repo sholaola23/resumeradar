@@ -17,6 +17,15 @@ function sanitizeAIText(text) {
     return text;
 }
 
+// Escape HTML before interpolating ANY AI- or user-derived string into
+// innerHTML. AI output is steered by the pasted job description, so a
+// poisoned JD can prompt-inject markup into suggestions (XSS otherwise).
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // MODE RESOLVER — single place for feature flags
@@ -1335,8 +1344,8 @@ Nice to Have
         const top3 = flat.slice(0, 3);
         list.innerHTML = top3.map(item =>
             `<div class="top-missing-item">
-                <span class="top-missing-keyword">${item.keyword}</span>
-                ${item.category ? `<span class="top-missing-category">${item.category}</span>` : ''}
+                <span class="top-missing-keyword">${escapeHtml(item.keyword)}</span>
+                ${item.category ? `<span class="top-missing-category">${escapeHtml(item.category)}</span>` : ''}
             </div>`
         ).join('');
 
@@ -1372,7 +1381,7 @@ Nice to Have
         }
 
         list.innerHTML = wins.map((win, i) => {
-            const text = sanitizeAIText(typeof win === 'string' ? win : (win.suggestion || win.text || JSON.stringify(win)));
+            const text = escapeHtml(sanitizeAIText(typeof win === 'string' ? win : (win.suggestion || win.text || JSON.stringify(win))));
             return `<div class="quick-win-item">
                 <span class="quick-win-number">${i + 1}</span>
                 <span class="quick-win-text">${text}</span>
@@ -1432,7 +1441,7 @@ Nice to Have
                 summaryText = `${score}% match with ${N} gap${N !== 1 ? 's' : ''} to close. The action plan below shows exactly what to fix first.`;
             }
         }
-        scoreSummary.innerHTML = `<p>${summaryText}</p>`;
+        scoreSummary.innerHTML = `<p>${escapeHtml(summaryText)}</p>`;
 
         // Stats boxes
         scoreStats.innerHTML = `
@@ -1671,7 +1680,7 @@ Nice to Have
             section.innerHTML = `
                 <div class="keywords-section-title">${labels[category] || category}</div>
                 <div class="keyword-tags">
-                    ${words.map(w => `<span class="keyword-tag ${type}">${w}</span>`).join('')}
+                    ${words.map(w => `<span class="keyword-tag ${type}">${escapeHtml(w)}</span>`).join('')}
                 </div>
             `;
             container.appendChild(section);
@@ -1702,7 +1711,7 @@ Nice to Have
         if (suggestions.api_error) {
             const notice = document.createElement('div');
             notice.className = 'ai-item';
-            notice.innerHTML = `<p style="color: var(--warning);">${suggestions.api_error}</p>`;
+            notice.innerHTML = `<p style="color: var(--warning);">${escapeHtml(suggestions.api_error)}</p>`;
             container.appendChild(notice);
         }
 
@@ -1712,7 +1721,7 @@ Nice to Have
             section.className = 'ai-section';
             section.innerHTML = `
                 <h3>💪 Your Strengths</h3>
-                ${suggestions.strengths.map(s => `<div class="strength-item">${s}</div>`).join('')}
+                ${suggestions.strengths.map(s => `<div class="strength-item">${escapeHtml(s)}</div>`).join('')}
             `;
             container.appendChild(section);
         }
@@ -1727,8 +1736,8 @@ Nice to Have
                 const div = document.createElement('div');
                 div.className = `ai-item ${priority}-priority`;
                 div.innerHTML = `
-                    <p><span class="label">${item.section}:</span> ${item.issue}</p>
-                    <p style="margin-top: 6px; color: var(--primary);">→ ${item.suggestion}</p>
+                    <p><span class="label">${escapeHtml(item.section)}:</span> ${escapeHtml(item.issue)}</p>
+                    <p style="margin-top: 6px; color: var(--primary);">→ ${escapeHtml(item.suggestion)}</p>
                 `;
                 section.appendChild(div);
             });
@@ -1744,8 +1753,8 @@ Nice to Have
                 const div = document.createElement('div');
                 div.className = 'ai-item';
                 div.innerHTML = `
-                    <p><span class="label">"${item.keyword}"</span> → Add to: ${item.where_to_add}</p>
-                    <p style="margin-top: 6px; color: var(--gray-500);">${item.how_to_add}</p>
+                    <p><span class="label">"${escapeHtml(item.keyword)}"</span> → Add to: ${escapeHtml(item.where_to_add)}</p>
+                    <p style="margin-top: 6px; color: var(--gray-500);">${escapeHtml(item.how_to_add)}</p>
                 `;
                 section.appendChild(div);
             });
@@ -1761,8 +1770,8 @@ Nice to Have
                 const div = document.createElement('div');
                 div.className = 'ai-item';
                 div.innerHTML = `
-                    <p><span class="label">${item.section}:</span> ${item.current_issue}</p>
-                    <p style="margin-top: 6px; color: var(--primary);">→ ${item.suggested_approach}</p>
+                    <p><span class="label">${escapeHtml(item.section)}:</span> ${escapeHtml(item.current_issue)}</p>
+                    <p style="margin-top: 6px; color: var(--primary);">→ ${escapeHtml(item.suggested_approach)}</p>
                 `;
                 section.appendChild(div);
             });
@@ -1775,7 +1784,7 @@ Nice to Have
             section.className = 'ai-section';
             section.innerHTML = `
                 <h3>⚡ Quick Wins</h3>
-                ${suggestions.quick_wins.map(w => `<div class="quick-win">${w}</div>`).join('')}
+                ${suggestions.quick_wins.map(w => `<div class="quick-win">${escapeHtml(w)}</div>`).join('')}
             `;
             container.appendChild(section);
         }
@@ -1797,7 +1806,7 @@ Nice to Have
         container.innerHTML = points.map((point, i) => `
             <div class="cover-point">
                 <span class="cover-point-num">${i + 1}</span>
-                <p class="cover-point-text">${point}</p>
+                <p class="cover-point-text">${escapeHtml(point)}</p>
             </div>
         `).join('');
 
@@ -1866,8 +1875,8 @@ Nice to Have
                     return;
                 }
 
-                // Render cover letter
-                body.innerHTML = data.cover_letter.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+                // Render cover letter — escape BEFORE converting newlines to markup
+                body.innerHTML = escapeHtml(data.cover_letter).replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
                 body.innerHTML = '<p>' + body.innerHTML + '</p>';
                 output.style.display = 'block';
 
@@ -1953,8 +1962,8 @@ Nice to Have
                 div.innerHTML = `
                     <span class="ats-issue-icon">${icons[issue.type] || 'ℹ️'}</span>
                     <div class="ats-issue-content">
-                        <div class="ats-issue-title">${issue.message}</div>
-                        <div class="ats-issue-detail">${issue.detail}</div>
+                        <div class="ats-issue-title">${escapeHtml(issue.message)}</div>
+                        <div class="ats-issue-detail">${escapeHtml(issue.detail)}</div>
                     </div>
                 `;
                 container.appendChild(div);
@@ -1978,7 +1987,7 @@ Nice to Have
             tipsDiv.className = 'ats-tips';
             tipsDiv.innerHTML = `
                 <h3>💡 Pro Tips</h3>
-                ${ats.tips.map(t => `<div class="ats-tip">${t}</div>`).join('')}
+                ${ats.tips.map(t => `<div class="ats-tip">${escapeHtml(t)}</div>`).join('')}
             `;
             container.appendChild(tipsDiv);
         }
@@ -2081,7 +2090,7 @@ Nice to Have
                 <div class="history-entry">
                     <div class="history-entry-score" style="color: ${scoreColor};">${entry.score}% ${delta}</div>
                     <div class="history-entry-detail">
-                        <span class="history-entry-snippet">${snippet}</span>
+                        <span class="history-entry-snippet">${escapeHtml(snippet)}</span>
                         <span class="history-entry-time">${timeStr}</span>
                     </div>
                 </div>
