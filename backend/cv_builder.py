@@ -399,8 +399,8 @@ def _assess_extraction_quality(resume_text, result, fallback_counts=None):
 
 def polish_cv_sections(cv_data):
     """
-    Use Claude Haiku to polish all CV sections for ATS optimization
-    against the target job description.
+    Use Claude (MODEL above) to polish all CV sections for ATS
+    optimization against the target job description.
 
     Args:
         cv_data: dict with personal, summary, experience, education,
@@ -462,6 +462,7 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
 4. NEVER fabricate certifications, degrees, or qualifications.
 5. Keep education, certifications, and projects EXACTLY as provided — only improve description wording.
 6. NEVER omit any entries. If the input has 5 jobs, return ALL 5. If it has 3 education entries, return ALL 3.
+7. NEVER state or imply a total years-of-experience figure (e.g. "5+ years of experience") unless the person explicitly wrote that figure themselves. Do NOT derive one from employment dates, and NEVER echo the years requirement from the job description.
 
 WHAT YOU SHOULD DO:
 1. Polish the summary into a strong 2-3 sentence professional summary. Improve the WORDING only. Incorporate keywords from the job description naturally, but only where they truthfully describe the person's actual experience.

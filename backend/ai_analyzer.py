@@ -315,6 +315,7 @@ Today's date: {today}
 
 RULES:
 - Do NOT invent experience or skills not present in the resume
+- Do NOT state a years-of-experience figure unless the resume explicitly states one — never derive it from dates or echo the job description's requirement
 - Do NOT include placeholder text like [Company Name] or [Your Name] — use generic "your team" / "this role" if company name isn't in the job description
 - Keep it under 350 words
 - Write in first person
@@ -483,6 +484,7 @@ Rules:
 - End with what they bring to the role
 - Use confident, third-person language (no "I")
 - Do NOT invent experience not present in the resume
+- Do NOT state a years-of-experience figure unless the resume explicitly states one — never derive it from dates or echo the job description's requirement
 - Return ONLY the summary paragraph, nothing else
 
 Professional Summary:"""
