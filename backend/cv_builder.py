@@ -7,15 +7,15 @@ Follows same pattern as ai_analyzer.py.
 import os
 import json
 import re
-from anthropic import Anthropic
 
 from backend import ai_budget
 from backend import ai_metrics
+from backend.ai_analyzer import make_client, first_text, NO_THINKING
 
-# Paid CV builder runs on Sonnet for higher-quality polish.
-# (Verified 2026-05-09: claude-sonnet-4-6 listed in /v1/models for the
-# production Anthropic key after the auth incident was resolved.)
-MODEL = "claude-sonnet-4-6"
+# Paid CV builder runs on Sonnet 5 ($2/$10 per MTok — upgraded from
+# Sonnet 4.6's $3/$15 on 2026-08-26; verify on staging before prod,
+# per the 82fc110 model-ID incident).
+MODEL = "claude-sonnet-5"
 TOOL = ai_metrics.TOOL_CV_POLISH
 
 
@@ -425,7 +425,7 @@ def polish_cv_sections(cv_data):
         }
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = make_client(api_key)
 
         personal = cv_data.get("personal", {})
         summary = cv_data.get("summary", "")
@@ -527,7 +527,8 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
             max_tokens=5000,
             messages=[
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            extra_body=NO_THINKING,
         )
 
         ai_metrics.record_claude_call(TOOL)
@@ -537,7 +538,7 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
         output_tok = getattr(usage, "output_tokens", None) if usage else None
         ai_budget.record_usage(input_tok, output_tok, model=MODEL)
 
-        response_text = message.content[0].text
+        response_text = first_text(message)
 
         # Parse JSON -- same pattern as ai_analyzer.py
         try:
@@ -638,7 +639,7 @@ def extract_and_polish(resume_text, job_description, scan_keywords=None):
         }
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = make_client(api_key)
 
         from datetime import datetime
         today = datetime.now().strftime('%B %Y')
@@ -758,7 +759,8 @@ Respond with ONLY valid JSON:
             max_tokens=5000,
             messages=[
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            extra_body=NO_THINKING,
         )
 
         ai_metrics.record_claude_call(TOOL)
@@ -768,7 +770,7 @@ Respond with ONLY valid JSON:
         output_tok = getattr(usage, "output_tokens", None) if usage else None
         ai_budget.record_usage(input_tok, output_tok, model=MODEL)
 
-        response_text = message.content[0].text
+        response_text = first_text(message)
 
         # Parse JSON — same repair logic as polish_cv_sections
         try:

@@ -12,10 +12,32 @@ from backend import ai_cache
 from backend import ai_budget
 from backend import ai_metrics
 
-# Free /api/scan stays on Haiku (high-volume, free tier).
-# Paid features (cover letter, bullet enhance, summary) run on Sonnet 4.6.
-MODEL_FREE = "claude-haiku-4-5-20251001"
-MODEL_PAID = "claude-sonnet-4-6"
+# Both gates run Sonnet 5 — cheaper AND stronger than Sonnet 4.6
+# ($2/$10 vs $3/$15 per MTok). Free scans are budget-guarded and degrade to
+# rule-based suggestions when the daily cap trips. To dial free-tier spend
+# back down fast, set MODEL_FREE = "claude-haiku-4-5-20251001".
+MODEL_FREE = "claude-sonnet-5"
+MODEL_PAID = "claude-sonnet-5"
+
+# Sonnet 5 defaults to adaptive thinking; these are short structured calls,
+# so keep thinking off for deterministic cost and latency. Passed via
+# extra_body because the pinned SDK (0.43) predates the thinking param.
+NO_THINKING = {"thinking": {"type": "disabled"}}
+
+
+def make_client(api_key):
+    """Shared Anthropic client. 60s timeout so a hung call fails fast instead
+    of riding the SDK's ~10-min default into gunicorn's 120s worker kill."""
+    return Anthropic(api_key=api_key, timeout=60.0, max_retries=1)
+
+
+def first_text(message):
+    """Text of the first text block — content[0] is not guaranteed to be text
+    on models that can emit thinking blocks."""
+    for block in message.content:
+        if getattr(block, "type", None) == "text" and getattr(block, "text", None):
+            return block.text
+    return ""
 
 
 def _safe_truncate(text, max_chars):
@@ -48,8 +70,15 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
     if not api_key or api_key == "your-anthropic-api-key-here":
         return _get_fallback_suggestions(keyword_results)
 
+    # Free tier degrades gracefully to rule-based suggestions when the daily
+    # AI budget trips — this path was previously invisible to the cost guard.
+    if not ai_budget.check_budget():
+        fallback = _get_fallback_suggestions(keyword_results)
+        fallback["api_error"] = "AI analysis temporarily unavailable. Showing rule-based suggestions."
+        return fallback
+
     try:
-        client = Anthropic(api_key=api_key)
+        client = make_client(api_key)
 
         # Build a focused prompt with the analysis context
         missing_technical = keyword_results.get("missing_keywords", {}).get("technical_skills", [])
@@ -123,11 +152,17 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
             max_tokens=3000,
             messages=[
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            extra_body=NO_THINKING,
         )
 
+        usage = getattr(message, 'usage', None)
+        input_tok = getattr(usage, 'input_tokens', None) if usage else None
+        output_tok = getattr(usage, 'output_tokens', None) if usage else None
+        ai_budget.record_usage(input_tok, output_tok, model=MODEL_FREE)
+
         # Parse the response
-        response_text = message.content[0].text
+        response_text = first_text(message)
 
         # Try to extract JSON from the response
         try:
@@ -246,7 +281,7 @@ def generate_cover_letter(resume_text, job_description):
         return {"error": ai_budget.BUDGET_EXCEEDED_MESSAGE}
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = make_client(api_key)
 
         from datetime import datetime
         today = datetime.now().strftime('%B %d, %Y')
@@ -283,7 +318,8 @@ Write the cover letter body now:"""
             max_tokens=1500,
             messages=[
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            extra_body=NO_THINKING,
         )
 
         ai_metrics.record_claude_call(tool)
@@ -294,7 +330,7 @@ Write the cover letter body now:"""
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
         ai_budget.record_usage(input_tok, output_tok, model=MODEL_PAID)
 
-        cover_letter = message.content[0].text.strip()
+        cover_letter = first_text(message).strip()
 
         # Basic cleanup — remove any accidental salutation/sign-off/headers
         lines = cover_letter.split('\n')
@@ -346,7 +382,7 @@ def enhance_bullet_point(bullet_text, job_context=None):
         return {"error": ai_budget.BUDGET_EXCEEDED_MESSAGE}
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = make_client(api_key)
 
         context_line = f"\nTarget role: {job_context}" if job_context else ""
 
@@ -367,7 +403,8 @@ Rewritten bullet:"""
         message = client.messages.create(
             model=MODEL_PAID,
             max_tokens=200,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            extra_body=NO_THINKING,
         )
 
         ai_metrics.record_claude_call(tool)
@@ -377,7 +414,7 @@ Rewritten bullet:"""
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
         ai_budget.record_usage(input_tok, output_tok, model=MODEL_PAID)
 
-        enhanced = message.content[0].text.strip()
+        enhanced = first_text(message).strip()
         if enhanced.startswith('- '):
             enhanced = enhanced[2:]
         if enhanced.startswith('• '):
@@ -419,7 +456,7 @@ def generate_resume_summary(resume_text, job_description):
         return {"error": ai_budget.BUDGET_EXCEEDED_MESSAGE}
 
     try:
-        client = Anthropic(api_key=api_key)
+        client = make_client(api_key)
 
         prompt = f"""You are a resume writing expert. Write a professional summary paragraph for the top of a resume.
 
@@ -443,7 +480,8 @@ Professional Summary:"""
         message = client.messages.create(
             model=MODEL_PAID,
             max_tokens=300,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            extra_body=NO_THINKING,
         )
 
         ai_metrics.record_claude_call(tool)
@@ -453,7 +491,7 @@ Professional Summary:"""
         output_tok = getattr(usage, 'output_tokens', None) if usage else None
         ai_budget.record_usage(input_tok, output_tok, model=MODEL_PAID)
 
-        summary = message.content[0].text.strip()
+        summary = first_text(message).strip()
         result = {"summary": summary}
         ai_cache.cache_set(tool, result, resume_text, job_description)
 

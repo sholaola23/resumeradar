@@ -26,10 +26,12 @@ _DAY_TTL = 86400  # 24 hours
 
 # Per-model pricing (USD per million tokens) — (input, output)
 _PRICING = {
-    "claude-haiku-4-5-20251001": (0.80, 4.00),
-    "claude-haiku-4-5": (0.80, 4.00),
+    "claude-haiku-4-5-20251001": (1.00, 5.00),
+    "claude-haiku-4-5": (1.00, 5.00),
     "claude-sonnet-4-6": (3.00, 15.00),
-    "claude-opus-4-7": (15.00, 75.00),
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-opus-5": (5.00, 25.00),
+    "claude-opus-4-7": (5.00, 25.00),
 }
 # Conservative default if model is unknown (falls back to Sonnet rate so the
 # daily cap fires sooner rather than later — better to over-protect spend).
