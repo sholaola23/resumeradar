@@ -23,7 +23,7 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 - [x] B5. Shared Anthropic client factory with `timeout=60.0, max_retries=1` (P1-5: hung call currently kills gunicorn worker at 120s)
 - [x] B6. Staging + prod verified live (deploy 2). Tiered fallback + anti-fabrication prompt fix = deploy 3 (26 Aug) → USER GO → deploy → canary paid path (lesson from 82fc110: model-ID changes have broken prod before)
 
-## Batch C — P1 remainder — implemented 26 Aug, on staging, prod deploy 4 target 27 Aug
+## Batch C — P1 remainder — ✅ LIVE ON PROD (deploy 4, 26 Aug ~23:59), canary passed
 - [x] C1. XSS: port `escapeHtml` into app.js, wrap all AI-derived `innerHTML` values (~8 sites); add CSP header
 - [x] C2. Budget hooks on free /api/scan path (shipped early, in Batch B)
 - [x] C3. README regenerate from current code + add MIT LICENCE file
@@ -38,7 +38,7 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 - [ ] D5. DECISION: own domain vs subdomain — before first backlink lands
 - [ ] D6. LinkedIn posts (after A ships): build-story w/ receipts → anti-subscription → myth-busting → data series
 
-## Batch D-UI — UX fixes — implemented + verified on staging 26 Aug (rides deploy 4)
+## Batch D-UI — UX fixes — ✅ LIVE ON PROD (deploy 4), canary passed incl. skip flow + geo 403 from UK IP
 - [x] U1. Score consistency: AI may cite only the (rounded) headline score; verified on novel + demo scans
 - [x] U2. CTA de-noising: report + share actions collapsed; £2 build CTA is the single dominant action
 - [x] U3. "Skip for now" reinstated per owner (reverses 14b9ef1) — quiet 12px link, session-only unlock, gate_skipped tracked
