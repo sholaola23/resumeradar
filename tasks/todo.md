@@ -15,13 +15,15 @@ Discipline: batch deploys (max 2-3/day), QA before every push, canary after ever
 Decision: paid gate Sonnet 4.6 → **Sonnet 5** (`claude-sonnet-5`, $2/$10 vs $3/$15 — better AND ~33% cheaper).
 Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) — budget-guarded, Haiku dial-back documented in ai_analyzer.py.
 - [x] B1. MODEL_PAID (ai_analyzer.py:18) + MODEL (cv_builder.py:18) → `claude-sonnet-5`
+- [x] B7. Tiered free-scan degradation: Sonnet 5 -> Haiku (60% budget) -> rule-based (hard cap)
+- [x] B8. Prompt integrity: forbid derived years-of-experience claims (all 3 AI prompts) — caught via Opus/Sonnet head-to-head
 - [x] B2. ai_budget._PRICING: add `claude-sonnet-5: (2.00, 10.00)`; correct haiku-4-5 to (1.00, 5.00)
 - [x] B3. Robust text extraction (all 6 `message.content[0].text` sites → first text block) — guards against thinking blocks
 - [x] B4. Keep paid calls thinking-off via `extra_body={"thinking": {"type": "disabled"}}` (Sonnet 5 defaults to adaptive thinking; deterministic cost/latency, SDK 0.43-compatible)
 - [x] B5. Shared Anthropic client factory with `timeout=60.0, max_retries=1` (P1-5: hung call currently kills gunicorn worker at 120s)
-- [ ] B6. (in progress) QA green; staging deployed for live Sonnet 5 verification → USER GO → deploy → canary paid path (lesson from 82fc110: model-ID changes have broken prod before)
+- [x] B6. Staging + prod verified live (deploy 2). Tiered fallback + anti-fabrication prompt fix = deploy 3 (26 Aug) → USER GO → deploy → canary paid path (lesson from 82fc110: model-ID changes have broken prod before)
 
-## Batch C — P1 remainder (deploy 3)
+## Batch C — P1 remainder (deploy 4, target 27 Aug)
 - [ ] C1. XSS: port `escapeHtml` into app.js, wrap all AI-derived `innerHTML` values (~8 sites); add CSP header
 - [ ] C2. Budget hooks on free /api/scan path (check_budget + record_usage with MODEL_FREE)
 - [ ] C3. README regenerate from current code + add MIT LICENCE file
@@ -35,6 +37,15 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 - [ ] D4. Directory blitz: ToolPilot (stuck since 8 Mar) → AlternativeTo → SaaSHub → uNeed → Peerlist → PH/Show HN
 - [ ] D5. DECISION: own domain vs subdomain — before first backlink lands
 - [ ] D6. LinkedIn posts (after A ships): build-story w/ receipts → anti-subscription → myth-busting → data series
+
+## Batch E — £5 "Pro Review" tier on Opus 5 (APPROVED 26 Aug, after Batch C)
+Evidence: head-to-head on production polish prompt — same rewrite quality, but Opus coaching clearly deeper
+(8 JD-tied tips vs 5; caught Terraform-in-skills-but-never-in-bullets gap). ~$0.05-0.15 model cost vs ~£4.75 net.
+- [ ] E1. Stripe price object £5 + Paystack equivalent; STRIPE_PRICE_ID_PRO env
+- [ ] E2. cv_builder: model param (sonnet-5 | opus-5) routed by purchased tier
+- [ ] E3. /build UI: tier picker (£2 Polish / £5 Pro Review — "senior-coach gap analysis, 8+ tailored improvements")
+- [ ] E4. Bundle credits: decide whether Pro consumes 2 credits or has own bundle
+- [ ] E5. QA + staging + canary with Stripe test card
 
 ## Later (quarter)
 - [ ] Blueprint split of app.py · pytest + GitHub Actions CI (quick suite, AI mocked) · /jobscan-alternative page · per-JD tracking + score deltas · Unicode TTF for PDFs · pypdf migration · CF cache rule for /static
