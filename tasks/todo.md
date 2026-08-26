@@ -23,12 +23,12 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 - [x] B5. Shared Anthropic client factory with `timeout=60.0, max_retries=1` (P1-5: hung call currently kills gunicorn worker at 120s)
 - [x] B6. Staging + prod verified live (deploy 2). Tiered fallback + anti-fabrication prompt fix = deploy 3 (26 Aug) → USER GO → deploy → canary paid path (lesson from 82fc110: model-ID changes have broken prod before)
 
-## Batch C — P1 remainder (deploy 4, target 27 Aug)
-- [ ] C1. XSS: port `escapeHtml` into app.js, wrap all AI-derived `innerHTML` values (~8 sites); add CSP header
-- [ ] C2. Budget hooks on free /api/scan path (check_budget + record_usage with MODEL_FREE)
-- [ ] C3. README regenerate from current code + add MIT LICENCE file
-- [ ] C4. Nigeria endpoint: server-side geo via CF-IPCountry header (currently worldwide £2 bypass)
-- [ ] C5. Webhook fail-loud: Stripe webhook returns 500 when Redis down (so Stripe retries); alert on _send_cv_email silent skip
+## Batch C — P1 remainder — implemented 26 Aug, on staging, prod deploy 4 target 27 Aug
+- [x] C1. XSS: port `escapeHtml` into app.js, wrap all AI-derived `innerHTML` values (~8 sites); add CSP header
+- [x] C2. Budget hooks on free /api/scan path (shipped early, in Batch B)
+- [x] C3. README regenerate from current code + add MIT LICENCE file
+- [x] C4. Nigeria endpoint: server-side geo via CF-IPCountry header (currently worldwide £2 bypass)
+- [x] C5. Webhook fail-loud: Stripe webhook returns 500 when Redis down (so Stripe retries); alert on _send_cv_email silent skip
 
 ## Batch D — SEO & growth backlog (parallel, non-deploy-critical)
 - [ ] D1. Role pages → real content (400+ words from ROLE_PAGES data, role-specific FAQs in schema, related-role links)
