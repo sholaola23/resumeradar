@@ -56,7 +56,9 @@ Evidence: head-to-head on production polish prompt — same rewrite quality, but
 - [x] E5. Verified on staging 27 Aug: pro token -> £5.00 session (std £2.00 control), Paystack 400,
   UI tier-switch + Opus regen + £5 checkout page reached, webhook (new test endpoint
   we_1U8xIc0kxtLwjKih8zsre8yF) -> cv_paid -> PDF download 200
-- [ ] E6. PROD ENABLE (user: create £5 live price in Stripe dashboard) -> then push master, set prod STRIPE_PRICE_ID_PRO, canary
+- [x] E6. PROD LIVE 27 Aug ~08:15: live product prod_V9FylH7vGMrrz6 / price_1U8xSP0kxtLwjKihSVG4XaTJ
+  (created via owner's Chrome session, approved). Canary: pro token -> LIVE £5.00 session (tier=pro),
+  std control £2.00, Paystack 400, free scan clean. Canary sessions expired after verification.
 - [x] BONUS: prod gunicorn aligned to render.yaml (3 workers x 4 threads) — 3 parallel AI calls now complete in 3s (were serialized)
 
 ## Later (quarter)
