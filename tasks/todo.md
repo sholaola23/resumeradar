@@ -31,12 +31,12 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 - [x] C5. Webhook fail-loud: Stripe webhook returns 500 when Redis down (so Stripe retries); alert on _send_cv_email silent skip
 
 ## Batch D — SEO & growth backlog (parallel, non-deploy-critical)
-- [ ] D1. Role pages → real content (400+ words from ROLE_PAGES data, role-specific FAQs in schema, related-role links)
-- [ ] D2. /ats-resume-checker/ hub + footer links + honest per-page lastmod (kill datetime.now() in sitemap)
-- [ ] D3. llms.txt (content ready in tasks/seo-organic-discovery-strategy.md §7)
+- [x] D1. Role pages: ~900 unique words/page authored (backend/role_content.py), role FAQs in JSON-LD, related links — verified on staging
+- [x] D2. Hub live (CollectionPage schema) + footer role links on / and /build + LASTMOD constants (sitemap 18 urls)
+- [x] D3. /llms.txt live (updated for £2/£5 ladder + ranking reframe)
 - [ ] D4. Directory blitz: ToolPilot (stuck since 8 Mar) → AlternativeTo → SaaSHub → uNeed → Peerlist → PH/Show HN
 - [ ] D5. DECISION: own domain vs subdomain — before first backlink lands
-- [ ] D6. LinkedIn posts (after A ships): build-story w/ receipts → anti-subscription → myth-busting → data series
+- [~] D6. Post #1 drafted (build story), trope-QA clean, saved to Kleo drafts 27 Aug. Next: anti-subscription, myth-busting, data series
 
 ## Batch D-UI — UX fixes — ✅ LIVE ON PROD (deploy 4), canary passed incl. skip flow + geo 403 from UK IP
 - [x] U1. Score consistency: AI may cite only the (rounded) headline score; verified on novel + demo scans
