@@ -1625,3 +1625,27 @@
 @media (max-width: 560px) {
     .tier-picker { grid-template-columns: 1fr; }
 }
+
+/* Tier cards sit on the dark payment card — explicit surfaces for contrast */
+.payment-card .tier-option {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.payment-card .tier-option.tier-selected {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: #ffffff;
+}
+
+.payment-card .tier-name,
+.payment-card .tier-price {
+    color: #ffffff;
+}
+
+.payment-card .tier-desc {
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.payment-card .tier-busy-note {
+    color: rgba(255, 255, 255, 0.85);
+}

@@ -49,11 +49,15 @@ Free gate: **also Sonnet 5** (owner call, 26 Aug: wow the free tier to convert) 
 ## Batch E — £5 "Pro Review" tier on Opus 5 (APPROVED 26 Aug, after Batch C)
 Evidence: head-to-head on production polish prompt — same rewrite quality, but Opus coaching clearly deeper
 (8 JD-tied tips vs 5; caught Terraform-in-skills-but-never-in-bullets gap). ~$0.05-0.15 model cost vs ~£4.75 net.
-- [ ] E1. Stripe price object £5 + Paystack equivalent; STRIPE_PRICE_ID_PRO env
-- [ ] E2. cv_builder: model param (sonnet-5 | opus-5) routed by purchased tier
-- [ ] E3. /build UI: tier picker (£2 Polish / £5 Pro Review — "senior-coach gap analysis, 8+ tailored improvements")
-- [ ] E4. Bundle credits: decide whether Pro consumes 2 credits or has own bundle
-- [ ] E5. QA + staging + canary with Stripe test card
+- [x] E1. Stripe test product+price live on staging (price_1U8x4a0kxtLwjKih3ixCZBN6). LIVE price + prod env var pending prod-enable
+- [x] E2. Tier routing server-side (cv_tier:{token} in Redis; checkout price never client-chosen)
+- [x] E3. Tier picker in payment card; switch = regenerate with chosen tier (all 3 gen paths)
+- [x] E4. DECIDED: bundles cover Standard only; Pro is direct card purchase (guards live)
+- [x] E5. Verified on staging 27 Aug: pro token -> £5.00 session (std £2.00 control), Paystack 400,
+  UI tier-switch + Opus regen + £5 checkout page reached, webhook (new test endpoint
+  we_1U8xIc0kxtLwjKih8zsre8yF) -> cv_paid -> PDF download 200
+- [ ] E6. PROD ENABLE (user: create £5 live price in Stripe dashboard) -> then push master, set prod STRIPE_PRICE_ID_PRO, canary
+- [x] BONUS: prod gunicorn aligned to render.yaml (3 workers x 4 threads) — 3 parallel AI calls now complete in 3s (were serialized)
 
 ## Later (quarter)
 - [ ] Blueprint split of app.py · pytest + GitHub Actions CI (quick suite, AI mocked) · /jobscan-alternative page · per-JD tracking + score deltas · Unicode TTF for PDFs · pypdf migration · CF cache rule for /static
