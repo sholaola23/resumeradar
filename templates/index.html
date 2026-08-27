@@ -21,7 +21,7 @@
     {% endif %}
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_US">
-    <meta property="og:url" content="https://resumeradar.sholastechnotes.com">
+    <meta property="og:url" content="https://resumeradar.sholastechnotes.com{% if role %}/ats-resume-checker/{{ role_slug }}{% endif %}">
     <meta property="og:image" content="https://resumeradar.sholastechnotes.com/static/images/{{ og_image }}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=7">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -82,7 +82,24 @@
     }
     </script>
 
-    <!-- FAQ Structured Data -->
+    <!-- FAQ Structured Data (role-specific on role pages) -->
+    {% if role_content %}
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {% for faq in role_content.faqs %}
+            {
+                "@type": "Question",
+                "name": {{ faq.q|tojson }},
+                "acceptedAnswer": { "@type": "Answer", "text": {{ faq.a|tojson }} }
+            }{{ "," if not loop.last }}
+            {% endfor %}
+        ]
+    }
+    </script>
+    {% else %}
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -131,6 +148,7 @@
         ]
     }
     </script>
+    {% endif %}
 
     <!-- HowTo Structured Data -->
     <script type="application/ld+json">
@@ -694,6 +712,60 @@ Include the job title, requirements, responsibilities, qualifications — everyt
         </div>
     </div>
 
+    {% if role_content %}
+    <!-- ============ ROLE GUIDE (programmatic SEO content) ============ -->
+    <section class="role-guide" id="role-guide">
+        <div class="container">
+            <h2 class="role-guide-title">How {{ role.title }} resumes get ranked in 2026</h2>
+            {% for para in role_content.intro %}
+            <p class="role-guide-intro">{{ para }}</p>
+            {% endfor %}
+
+            <h3 class="role-guide-subtitle">Keywords screeners look for in {{ role.title }} resumes</h3>
+            <div class="role-keyword-categories">
+                {% for category, words in role_content.categories.items() %}
+                <div class="role-keyword-category">
+                    <h4>{{ category }}</h4>
+                    <div class="keyword-tags">
+                        {% for w in words %}<span class="keyword-tag matched">{{ w }}</span>{% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="role-guide-note">Keywords only rank you when they honestly describe your experience — the scanner below shows which ones from a real posting you can truthfully add.</p>
+
+            <h3 class="role-guide-subtitle">Three fixes that move {{ role.title }} resumes up the ranking</h3>
+            <ol class="role-guide-tips">
+                {% for tip in role_content.tips %}
+                <li>{{ tip }}</li>
+                {% endfor %}
+            </ol>
+
+            <h3 class="role-guide-subtitle">{{ role.title }} resume questions</h3>
+            <div class="role-guide-faqs">
+                {% for faq in role_content.faqs %}
+                <div class="role-guide-faq">
+                    <h4>{{ faq.q }}</h4>
+                    <p>{{ faq.a }}</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if related_roles %}
+            <div class="role-related">
+                <h3 class="role-guide-subtitle">Related resume checkers</h3>
+                <div class="role-related-links">
+                    {% for r in related_roles %}
+                    <a href="/ats-resume-checker/{{ r.slug }}" class="role-related-link">{{ r.title }} resume checker</a>
+                    {% endfor %}
+                    <a href="/ats-resume-checker/" class="role-related-link">All roles</a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
     <!-- ============ FAQ ============ -->
     <section class="faq-section" id="faq">
         <div class="container">
@@ -730,6 +802,19 @@ Include the job title, requirements, responsibilities, qualifications — everyt
     <!-- ============ FOOTER ============ -->
     <footer class="footer">
         <div class="container">
+            <div class="footer-roles">
+                <p class="footer-roles-title">Free ATS resume checkers by role</p>
+                <p class="footer-roles-links">
+                    <a href="/ats-resume-checker/software-engineer">Software Engineer</a> ·
+                    <a href="/ats-resume-checker/data-analyst">Data Analyst</a> ·
+                    <a href="/ats-resume-checker/cloud-engineer">Cloud Engineer</a> ·
+                    <a href="/ats-resume-checker/devops-engineer">DevOps Engineer</a> ·
+                    <a href="/ats-resume-checker/product-manager">Product Manager</a> ·
+                    <a href="/ats-resume-checker/data-scientist">Data Scientist</a> ·
+                    <a href="/ats-resume-checker/cybersecurity-analyst">Cybersecurity Analyst</a> ·
+                    <a href="/ats-resume-checker/">all 15 roles →</a>
+                </p>
+            </div>
             <p class="footer-built">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Olushola Oladipupo</a> — AWS Solutions Architect</p>
             <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
             <p class="footer-privacy">🔒 Your resume is analyzed in real-time and never stored. Your data stays yours.</p>

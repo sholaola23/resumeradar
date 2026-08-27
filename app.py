@@ -27,6 +27,7 @@ from backend.keyword_engine import extract_keywords_from_text, calculate_match, 
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
+from backend.role_content import ROLE_CONTENT
 from backend.cv_pdf_generator import generate_cv_pdf
 from backend.cv_docx_generator import generate_cv_docx
 import stripe
@@ -339,7 +340,24 @@ def role_landing(role_slug):
         'high': 'og-score-high.png',
     }
     og_image = og_images.get(score_tier, 'og-image.png')
-    return render_template('index.html', og_image=og_image, role=role, role_slug=role_slug)
+    content = ROLE_CONTENT.get(role_slug)
+    related = []
+    if content:
+        for rslug in content.get("related", []):
+            rrole = ROLE_PAGES.get(rslug)
+            if rrole:
+                related.append({"slug": rslug, "title": rrole["title"]})
+    return render_template('index.html', og_image=og_image, role=role, role_slug=role_slug,
+                           role_content=content, related_roles=related)
+
+
+@app.route('/ats-resume-checker')
+@app.route('/ats-resume-checker/')
+@limiter.exempt
+def role_hub():
+    """Hub page for the role-specific checker cluster (internal-link anchor)."""
+    roles = [{"slug": slug, "title": r["title"], "desc": r["desc"]} for slug, r in ROLE_PAGES.items()]
+    return render_template('role_hub.html', roles=roles)
 
 
 @app.route('/favicon.ico')
@@ -364,23 +382,37 @@ def robots_txt():
     return send_from_directory(app.static_folder, 'robots.txt', mimetype='text/plain')
 
 
+@app.route('/llms.txt')
+@limiter.exempt
+def llms_txt():
+    """Serve llms.txt for AI crawlers and answer engines."""
+    return send_from_directory(app.static_folder, 'llms.txt', mimetype='text/plain')
+
+
+# Honest lastmod dates — update ONLY when the page's content actually changes.
+# (Previously datetime.now() on every request, which teaches Google to
+# distrust the field entirely.)
+LASTMOD_CORE = '2026-08-27'   # / and /build (hero reframe, tier picker)
+LASTMOD_ROLES = '2026-08-27'  # role pages + hub (rich content shipped)
+
+
 @app.route('/sitemap.xml')
 @limiter.exempt
 def sitemap_xml():
     """Serve sitemap.xml for search engines and AI crawlers."""
     base = 'https://resumeradar.sholastechnotes.com'
-    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     pages = [
-        {'loc': f'{base}/', 'priority': '1.0', 'changefreq': 'weekly'},
-        {'loc': f'{base}/build', 'priority': '0.8', 'changefreq': 'monthly'},
+        {'loc': f'{base}/', 'priority': '1.0', 'changefreq': 'weekly', 'lastmod': LASTMOD_CORE},
+        {'loc': f'{base}/build', 'priority': '0.8', 'changefreq': 'monthly', 'lastmod': LASTMOD_CORE},
+        {'loc': f'{base}/ats-resume-checker/', 'priority': '0.8', 'changefreq': 'monthly', 'lastmod': LASTMOD_ROLES},
     ]
     # Add programmatic SEO role pages
     for slug in ROLE_PAGES:
-        pages.append({'loc': f'{base}/ats-resume-checker/{slug}', 'priority': '0.7', 'changefreq': 'monthly'})
+        pages.append({'loc': f'{base}/ats-resume-checker/{slug}', 'priority': '0.7', 'changefreq': 'monthly', 'lastmod': LASTMOD_ROLES})
     xml_entries = '\n'.join(
         f'  <url>\n'
         f'    <loc>{p["loc"]}</loc>\n'
-        f'    <lastmod>{today}</lastmod>\n'
+        f'    <lastmod>{p["lastmod"]}</lastmod>\n'
         f'    <changefreq>{p["changefreq"]}</changefreq>\n'
         f'    <priority>{p["priority"]}</priority>\n'
         f'  </url>'

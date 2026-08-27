@@ -1,0 +1,35 @@
+# ResumeRadar
+> Free ATS resume scanner — no signup required
+
+ResumeRadar is a free online tool that helps job seekers check their resume against a specific job description. Recruiters receive hundreds of applications per role, and ATS software plus AI screening rank every resume before a human reads it. ResumeRadar shows you how you rank: upload a resume (PDF/DOCX) and paste a job description to get an instant match score, missing keywords by category, ATS formatting checks, and AI-powered improvement suggestions.
+
+## Features
+- ATS match score with keyword analysis across 5 categories (technical skills, soft skills, certifications, education, action verbs)
+- Missing keyword detection against the actual job description
+- AI-powered resume suggestions, quick wins, and cover-letter talking points
+- Free AI micro-tools: cover letter generator, bullet enhancer, summary generator
+- ATS formatting and recruiter-tips sub-scores
+- CV Builder: AI rewrites your CV for a target job — strict no-fabrication rules (no invented metrics, skills, or years of experience)
+
+## Pricing
+- Resume scan: free, no signup
+- Standard Polish CV rewrite: £2 one-off (no subscription)
+- Pro Review CV rewrite with senior-level gap analysis: £5 one-off
+- Bundle credit packs available; Naira (Paystack) payment supported for Standard
+
+## Role-specific checkers
+Free ATS resume checkers with keyword guides for 15 roles, at
+https://resumeradar.sholastechnotes.com/ats-resume-checker/ — including
+software engineer, data analyst, cloud engineer, DevOps engineer, data
+scientist, product manager, project manager, UX designer, cybersecurity
+analyst, business analyst, solutions architect, frontend developer,
+backend developer, scrum master, and machine learning engineer.
+
+## URL
+https://resumeradar.sholastechnotes.com
+
+## Privacy
+Resumes are analyzed in real time and never stored. Emails are stored only as HMAC hashes.
+
+## Built by
+Olushola Oladipupo — AWS Solutions Architect (https://www.linkedin.com/in/olushola-oladipupo/)

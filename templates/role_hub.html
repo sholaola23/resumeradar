@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Resume Checkers by Role — Free | ResumeRadar</title>
+    <meta name="description" content="Free ATS resume checkers for 15 roles — software engineer, data analyst, cloud engineer, product manager, and more. Role-specific keyword guides plus an instant match score against any job description.">
+    <link rel="canonical" href="https://resumeradar.sholastechnotes.com/ats-resume-checker/">
+
+    <meta property="og:title" content="ATS Resume Checkers by Role | ResumeRadar">
+    <meta property="og:description" content="Role-specific ATS keyword guides and a free resume scanner for 15 tech and business roles.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://resumeradar.sholastechnotes.com/ats-resume-checker/">
+    <meta property="og:image" content="https://resumeradar.sholastechnotes.com/static/images/og-image.png">
+
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=8">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "ATS Resume Checkers by Role",
+        "url": "https://resumeradar.sholastechnotes.com/ats-resume-checker/",
+        "description": "Free role-specific ATS resume checkers with keyword guides for 15 tech and business roles.",
+        "isPartOf": {
+            "@type": "WebApplication",
+            "name": "ResumeRadar",
+            "url": "https://resumeradar.sholastechnotes.com"
+        }
+    }
+    </script>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="header-inner">
+                <div class="logo">
+                    <span class="logo-icon">📡</span>
+                    <span class="logo-text">ResumeRadar</span>
+                </div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link">Scan Resume</a>
+                    <a href="/build" class="nav-link">Build CV <span class="nav-badge">£2</span></a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1>ATS resume checkers, <span class="highlight">by role</span>.</h1>
+            <p class="hero-sub">Every role gets ranked on its own vocabulary. Pick yours for a keyword guide, resume tips, and a free scan against any job description.</p>
+        </div>
+    </section>
+
+    <section class="role-hub">
+        <div class="container">
+            <div class="role-hub-grid">
+                {% for r in roles %}
+                <a href="/ats-resume-checker/{{ r.slug }}" class="role-hub-card">
+                    <h2>{{ r.title }}</h2>
+                    <p>{{ r.desc }}</p>
+                    <span class="role-hub-cta">Check your resume →</span>
+                </a>
+                {% endfor %}
+            </div>
+            <div class="role-hub-home">
+                <p>Not in the list? The <a href="/">free scanner</a> works for any role — paste any job description and see your match score in 30 seconds.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-built">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Olushola Oladipupo</a> — AWS Solutions Architect</p>
+            <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
+            <p class="footer-privacy">🔒 Your resume is analyzed in real-time and never stored. Your data stays yours.</p>
+        </div>
+    </footer>
+</body>
+</html>

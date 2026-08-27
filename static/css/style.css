@@ -2995,3 +2995,196 @@ textarea::placeholder {
     .nav-links { flex-shrink: 0; }
     .tagline { font-size: 12px; }
 }
+
+/* ---- Role guide sections (programmatic SEO content, 27 Aug 2026) ---- */
+.role-guide {
+    padding: 56px 0;
+    background: var(--gray-50, #f9fafb);
+    border-top: 1px solid var(--gray-200);
+}
+
+.role-guide-title {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 18px;
+    letter-spacing: -0.5px;
+}
+
+.role-guide-intro {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--gray-600, #4b5563);
+    max-width: 720px;
+    margin-bottom: 14px;
+}
+
+.role-guide-subtitle {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 32px 0 14px;
+}
+
+.role-keyword-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.role-keyword-category {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.role-keyword-category h4 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--gray-700, #374151);
+}
+
+.role-guide-note {
+    font-size: 14px;
+    color: var(--gray-500);
+    margin-top: 12px;
+    max-width: 720px;
+}
+
+.role-guide-tips {
+    padding-left: 22px;
+    max-width: 720px;
+}
+
+.role-guide-tips li {
+    font-size: 15.5px;
+    line-height: 1.65;
+    margin-bottom: 10px;
+    color: var(--gray-600, #4b5563);
+}
+
+.role-guide-faqs {
+    max-width: 720px;
+}
+
+.role-guide-faq {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+}
+
+.role-guide-faq h4 {
+    font-size: 15.5px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.role-guide-faq p {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--gray-600, #4b5563);
+}
+
+.role-related-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.role-related-link {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.role-related-link:hover {
+    border-color: var(--primary);
+}
+
+/* ---- Role hub page ---- */
+.role-hub {
+    padding: 48px 0 64px;
+}
+
+.role-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.role-hub-card {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.role-hub-card:hover {
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+}
+
+.role-hub-card h2 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.role-hub-card p {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--gray-500);
+    margin-bottom: 12px;
+}
+
+.role-hub-cta {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.role-hub-home {
+    margin-top: 28px;
+    font-size: 14.5px;
+    color: var(--gray-500);
+}
+
+/* ---- Footer role links ---- */
+.footer-roles {
+    margin-bottom: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.footer-roles-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.footer-roles-links {
+    font-size: 13px;
+    line-height: 1.9;
+}
+
+.footer-roles-links a {
+    color: inherit;
+    opacity: 0.85;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.footer-roles-links a:hover {
+    opacity: 1;
+}
