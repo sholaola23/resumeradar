@@ -16,7 +16,21 @@ from backend.ai_analyzer import make_client, first_text, NO_THINKING
 # Sonnet 4.6's $3/$15 on 2026-08-26; verify on staging before prod,
 # per the 82fc110 model-ID incident).
 MODEL = "claude-sonnet-5"
+# £5 Pro Review tier: Opus 5 with adaptive thinking (its default) — the
+# 26 Aug head-to-head showed equal rewrite quality but clearly deeper,
+# more JD-specific coaching. Higher max_tokens because thinking tokens
+# count against the cap.
+MODEL_PRO = "claude-opus-5"
 TOOL = ai_metrics.TOOL_CV_POLISH
+
+VALID_TIERS = ("standard", "pro")
+
+
+def _model_kwargs(tier):
+    """Per-tier model call configuration."""
+    if tier == "pro":
+        return {"model": MODEL_PRO, "max_tokens": 8000}
+    return {"model": MODEL, "max_tokens": 5000, "extra_body": NO_THINKING}
 
 
 # ============================================================
@@ -397,10 +411,10 @@ def _assess_extraction_quality(resume_text, result, fallback_counts=None):
 # POLISH CV SECTIONS (form-based flow)
 # ============================================================
 
-def polish_cv_sections(cv_data):
+def polish_cv_sections(cv_data, tier="standard"):
     """
-    Use Claude (MODEL above) to polish all CV sections for ATS
-    optimization against the target job description.
+    Use Claude (MODEL / MODEL_PRO by tier) to polish all CV sections for
+    ATS optimization against the target job description.
 
     Args:
         cv_data: dict with personal, summary, experience, education,
@@ -426,6 +440,7 @@ def polish_cv_sections(cv_data):
 
     try:
         client = make_client(api_key)
+        call_kwargs = _model_kwargs(tier if tier in VALID_TIERS else "standard")
 
         personal = cv_data.get("personal", {})
         summary = cv_data.get("summary", "")
@@ -524,12 +539,10 @@ Respond with ONLY valid JSON in this exact structure:
 CRITICAL: Same number of experience and education entries as input. Do NOT invent new jobs, degrees, skills, or metrics. You are optimizing WORDING, not fabricating content."""
 
         message = client.messages.create(
-            model=MODEL,
-            max_tokens=5000,
             messages=[
                 {"role": "user", "content": prompt}
             ],
-            extra_body=NO_THINKING,
+            **call_kwargs,
         )
 
         ai_metrics.record_claude_call(TOOL)
@@ -537,7 +550,7 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
         usage = getattr(message, "usage", None)
         input_tok = getattr(usage, "input_tokens", None) if usage else None
         output_tok = getattr(usage, "output_tokens", None) if usage else None
-        ai_budget.record_usage(input_tok, output_tok, model=MODEL)
+        ai_budget.record_usage(input_tok, output_tok, model=call_kwargs["model"])
 
         response_text = first_text(message)
 
@@ -612,7 +625,7 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
 # EXTRACT AND POLISH (upload / scan-to-CV flow)
 # ============================================================
 
-def extract_and_polish(resume_text, job_description, scan_keywords=None):
+def extract_and_polish(resume_text, job_description, scan_keywords=None, tier="standard"):
     """
     One-shot: extract structured CV from raw resume text AND polish for ATS.
     Used in the scan-to-CV flow so the user never fills a form.
@@ -641,6 +654,7 @@ def extract_and_polish(resume_text, job_description, scan_keywords=None):
 
     try:
         client = make_client(api_key)
+        call_kwargs = _model_kwargs(tier if tier in VALID_TIERS else "standard")
 
         from datetime import datetime
         today = datetime.now().strftime('%B %Y')
@@ -756,12 +770,10 @@ Respond with ONLY valid JSON:
 }}"""
 
         message = client.messages.create(
-            model=MODEL,
-            max_tokens=5000,
             messages=[
                 {"role": "user", "content": prompt}
             ],
-            extra_body=NO_THINKING,
+            **call_kwargs,
         )
 
         ai_metrics.record_claude_call(TOOL)
@@ -769,7 +781,7 @@ Respond with ONLY valid JSON:
         usage = getattr(message, "usage", None)
         input_tok = getattr(usage, "input_tokens", None) if usage else None
         output_tok = getattr(usage, "output_tokens", None) if usage else None
-        ai_budget.record_usage(input_tok, output_tok, model=MODEL)
+        ai_budget.record_usage(input_tok, output_tok, model=call_kwargs["model"])
 
         response_text = first_text(message)
 

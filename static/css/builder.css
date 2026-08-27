@@ -1553,3 +1553,75 @@
 .ai-disclaimer strong {
     color: #1f2937;
 }
+
+/* ---- Tier picker (£2 Standard / £5 Pro Review) — Batch E ---- */
+.tier-picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.tier-option {
+    display: block;
+    border: 1.5px solid var(--gray-200, #e5e7eb);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.tier-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.tier-option.tier-selected {
+    border-color: var(--primary, #2563eb);
+    background: rgba(37, 99, 235, 0.04);
+}
+
+.tier-option:hover {
+    border-color: var(--primary, #2563eb);
+}
+
+.tier-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+}
+
+.tier-name {
+    font-weight: 700;
+    font-size: 14.5px;
+}
+
+.tier-price {
+    font-weight: 800;
+    font-size: 15px;
+    color: var(--primary, #2563eb);
+}
+
+.tier-desc {
+    display: block;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--gray-500, #6b7280);
+}
+
+.tier-busy-note {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    color: var(--gray-500, #6b7280);
+}
+
+.tier-picker.tier-busy .tier-option {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+@media (max-width: 560px) {
+    .tier-picker { grid-template-columns: 1fr; }
+}

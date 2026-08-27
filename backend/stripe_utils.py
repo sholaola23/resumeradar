@@ -11,9 +11,11 @@ import stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 
-def create_checkout_session(cv_token, template, success_url, cancel_url, delivery_email=None, format_choice="both"):
+def create_checkout_session(cv_token, template, success_url, cancel_url, delivery_email=None, format_choice="both", tier="standard"):
     """
-    Create a Stripe Checkout session for a £2 CV download.
+    Create a Stripe Checkout session for a CV download.
+    tier "standard" = £2 polish (STRIPE_PRICE_ID); "pro" = £5 Pro Review
+    (STRIPE_PRICE_ID_PRO) — tier is resolved server-side from the CV token.
 
     Args:
         cv_token: UUID token identifying the generated CV in Redis
@@ -26,7 +28,7 @@ def create_checkout_session(cv_token, template, success_url, cancel_url, deliver
     Returns:
         dict with session_id and checkout_url, or error
     """
-    price_id = os.getenv("STRIPE_PRICE_ID")
+    price_id = os.getenv("STRIPE_PRICE_ID_PRO") if tier == "pro" else os.getenv("STRIPE_PRICE_ID")
     if not price_id:
         return {"error": "Payment service not configured."}
 
@@ -35,6 +37,7 @@ def create_checkout_session(cv_token, template, success_url, cancel_url, deliver
             "cv_token": cv_token,
             "template": template,
             "format": format_choice,
+            "tier": tier,
         }
         if delivery_email:
             metadata["delivery_email"] = delivery_email

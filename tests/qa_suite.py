@@ -871,8 +871,12 @@ def run_tests():
           'education_missing' in cv_builder_source and
           'certifications_missing' in cv_builder_source and
           'experience_missing' in cv_builder_source)
-    check("max_tokens >= 5000 in extract_and_polish",
-          'max_tokens=5000' in cv_builder_source)
+    # max_tokens moved into _model_kwargs() with the tier split (Batch E):
+    # standard 5000, pro 8000 (thinking tokens count against the cap on Opus)
+    check("max_tokens >= 5000 via _model_kwargs (tier split)",
+          '"max_tokens": 5000' in cv_builder_source and
+          '"max_tokens": 8000' in cv_builder_source and
+          '**call_kwargs' in cv_builder_source)
     check("No resume_text[:5000] in source",
           'resume_text[:5000]' not in cv_builder_source)
     check("Strict rule: NEVER omit any entries",

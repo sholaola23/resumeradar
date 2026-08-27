@@ -15,6 +15,8 @@
     let storageMode = 'server'; // 'server' (Redis) or 'client' (sessionStorage fallback)
     let lastTargetJD = ''; // Stores the last job description for form pre-populate
     var selectedFormat = 'both'; // Download format: 'pdf', 'docx', or 'both'
+    var selectedTier = 'standard'; // 'standard' (£2) | 'pro' (£5 Pro Review)
+    var lastGenerateRequest = null; // replayed when the user switches tier
 
     // Loading message rotation
     const LOADING_MESSAGES = [
@@ -352,14 +354,16 @@
             if (missingList.length) scanKeywords.missing = missingList;
 
             // Call the one-shot extract+polish endpoint
+            const scanGenBody = {
+                resume_text: resumeText,
+                job_description: jobDescription,
+                scan_keywords: scanKeywords,
+            };
+            lastGenerateRequest = { kind: 'json', url: '/api/build/generate-from-scan', payload: scanGenBody };
             const response = await fetch('/api/build/generate-from-scan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    resume_text: resumeText,
-                    job_description: jobDescription,
-                    scan_keywords: scanKeywords,
-                }),
+                body: JSON.stringify(scanGenBody),
             });
 
             // Helper: render the scan-error block via DOM (no innerHTML on
@@ -678,6 +682,7 @@
                 var formData = new FormData();
                 formData.append('resume_file', buildResumeFile.files[0]);
                 formData.append('job_description', jd);
+                lastGenerateRequest = { kind: 'upload', jd: jd };
 
                 var response = await fetch('/api/build/generate-from-upload', {
                     method: 'POST',
@@ -869,6 +874,7 @@
         setGenerateLoading(true);
 
         try {
+            lastGenerateRequest = { kind: 'json', url: '/api/build/generate', payload: data };
             const response = await fetch('/api/build/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1581,6 +1587,97 @@
         } else {
             extractionWarning.style.display = 'none';
         }
+    }
+
+    // ============================================================
+    // TIER PICKER — £2 Standard / £5 Pro Review (Batch E, 27 Aug 2026)
+    // Switching tier re-runs the last generation with the chosen tier so the
+    // server binds tier→token; checkout price is resolved server-side only.
+    // ============================================================
+    var tierPicker = document.getElementById('tierPicker');
+    var tierBusyNote = document.getElementById('tierBusyNote');
+
+    async function regenerateWithTier(tier) {
+        if (!lastGenerateRequest) {
+            return { error: 'Please generate your CV first.' };
+        }
+        try {
+            var response;
+            if (lastGenerateRequest.kind === 'upload') {
+                if (!buildResumeFile || !buildResumeFile.files[0]) {
+                    return { error: 'Please re-upload your CV to switch tier.' };
+                }
+                var fd = new FormData();
+                fd.append('resume_file', buildResumeFile.files[0]);
+                fd.append('job_description', lastGenerateRequest.jd);
+                fd.append('tier', tier);
+                response = await fetch('/api/build/generate-from-upload', { method: 'POST', body: fd });
+            } else {
+                var payload = Object.assign({}, lastGenerateRequest.payload, { tier: tier });
+                response = await fetch(lastGenerateRequest.url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+            }
+            var result = await response.json();
+            if (!response.ok || result.error) {
+                return { error: result.error || 'Could not switch tier. Please try again.' };
+            }
+            currentToken = result.token;
+            currentPolished = result.polished;
+            storageMode = result.storage || 'server';
+            renderPreview(result.polished);
+            return { ok: true };
+        } catch (err) {
+            console.error('Tier switch error:', err);
+            return { error: 'Could not switch tier. Please try again.' };
+        }
+    }
+
+    function updateTierUI() {
+        if (!tierPicker) return;
+        var paymentPriceEl = document.getElementById('paymentPrice');
+        var providerRow = document.getElementById('providerRow');
+        if (selectedTier === 'pro') {
+            detectedProvider = 'stripe'; // Pro is card-only
+            if (paymentPriceEl) paymentPriceEl.textContent = '£5';
+            if (providerRow) providerRow.style.display = 'none';
+        } else {
+            if (paymentPriceEl) paymentPriceEl.textContent = '£2';
+        }
+        tierPicker.querySelectorAll('.tier-option').forEach(function (el) {
+            el.classList.toggle('tier-selected', el.dataset.tier === selectedTier);
+        });
+    }
+
+    if (tierPicker) {
+        tierPicker.addEventListener('change', async function (e) {
+            var input = e.target;
+            if (!input || input.name !== 'cvTier') return;
+            var tier = input.value === 'pro' ? 'pro' : 'standard';
+            if (tier === selectedTier) return;
+
+            var prev = selectedTier;
+            tierPicker.classList.add('tier-busy');
+            if (tierBusyNote) tierBusyNote.style.display = 'block';
+            tierPicker.querySelectorAll('input[name="cvTier"]').forEach(function (r) { r.disabled = true; });
+
+            var res = await regenerateWithTier(tier);
+
+            tierPicker.classList.remove('tier-busy');
+            if (tierBusyNote) tierBusyNote.style.display = 'none';
+            tierPicker.querySelectorAll('input[name="cvTier"]').forEach(function (r) { r.disabled = false; });
+
+            if (res.ok) {
+                selectedTier = tier;
+                updateTierUI();
+            } else {
+                var prevInput = tierPicker.querySelector('input[value="' + prev + '"]');
+                if (prevInput) prevInput.checked = true;
+                showError(res.error);
+            }
+        });
     }
 
     // ============================================================

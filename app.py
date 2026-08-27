@@ -934,6 +934,28 @@ def get_scan_count():
 # CV BUILDER ROUTES
 # ============================================================
 
+def _parse_tier(value):
+    """Validate a requested polish tier. Pro requires its Stripe price to be
+    configured server-side — otherwise everything coerces to standard."""
+    tier = (value or "standard").strip().lower()
+    if tier != "pro" or not os.getenv("STRIPE_PRICE_ID_PRO"):
+        return "standard"
+    return "pro"
+
+
+def _read_cv_tier(token):
+    """Tier bound to a CV token at generation time ('standard'|'pro').
+    The client never chooses the checkout price directly — only this does."""
+    if not (_redis_client and token):
+        return "standard"
+    try:
+        raw = _redis_client.get(f"resumeradar:cv_tier:{token}")
+        val = raw.decode() if isinstance(raw, bytes) else raw
+        return "pro" if val == "pro" else "standard"
+    except Exception:
+        return "standard"
+
+
 @app.route('/build')
 @limiter.exempt
 def build_page():
@@ -945,6 +967,7 @@ def build_page():
         'build.html',
         paystack_enabled=paystack_enabled,
         paystack_price=paystack_price,
+        pro_enabled=bool(os.getenv('STRIPE_PRICE_ID_PRO')),
     )
 
 
@@ -973,8 +996,10 @@ def build_generate():
         if not personal.get("full_name", "").strip():
             return jsonify({"error": "Please provide your full name."}), 400
 
+        tier = _parse_tier(cv_data.get("tier"))
+
         # Polish with AI
-        polished = polish_cv_sections(cv_data)
+        polished = polish_cv_sections(cv_data, tier=tier)
 
         if polished.get("error"):
             status = 503 if polished["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
@@ -988,6 +1013,8 @@ def build_generate():
             try:
                 import json as _json
                 _redis_client.setex(cv_redis_key, 7200, _json.dumps(polished))  # 2hr TTL
+                if tier == "pro":
+                    _redis_client.setex(f"resumeradar:cv_tier:{token}", 259200, "pro")
             except Exception as redis_err:
                 print(f"Redis store error: {redis_err}")
                 # Fallback: return data to frontend to store in sessionStorage
@@ -1045,8 +1072,10 @@ def build_generate_from_scan():
         if not job_description:
             return jsonify({"error": "Job description is missing."}), 400
 
+        tier = _parse_tier((request.get_json(silent=True) or {}).get("tier"))
+
         # One AI call: extract structure + polish for ATS
-        polished = extract_and_polish(resume_text, job_description, scan_keywords)
+        polished = extract_and_polish(resume_text, job_description, scan_keywords, tier=tier)
 
         if polished.get("error"):
             status = 503 if polished["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
@@ -1060,6 +1089,8 @@ def build_generate_from_scan():
             try:
                 import json as _json
                 _redis_client.setex(cv_redis_key, 7200, _json.dumps(polished))
+                if tier == "pro":
+                    _redis_client.setex(f"resumeradar:cv_tier:{token}", 259200, "pro")
             except Exception as redis_err:
                 print(f"Redis store error: {redis_err}")
                 return jsonify({
@@ -1142,8 +1173,10 @@ def build_generate_from_upload():
         if not resume_text or len(resume_text.strip()) < 50:
             return jsonify({"error": "Could not extract enough text from your resume. Please try a different file or use the manual form."}), 400
 
+        tier = _parse_tier(request.form.get("tier"))
+
         # One AI call: extract structure + polish for ATS (same as scan flow)
-        polished = extract_and_polish(resume_text, job_description)
+        polished = extract_and_polish(resume_text, job_description, tier=tier)
 
         if polished.get("error"):
             status = 503 if polished["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
@@ -1156,6 +1189,8 @@ def build_generate_from_upload():
         if _redis_client:
             try:
                 _redis_client.setex(cv_redis_key, 7200, json.dumps(polished))
+                if tier == "pro":
+                    _redis_client.setex(f"resumeradar:cv_tier:{token}", 259200, "pro")
                 return jsonify({
                     "success": True,
                     "token": token,
@@ -1235,6 +1270,11 @@ def build_create_checkout():
         base_url = _get_base_url()
         funnel_metrics.record("checkout_started")
 
+        # Tier was bound server-side at generation time — never client-chosen here
+        tier = _read_cv_tier(token)
+        if tier == "pro" and provider == "paystack":
+            return jsonify({"error": "Pro Review is card-only for now — please pay by card."}), 400
+
         # ---- PAYSTACK PATH (Nigeria — explicit opt-in) ----
         if provider == "paystack" and os.getenv("PAYSTACK_SECRET_KEY"):
             # Paystack requires real email — no placeholder
@@ -1270,7 +1310,7 @@ def build_create_checkout():
         success_url = f"{base_url}/build?payment=success&token={token}&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{base_url}/build?payment=cancelled&cancel_nonce={cancel_nonce}"
 
-        result = create_checkout_session(token, template, success_url, cancel_url, delivery_email, format_choice)
+        result = create_checkout_session(token, template, success_url, cancel_url, delivery_email, format_choice, tier=tier)
 
         if result.get("error"):
             return jsonify({"error": result["error"]}), 500
@@ -1543,6 +1583,10 @@ def bundle_use():
             return jsonify({"error": "Invalid credit type."}), 400
         if credit_type == "cv" and not cv_token:
             return jsonify({"error": "Missing CV token."}), 400
+
+        # Bundle credits cover Standard Polish only (E4 decision, 27 Aug 2026)
+        if credit_type == "cv" and _read_cv_tier(cv_token) == "pro":
+            return jsonify({"error": "Bundle credits cover Standard Polish. Pro Review is a separate card purchase."}), 400
 
         # operation_id is REQUIRED to prevent double-spend race (P0-3).
         # Two concurrent requests without an idempotency key both pass the
@@ -1977,6 +2021,11 @@ def free_download_nigeria():
             return jsonify({"error": "This offer is only available in Nigeria."}), 403
         if not cf_country:
             print("free-download-nigeria: CF-IPCountry absent — geo not enforced (enable IP Geolocation in Cloudflare)")
+
+        # Free download covers the Standard tier only — a cancelled £5 Pro
+        # checkout must not hand out the Opus-polished CV for free.
+        if _read_cv_tier(token) == "pro":
+            return jsonify({"error": "The free download covers Standard Polish only."}), 403
         if template not in VALID_TEMPLATES:
             template = "classic"
         if fmt not in VALID_FORMATS:

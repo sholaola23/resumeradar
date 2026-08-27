@@ -33,7 +33,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/builder.css">
+    <link rel="stylesheet" href="/static/css/builder.css?v=2">
 </head>
 <body>
     <!-- ============ HEADER ============ -->
@@ -497,6 +497,23 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 <div class="builder-card payment-card" id="paymentCard"
                      data-paystack-enabled="{{ 'true' if paystack_enabled else 'false' }}"
                      data-paystack-price="{{ paystack_price }}">
+                    {% if pro_enabled %}
+                    <div class="tier-picker" id="tierPicker">
+                        <label class="tier-option tier-selected" data-tier="standard">
+                            <input type="radio" name="cvTier" value="standard" checked>
+                            <span class="tier-head"><span class="tier-name">Standard Polish</span><span class="tier-price">£2</span></span>
+                            <span class="tier-desc">ATS-optimized rewrite of every section, tailored to the job description</span>
+                        </label>
+                        <label class="tier-option" data-tier="pro">
+                            <input type="radio" name="cvTier" value="pro">
+                            <span class="tier-head"><span class="tier-name">Pro Review</span><span class="tier-price">£5</span></span>
+                            <span class="tier-desc">Everything in Standard, plus a senior-level gap analysis: 8+ specific improvement calls mapped to this job description</span>
+                        </label>
+                        <span class="tier-busy-note" id="tierBusyNote" style="display: none;">
+                            <span class="spinner spinner-sm"></span> Re-analyzing your CV with the selected tier — this takes a moment...
+                        </span>
+                    </div>
+                    {% endif %}
                     <div class="payment-content">
                         <div class="payment-info">
                             <h2>Download Your CV</h2>
@@ -663,6 +680,6 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
         </div>
     </footer>
 
-    <script src="/static/js/builder.js?v=3"></script>
+    <script src="/static/js/builder.js?v=4"></script>
 </body>
 </html>
