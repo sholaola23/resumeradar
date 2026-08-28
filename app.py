@@ -14,7 +14,7 @@ import ipaddress
 from concurrent.futures import ThreadPoolExecutor
 import html as html_module
 import re as re_module
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -3138,6 +3138,65 @@ def admin_funnel():
     except (ValueError, TypeError):
         days = 7
     return jsonify(funnel_metrics.get_range(days)), 200
+
+
+@app.route('/api/admin/ai-metrics', methods=['GET'])
+@limiter.exempt
+def admin_ai_metrics():
+    """
+    Per-tool AI counters. Bearer token auth (AUDIT_ADMIN_TOKEN).
+
+    ai_metrics has been recording requests, claude_calls, cache_hits,
+    rate_rejects, budget_rejects and errors all along with nothing reading
+    them. This exposes them, primarily so rate_rejects can be watched before
+    the cover_letter / enhance_bullet / generate_summary daily caps are moved
+    onto _client_ip() — those caps have never actually fired in production, so
+    flipping them blind would enforce untested numbers. See the staged-rollout
+    note on those routes.
+
+    Usage:
+        GET /api/admin/ai-metrics?days=7
+        GET /api/admin/ai-metrics?date=2026-08-28
+    """
+    admin_token = os.getenv('AUDIT_ADMIN_TOKEN', '')
+    if not admin_token:
+        return jsonify({"error": "Not configured."}), 503
+
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Unauthorized."}), 401
+    if not hmac_module.compare_digest(auth_header[7:], admin_token):
+        return jsonify({"error": "Unauthorized."}), 401
+
+    date_param = request.args.get('date', '')
+    if date_param:
+        try:
+            datetime.strptime(date_param, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "date must be YYYY-MM-DD."}), 400
+        dates = [date_param]
+    else:
+        try:
+            days = min(max(int(request.args.get('days', '7')), 1), 30)
+        except (ValueError, TypeError):
+            days = 7
+        today = datetime.now(timezone.utc)
+        dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+
+    tools = {}
+    for tool in ai_metrics.ALL_TOOLS:
+        by_date = {}
+        totals = {}
+        for d in dates:
+            day = ai_metrics.get_metrics(tool, d)
+            by_date[d] = day
+            for field, value in day.items():
+                totals[field] = totals.get(field, 0) + (value or 0)
+        tools[tool] = {"totals": totals, "by_date": by_date}
+
+    resp = jsonify({"dates": dates, "tools": tools})
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp, 200
 
 
 @app.route('/api/admin/audit/lookup', methods=['GET'])

@@ -19,7 +19,12 @@ from docx import Document
 # so the parsers enforce their own ceilings.
 # ---------------------------------------------------------------------------
 MAX_PDF_PAGES = 50
-MAX_DOCX_UNCOMPRESSED = 50 * 1024 * 1024   # 50MB expanded
+# 10MB, not 50. The guard stops bombs either way, but everything under the
+# ceiling still gets handed to lxml, whose DOM costs far more than the bytes:
+# a legitimate 2.4MB upload declaring 31MB measured ~440MB and 10s in
+# python-docx. 10MB keeps >12x headroom over the largest DOCX this product
+# generates (~0.8MB expanded) while cutting that worst case by roughly a third.
+MAX_DOCX_UNCOMPRESSED = 10 * 1024 * 1024   # 10MB expanded
 MAX_DOCX_COMPRESSION_RATIO = 150           # expanded / compressed
 MAX_DOCX_ENTRIES = 2000                    # a real DOCX has tens, not thousands
 
