@@ -20,10 +20,19 @@ _RL_PREFIX = "resumeradar:ratelimit:"
 _RL_TTL = 86400  # 24 hours
 
 # Tool-specific daily limits (per IP)
+# "cv_generate" is shared by all three CV-builder generate routes so the cap
+# can't be sidestepped by rotating between them. It is set well above real
+# usage (including Sprint-plan users) — its job is to bound runaway spend,
+# not to ration normal use.
 DAILY_LIMITS = {
     "cover_letter": 3,
     "enhance_bullet": 10,
     "generate_summary": 5,
+    # 50, not a tighter number, because even the true client IP is shared under
+    # carrier NAT — a large share of our Nigerian traffic sits behind CGNAT, so
+    # a whole pool can share one address. This still cuts the abuse ceiling from
+    # ~360/day (burst limit alone) to 50 without risking a shared-IP lockout.
+    "cv_generate": 50,
 }
 
 # ---------------------------------------------------------------------------

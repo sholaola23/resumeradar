@@ -24,6 +24,15 @@ TOOL_ENHANCE_BULLET = "enhance_bullet"
 TOOL_GENERATE_SUMMARY = "generate_summary"
 TOOL_CV_POLISH = "cv_polish"
 
+# Canonical list, so callers reporting on "every tool" cannot drift out of sync
+# with the constants above.
+ALL_TOOLS = (
+    TOOL_COVER_LETTER,
+    TOOL_ENHANCE_BULLET,
+    TOOL_GENERATE_SUMMARY,
+    TOOL_CV_POLISH,
+)
+
 # ---------------------------------------------------------------------------
 # Module-level Redis reference (set via init())
 # ---------------------------------------------------------------------------
