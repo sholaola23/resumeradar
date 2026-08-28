@@ -1628,8 +1628,8 @@ Nice to Have
         if (checklist && checklist.length > 0) {
             const items = checklist.map(item => {
                 const icon = item.passed ? '✅' : '❌';
-                const detail = item.detail ? ` — ${item.detail}` : '';
-                return `<div class="subscore-item"><span class="subscore-icon">${icon}</span><span class="subscore-label">${item.label}${detail}</span><span class="subscore-pts">${item.points} pts</span></div>`;
+                const detail = item.detail ? ` — ${escapeHtml(item.detail)}` : '';
+                return `<div class="subscore-item"><span class="subscore-icon">${icon}</span><span class="subscore-label">${escapeHtml(item.label)}${detail}</span><span class="subscore-pts">${escapeHtml(String(item.points))} pts</span></div>`;
             }).join('');
             detailsHTML = `<div class="subscore-details" style="display:none;">${items}</div>`;
         }
@@ -1639,7 +1639,7 @@ Nice to Have
         if (quantification && quantification.flagged_bullets && quantification.flagged_bullets.length > 0) {
             const bullets = quantification.flagged_bullets.slice(0, 5).map(b => {
                 const truncated = b.length > 100 ? b.substring(0, 100) + '...' : b;
-                return `<div class="flagged-bullet">💡 <span>${truncated}</span></div>`;
+                return `<div class="flagged-bullet">💡 <span>${escapeHtml(truncated)}</span></div>`;
             }).join('');
             flaggedHTML = `<div class="flagged-bullets" style="display:none;">
                 <div class="flagged-header">Bullets that could use metrics:</div>

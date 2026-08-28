@@ -205,8 +205,21 @@ _public_base_url = os.getenv('PUBLIC_BASE_URL', '').rstrip('/')
 
 
 def _get_base_url():
-    """Return trusted base URL for payment callbacks. Env var preferred over request.host_url."""
-    return _public_base_url or request.host_url.rstrip('/')
+    """
+    Return trusted base URL for payment callbacks.
+
+    PUBLIC_BASE_URL is required in production: request.host_url derives from
+    the client-controlled Host header, which must never shape payment
+    callback URLs. The fallback exists for local development only.
+    """
+    if _public_base_url:
+        return _public_base_url
+    if os.getenv('RENDER'):
+        # Misconfigured production — refuse to build a callback URL from a
+        # spoofable Host header. Callers' try/except turns this into a 500.
+        raise RuntimeError("PUBLIC_BASE_URL not configured")
+    print("WARNING: PUBLIC_BASE_URL not set — using request.host_url (dev only)")
+    return request.host_url.rstrip('/')
 
 
 def allowed_file(filename):
@@ -2366,6 +2379,7 @@ def build_webhook():
             event_id = event['id']
             session = event['data']['object']
             metadata = session.get('metadata', {})
+            dedup_key = None
 
             # (2) Dedup on event.id (H3) — after signature verification
             if event_id and _redis_client:
@@ -2375,6 +2389,7 @@ def build_webhook():
                     return jsonify({"received": True}), 200  # Already processed
 
             product_type = metadata.get('product_type', '')
+            payment_intent = session.get('payment_intent', '') or ''
 
             if product_type == 'bundle':
                 # (3) Bundle payment side effects
@@ -2382,22 +2397,46 @@ def build_webhook():
                 plan = metadata.get('plan', '')
                 delivery_email = metadata.get('delivery_email', '')
 
-                if bundle_token and plan and _redis_client:
+                if bundle_token and plan:
+                    if not _redis_client:
+                        # Customer paid but bundle can't be created — fail loudly
+                        # so Stripe retries (same pattern as the single-CV path).
+                        print(f"ERROR: Redis unavailable — bundle not created for session {session.get('id', '')}")
+                        return jsonify({"error": "Payment recorded but activation failed; retry."}), 500
                     try:
-                        # Create bundle in Redis (H9: email_hash, not plaintext)
+                        # Create bundle in Redis (H9: email_hash, not plaintext).
+                        # already_existed=True means the activate-from-payment
+                        # path won the race — that's success (and that path
+                        # never sends the access email, so we still do below).
                         bundle_result = bundle_credits.create_bundle(plan, "stripe", delivery_email, bundle_token)
 
                         if bundle_result.get("error"):
                             print(f"Webhook bundle creation failed: {bundle_result['error']}")
-                            # Release dedup so retries can succeed
+                            # Release dedup and 500 so Stripe's retry can succeed
+                            if dedup_key:
+                                try:
+                                    _redis_client.delete(dedup_key)
+                                except Exception:
+                                    pass
+                            return jsonify({"error": "Payment recorded but activation failed; retry."}), 500
+                    except Exception as e:
+                        print(f"Webhook bundle error: {e}")
+                        if dedup_key:
                             try:
                                 _redis_client.delete(dedup_key)
                             except Exception:
                                 pass
-                    except Exception as e:
-                        print(f"Webhook bundle error: {e}")
+                        return jsonify({"error": "Payment recorded but activation failed; retry."}), 500
+
+                    # Map payment_intent → bundle token so charge.refunded /
+                    # charge.dispute.created can revoke the entitlement.
+                    if payment_intent:
                         try:
-                            _redis_client.delete(dedup_key)
+                            _redis_client.set(
+                                f"resumeradar:pi_token:{payment_intent}",
+                                f"bundle:{bundle_token}",
+                                ex=10_368_000,  # 120d — matches audit retention / dispute window
+                            )
                         except Exception:
                             pass
 
@@ -2448,6 +2487,14 @@ def build_webhook():
                             paid_key = f"resumeradar:cv_paid:{cv_token}"
                             _redis_client.setex(paid_key, 7200, "1")
                             _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
+                            # Map payment_intent → cv token so charge.refunded /
+                            # charge.dispute.created can revoke the entitlement.
+                            if payment_intent:
+                                _redis_client.set(
+                                    f"resumeradar:pi_token:{payment_intent}",
+                                    f"cv:{cv_token}",
+                                    ex=10_368_000,  # 120d
+                                )
                         except Exception as e:
                             stamp_error = str(e)
                     else:
@@ -2457,10 +2504,11 @@ def build_webhook():
                         # release the event dedup so Stripe's retry can succeed
                         # (same pattern as the bundle path above).
                         print(f"ERROR: cv_paid stamp failed ({stamp_error}) for session {session.get('id', '')}")
-                        try:
-                            _redis_client.delete(dedup_key)
-                        except Exception:
-                            pass
+                        if dedup_key and _redis_client:
+                            try:
+                                _redis_client.delete(dedup_key)
+                            except Exception:
+                                pass
                         return jsonify({"error": "Payment recorded but activation failed; retry."}), 500
 
                 # AUDIT: payment confirmed
@@ -2481,6 +2529,118 @@ def build_webhook():
                 # Send email if requested
                 if delivery_email and cv_token:
                     _send_cv_email(delivery_email, cv_token, template, event_id)
+
+        elif event['type'] in ('charge.refunded', 'charge.dispute.created'):
+            # Refund / chargeback → revoke the entitlement the payment bought.
+            # data.object is a Charge for charge.refunded, a Dispute for
+            # charge.dispute.created; both carry payment_intent.
+            obj = event['data']['object']
+            is_dispute = event['type'] == 'charge.dispute.created'
+            payment_intent = obj.get('payment_intent', '') or ''
+            charge_id = obj.get('charge', '') if is_dispute else obj.get('id', '')
+            dispute_id = obj.get('id', '') if is_dispute else ''
+
+            # Partial refunds keep the entitlement — only a fully-refunded
+            # charge revokes. Disputes always revoke.
+            if not is_dispute and not obj.get('refunded', False):
+                return jsonify({"received": True}), 200
+
+            if not _redis_client:
+                # Can't revoke without Redis — 500 so Stripe retries later.
+                print(f"ERROR: Redis unavailable — cannot process {event['type']} for pi {payment_intent}")
+                return jsonify({"error": "Revocation failed; retry."}), 500
+
+            # Resolve which entitlement this payment bought: pi_token map first,
+            # then charge metadata (populated via payment_intent_data at
+            # checkout — disputes carry no charge metadata without an API call).
+            entry = None
+            if payment_intent:
+                try:
+                    entry = _redis_client.get(f"resumeradar:pi_token:{payment_intent}")
+                except Exception:
+                    entry = None
+            if not entry:
+                md = obj.get('metadata', {}) or {}
+                if md.get('bundle_token'):
+                    entry = f"bundle:{md['bundle_token']}"
+                elif md.get('cv_token'):
+                    entry = f"cv:{md['cv_token']}"
+
+            audit_event = "payment_disputed" if is_dispute else "payment_refunded"
+
+            if entry and entry.startswith('bundle:'):
+                bundle_token = entry[len('bundle:'):]
+                revoke_result = bundle_credits.revoke_bundle(bundle_token)
+                print(f"Stripe {event['type']}: bundle revoked ({revoke_result}) for pi {payment_intent}")
+                try:
+                    audit_log.log_event(
+                        audit_event,
+                        token=bundle_token,
+                        provider="stripe",
+                        payment_intent_id=payment_intent,
+                        charge_id=charge_id,
+                        dispute_id=dispute_id,
+                        webhook_event=event['type'],
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="webhook",
+                    )
+                    if revoke_result.get("revoked"):
+                        audit_log.log_event(
+                            "bundle_revoked",
+                            token=bundle_token,
+                            provider="stripe",
+                            payment_intent_id=payment_intent,
+                            bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                            source="webhook",
+                        )
+                except Exception:
+                    pass
+            elif entry and entry.startswith('cv:'):
+                cv_token = entry[len('cv:'):]
+                try:
+                    _redis_client.delete(f"resumeradar:cv_paid:{cv_token}")
+                    _redis_client.delete(f"resumeradar:cv_tier:{cv_token}")
+                except Exception as e:
+                    print(f"ERROR: entitlement revocation failed ({e}) for pi {payment_intent}")
+                    return jsonify({"error": "Revocation failed; retry."}), 500
+                print(f"Stripe {event['type']}: cv entitlement revoked for pi {payment_intent}")
+                try:
+                    audit_log.log_event(
+                        audit_event,
+                        token=cv_token,
+                        provider="stripe",
+                        payment_intent_id=payment_intent,
+                        charge_id=charge_id,
+                        dispute_id=dispute_id,
+                        webhook_event=event['type'],
+                        source="webhook",
+                    )
+                    audit_log.log_event(
+                        "entitlement_revoked",
+                        token=cv_token,
+                        provider="stripe",
+                        payment_intent_id=payment_intent,
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
+            else:
+                # Payment predates the pi_token map (or metadata missing) —
+                # nothing to auto-revoke. Log for manual follow-up.
+                print(f"WARNING: {event['type']} unresolvable to a token — pi {payment_intent}, charge {charge_id}")
+                try:
+                    audit_log.log_event(
+                        "revocation_unresolved",
+                        token=payment_intent or charge_id,
+                        provider="stripe",
+                        payment_intent_id=payment_intent,
+                        charge_id=charge_id,
+                        dispute_id=dispute_id,
+                        webhook_event=event['type'],
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
 
         return jsonify({"received": True}), 200
 
@@ -2513,6 +2673,7 @@ def build_webhook_paystack():
             metadata = data.get('metadata', {})
             product_type = metadata.get('product_type', '')
             delivery_email = metadata.get('delivery_email', '')
+            dedup_key = None
 
             # (2) Dedup on reference — after signature verification
             if reference and _redis_client:
@@ -2526,19 +2687,42 @@ def build_webhook_paystack():
                 bundle_token = metadata.get('bundle_token', '')
                 plan = metadata.get('plan', '')
 
-                if bundle_token and plan and _redis_client:
+                if bundle_token and plan:
+                    if not _redis_client:
+                        # Customer paid but bundle can't be created — fail loudly
+                        # so Paystack retries (same pattern as the single-CV path).
+                        print(f"ERROR: Redis unavailable — Paystack bundle not created for ref {reference}")
+                        return jsonify({"error": "Activation failed; retry."}), 500
                     try:
+                        # already_existed=True is success (webhook replay or a
+                        # racing activation) — proceed normally.
                         bundle_result = bundle_credits.create_bundle(plan, "paystack", delivery_email, bundle_token)
                         if bundle_result.get("error"):
                             print(f"Paystack webhook bundle creation failed: {bundle_result['error']}")
+                            if dedup_key:
+                                try:
+                                    _redis_client.delete(dedup_key)
+                                except Exception:
+                                    pass
+                            return jsonify({"error": "Activation failed; retry."}), 500
+                    except Exception as e:
+                        print(f"Paystack webhook bundle error: {e}")
+                        if dedup_key:
                             try:
                                 _redis_client.delete(dedup_key)
                             except Exception:
                                 pass
-                    except Exception as e:
-                        print(f"Paystack webhook bundle error: {e}")
+                        return jsonify({"error": "Activation failed; retry."}), 500
+
+                    # Map reference → bundle token so refund.processed /
+                    # charge.dispute.create can revoke the entitlement.
+                    if reference:
                         try:
-                            _redis_client.delete(dedup_key)
+                            _redis_client.set(
+                                f"resumeradar:paystack_ref_token:{reference}",
+                                f"bundle:{bundle_token}",
+                                ex=10_368_000,  # 120d — matches audit retention / dispute window
+                            )
                         except Exception:
                             pass
 
@@ -2584,14 +2768,23 @@ def build_webhook_paystack():
                         _redis_client.setex(paid_key, 259200, "1")
                         _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
                         _redis_client.setex(f"resumeradar:cv_paystack_ref:{cv_token}", 259200, reference)
+                        # Reverse map: reference → cv token so refund.processed /
+                        # charge.dispute.create can revoke the entitlement.
+                        if reference:
+                            _redis_client.set(
+                                f"resumeradar:paystack_ref_token:{reference}",
+                                f"cv:{cv_token}",
+                                ex=10_368_000,  # 120d
+                            )
                     except Exception as redis_err:
                         # Customer paid but can't download — fail loudly, release
                         # dedup, and 500 so Paystack retries the webhook.
                         print(f"ERROR: Paystack cv_paid stamp failed ({redis_err}) for ref {reference}")
-                        try:
-                            _redis_client.delete(dedup_key)
-                        except Exception:
-                            pass
+                        if dedup_key:
+                            try:
+                                _redis_client.delete(dedup_key)
+                            except Exception:
+                                pass
                         return jsonify({"error": "Activation failed; retry."}), 500
                 elif cv_token:
                     print(f"ERROR: Redis unavailable — Paystack cv_paid not stamped for ref {reference}")
@@ -2612,6 +2805,101 @@ def build_webhook_paystack():
 
                 if delivery_email and cv_token:
                     _send_cv_email(delivery_email, cv_token, template, f"paystack_{reference}")
+
+        elif event.get('event') in ('refund.processed', 'charge.dispute.create'):
+            # Refund / chargeback → revoke the entitlement the payment bought.
+            data = event.get('data', {})
+            is_dispute = event.get('event') == 'charge.dispute.create'
+            if is_dispute:
+                reference = (data.get('transaction') or {}).get('reference', '')
+                dispute_id = str(data.get('id', '') or '')
+            else:
+                reference = data.get('transaction_reference', '')
+                dispute_id = ''
+
+            if not _redis_client:
+                # Can't revoke without Redis — 500 so Paystack retries later.
+                print(f"ERROR: Redis unavailable — cannot process {event.get('event')} for ref {reference}")
+                return jsonify({"error": "Revocation failed; retry."}), 500
+
+            entry = None
+            if reference:
+                try:
+                    entry = _redis_client.get(f"resumeradar:paystack_ref_token:{reference}")
+                except Exception:
+                    entry = None
+
+            audit_event = "payment_disputed" if is_dispute else "payment_refunded"
+
+            if entry and entry.startswith('bundle:'):
+                bundle_token = entry[len('bundle:'):]
+                revoke_result = bundle_credits.revoke_bundle(bundle_token)
+                print(f"Paystack {event.get('event')}: bundle revoked ({revoke_result}) for ref {reference}")
+                try:
+                    audit_log.log_event(
+                        audit_event,
+                        token=bundle_token,
+                        provider="paystack",
+                        reference=reference,
+                        dispute_id=dispute_id,
+                        webhook_event=event.get('event'),
+                        bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                        source="webhook",
+                    )
+                    if revoke_result.get("revoked"):
+                        audit_log.log_event(
+                            "bundle_revoked",
+                            token=bundle_token,
+                            provider="paystack",
+                            reference=reference,
+                            bundle_token_hash=bundle_credits.hmac_token(bundle_token),
+                            source="webhook",
+                        )
+                except Exception:
+                    pass
+            elif entry and entry.startswith('cv:'):
+                cv_token = entry[len('cv:'):]
+                try:
+                    _redis_client.delete(f"resumeradar:cv_paid:{cv_token}")
+                    _redis_client.delete(f"resumeradar:cv_tier:{cv_token}")
+                except Exception as e:
+                    print(f"ERROR: Paystack entitlement revocation failed ({e}) for ref {reference}")
+                    return jsonify({"error": "Revocation failed; retry."}), 500
+                print(f"Paystack {event.get('event')}: cv entitlement revoked for ref {reference}")
+                try:
+                    audit_log.log_event(
+                        audit_event,
+                        token=cv_token,
+                        provider="paystack",
+                        reference=reference,
+                        dispute_id=dispute_id,
+                        webhook_event=event.get('event'),
+                        source="webhook",
+                    )
+                    audit_log.log_event(
+                        "entitlement_revoked",
+                        token=cv_token,
+                        provider="paystack",
+                        reference=reference,
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
+            else:
+                # Payment predates the ref_token map — nothing to auto-revoke.
+                print(f"WARNING: {event.get('event')} unresolvable to a token — ref {reference}")
+                try:
+                    audit_log.log_event(
+                        "revocation_unresolved",
+                        token=reference or dispute_id,
+                        provider="paystack",
+                        reference=reference,
+                        dispute_id=dispute_id,
+                        webhook_event=event.get('event'),
+                        source="webhook",
+                    )
+                except Exception:
+                    pass
 
         return jsonify({"received": True}), 200
 
@@ -2917,6 +3205,12 @@ print(f"   Email Delivery: {'✅ Enabled' if os.getenv('RESEND_API_KEY') else '�
 print(f"   Paystack: {'✅ Enabled' if os.getenv('PAYSTACK_SECRET_KEY') else '❌ Not configured'}")
 print(f"   Audit Log: {'✅ Enabled' if (os.getenv('AUDIT_HMAC_SECRET') and _redis_client) else '❌ Disabled (needs AUDIT_HMAC_SECRET + Redis)'}")
 print(f"   Funnel Analytics: {'✅ Enabled' if _redis_client else '❌ Disabled (needs Redis)'}")
+print(f"   Public Base URL: {'✅ Set' if _public_base_url else '❌ NOT SET'}")
+if not _public_base_url and os.getenv('RENDER'):
+    # Payment callbacks refuse to fall back to the client-controlled Host
+    # header, so checkout will 500 until this is configured.
+    print("   🚨 CRITICAL: PUBLIC_BASE_URL missing in production — "
+          "payment checkout will fail until it is set in the Render dashboard.")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
