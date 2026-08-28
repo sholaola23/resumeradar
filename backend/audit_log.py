@@ -50,6 +50,12 @@ VALID_EVENTS = frozenset({
     "bundle_exhausted",
     # Nigeria free download
     "free_download_nigeria",
+    # Refunds / disputes (entitlement revocation)
+    "payment_refunded",
+    "payment_disputed",
+    "entitlement_revoked",
+    "bundle_revoked",
+    "revocation_unresolved",  # refund/dispute we couldn't map to a token
 })
 
 ALLOWED_KWARGS = frozenset({
@@ -61,6 +67,10 @@ ALLOWED_KWARGS = frozenset({
     # Phase 2: Bundle fields
     "type", "remaining", "plan",
     "bundle_token_hash",    # H1: HMAC hash, never raw token
+    # Refund / dispute fields
+    # NOTE: not "event_type" — that name collides with log_event's own
+    # positional parameter and raises TypeError at the call site.
+    "charge_id", "dispute_id", "webhook_event", "amount", "currency",
 })
 
 # ---------------------------------------------------------------------------

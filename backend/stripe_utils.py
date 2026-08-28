@@ -51,6 +51,10 @@ def create_checkout_session(cv_token, template, success_url, cancel_url, deliver
             success_url=success_url,
             cancel_url=cancel_url,
             metadata=metadata,
+            # Copy metadata onto the PaymentIntent (and its Charge) so
+            # charge.refunded / charge.dispute.created events can resolve
+            # the cv_token without an extra API call.
+            payment_intent_data={"metadata": metadata},
         )
         return {
             "session_id": session.id,
@@ -134,6 +138,9 @@ def create_bundle_checkout_session(plan, bundle_token, delivery_email, success_u
             cancel_url=cancel_url,
             customer_email=delivery_email,
             metadata=metadata,
+            # Copy metadata onto the PaymentIntent (and its Charge) so
+            # refund/dispute events can resolve the bundle_token directly.
+            payment_intent_data={"metadata": metadata},
         )
         return {
             "session_id": session.id,

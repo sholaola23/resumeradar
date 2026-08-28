@@ -24,6 +24,7 @@ import os
 import json
 import hmac as hmac_module
 import hashlib
+import secrets
 import time
 import uuid
 from datetime import datetime, timezone
@@ -195,8 +196,21 @@ def create_bundle(plan, provider, email, bundle_token=None):
         ttl = plan_config["ttl"]
         bundle_key = f"{_BUNDLE_PREFIX}{bundle_token}"
 
-        # Store bundle data
-        _redis.setex(bundle_key, ttl, json.dumps(bundle_data))
+        # Store bundle data — SET NX so a replayed webhook or a duplicate
+        # create call can never overwrite an existing bundle (which would
+        # reset already-spent credits back to full).
+        created = _redis.set(bundle_key, json.dumps(bundle_data), nx=True, ex=ttl)
+        if not created:
+            # Idempotent replay: return the existing bundle's current state.
+            existing = get_status(bundle_token)
+            return {
+                "bundle_token": bundle_token,
+                "plan": existing.get("plan", plan),
+                "cv_remaining": existing.get("cv_remaining", 0),
+                "cl_remaining": existing.get("cl_remaining", 0),
+                "expires_in_hours": existing.get("expires_in_hours", 0),
+                "already_existed": True,
+            }
 
         # Update email index (H5: latest bundle wins)
         if email_hash:
@@ -212,10 +226,6 @@ def create_bundle(plan, provider, email, bundle_token=None):
         }
     except Exception as e:
         return {"error": f"Bundle creation failed: {type(e).__name__}"}
-
-
-# need secrets for token generation
-import secrets  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +334,55 @@ def get_status(bundle_token):
         }
     except Exception:
         return {"active": False}
+
+
+# ---------------------------------------------------------------------------
+# Bundle revocation (refunds / disputes)
+# ---------------------------------------------------------------------------
+def revoke_bundle(bundle_token):
+    """
+    Revoke a bundle after a refund or chargeback.
+
+    Deletes the bundle key and, if the email index still points at this
+    bundle, the index entry too (a newer bundle for the same email is
+    left untouched — H5: latest wins).
+
+    Returns:
+        {"revoked": True, "email_index_cleared": bool} on success,
+        {"revoked": False, "reason": "not_found"} if already gone,
+        {"error": ...} on failure.
+    """
+    if not _redis:
+        return {"error": "Service unavailable"}
+    if not bundle_token:
+        return {"error": "Missing bundle_token"}
+
+    try:
+        bundle_key = f"{_BUNDLE_PREFIX}{bundle_token}"
+
+        # Read first so we can clean up the email index conditionally.
+        data_raw = _redis.get(bundle_key)
+        if not data_raw:
+            return {"revoked": False, "reason": "not_found"}
+
+        email_index_cleared = False
+        try:
+            bundle = json.loads(data_raw)
+            email_hash = bundle.get("email_hash") or ""
+            if email_hash:
+                email_key = f"{_EMAIL_PREFIX}{email_hash}"
+                # Only clear the index if it still points at THIS bundle —
+                # never clobber a newer bundle the same email bought since.
+                if _redis.get(email_key) == bundle_token:
+                    _redis.delete(email_key)
+                    email_index_cleared = True
+        except (ValueError, TypeError):
+            pass  # corrupt JSON — still delete the bundle key below
+
+        _redis.delete(bundle_key)
+        return {"revoked": True, "email_index_cleared": email_index_cleared}
+    except Exception as e:
+        return {"error": f"Bundle revocation failed: {type(e).__name__}"}
 
 
 # ---------------------------------------------------------------------------
