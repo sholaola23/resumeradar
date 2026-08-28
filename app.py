@@ -10,6 +10,7 @@ import uuid
 import hmac as hmac_module
 import secrets
 import threading
+import ipaddress
 from concurrent.futures import ThreadPoolExecutor
 import html as html_module
 import re as re_module
@@ -220,6 +221,36 @@ def _get_base_url():
         raise RuntimeError("PUBLIC_BASE_URL not configured")
     print("WARNING: PUBLIC_BASE_URL not set — using request.host_url (dev only)")
     return request.host_url.rstrip('/')
+
+
+def _client_ip():
+    """
+    The real client IP, for per-user quota keys.
+
+    request.remote_addr is NOT usable here. Production sits behind Cloudflare,
+    and the address the app sees is a Cloudflare edge node: verified in the
+    Render access logs, where a single client's consecutive requests arrived as
+    172.68.229.194, 172.69.224.38, 172.69.224.39 and 162.158.216.204. Keying a
+    daily quota on that is wrong twice over — one user rotates across many
+    edge IPs (so the cap never accumulates), while unrelated users share one
+    edge IP (so they'd share a cap and lock each other out).
+
+    Cloudflare sets CF-Connecting-IP to the true client address and overwrites
+    any client-supplied value, so it is trustworthy for traffic arriving
+    through the CDN. remote_addr remains the fallback for local development.
+    """
+    forwarded = request.headers.get('CF-Connecting-IP', '')
+    if forwarded:
+        # Take one address, bounded, and only if it parses. The value becomes
+        # part of a Redis key, so an unvalidated header would let a caller mint
+        # unlimited quota buckets and grow key cardinality without limit.
+        candidate = forwarded.split(',')[0].strip()[:45]
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            pass
+    return (request.remote_addr or 'unknown').strip()
 
 
 def allowed_file(filename):
@@ -480,7 +511,11 @@ def scan_resume():
             unique_filename = f"{uuid.uuid4().hex}_{filename}"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
             resume_file.save(file_path)
-            file_type = filename.rsplit('.', 1)[1].lower()
+            # Derive the type from the ORIGINAL filename, which allowed_file()
+            # has already validated. secure_filename() strips non-ASCII, so a
+            # resume named e.g. 简历.pdf collapses to "pdf" and this rsplit
+            # would raise IndexError.
+            file_type = resume_file.filename.rsplit('.', 1)[1].lower()
 
         elif not resume_text:
             return jsonify({"error": "Please upload a resume file or paste your resume text."}), 400
@@ -599,6 +634,7 @@ def generate_cover_letter_endpoint():
             # If bundle exhausted/expired, fall through to free tier (H6 rule 4)
 
         if not bundle_bypass:
+            # STAGED ROLLOUT — see the note on the other tool routes below.
             ip = request.remote_addr
             if not ai_ratelimit.check_and_increment("cover_letter", ip):
                 ai_metrics.record_rate_reject(ai_metrics.TOOL_COVER_LETTER)
@@ -639,6 +675,14 @@ def enhance_bullet_endpoint():
             return jsonify({"error": "Bullet point is too long (max 500 characters)."}), 400
 
         # In-handler daily rate limit (H7)
+        # STAGED ROLLOUT: still the old key on purpose. These three caps
+        # (3/5/10 per day) have never actually fired in production, because
+        # remote_addr is a rotating Cloudflare edge IP. Switching them to
+        # _client_ip() would enforce them for the first time in a single
+        # deploy, against numbers tuned when they were a no-op — and under
+        # carrier NAT (a large share of our Nigerian traffic) a shared
+        # 3-per-day would lock out a whole pool. Flip these only after
+        # ai_metrics rate_rejects is observable. See _client_ip().
         ip = request.remote_addr
         if not ai_ratelimit.check_and_increment("enhance_bullet", ip):
             ai_metrics.record_rate_reject(ai_metrics.TOOL_ENHANCE_BULLET)
@@ -679,6 +723,14 @@ def generate_summary_endpoint():
             return jsonify({"error": "Please provide a job description."}), 400
 
         # In-handler daily rate limit (H7)
+        # STAGED ROLLOUT: still the old key on purpose. These three caps
+        # (3/5/10 per day) have never actually fired in production, because
+        # remote_addr is a rotating Cloudflare edge IP. Switching them to
+        # _client_ip() would enforce them for the first time in a single
+        # deploy, against numbers tuned when they were a no-op — and under
+        # carrier NAT (a large share of our Nigerian traffic) a shared
+        # 3-per-day would lock out a whole pool. Flip these only after
+        # ai_metrics rate_rejects is observable. See _client_ip().
         ip = request.remote_addr
         if not ai_ratelimit.check_and_increment("generate_summary", ip):
             ai_metrics.record_rate_reject(ai_metrics.TOOL_GENERATE_SUMMARY)
@@ -836,7 +888,7 @@ def email_report():
 
             <div style="background: #1f2937; padding: 24px; border-radius: 0 0 12px 12px; text-align: center;">
                 <p style="color: #9ca3af; margin: 0 0 4px; font-size: 13px;">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" style="color: #93c5fd; text-decoration: none;">Olushola Oladipupo</a></p>
-                <p style="color: #6b7280; margin: 0; font-size: 11px;">Your resume is analyzed in real-time and never stored.</p>
+                <p style="color: #6b7280; margin: 0; font-size: 11px;">Your resume is analyzed in real time and is never sold or shared.</p>
             </div>
         </div>
         """
@@ -1043,6 +1095,14 @@ def build_generate():
 
         tier = _parse_tier(cv_data.get("tier"))
 
+        # Daily per-IP cap (AI-01). Generation is free and the AI call below is
+        # the expensive one, so the burst limiter alone allowed ~360/day/IP.
+        if not ai_ratelimit.check_and_increment("cv_generate", _client_ip()):
+            ai_metrics.record_rate_reject(ai_metrics.TOOL_CV_POLISH)
+            return jsonify({"error": f"Daily limit reached "
+                                     f"({ai_ratelimit.DAILY_LIMITS['cv_generate']} CV generations per day). "
+                                     f"Try again tomorrow."}), 429
+
         # Polish with AI
         polished = polish_cv_sections(cv_data, tier=tier)
 
@@ -1118,6 +1178,13 @@ def build_generate_from_scan():
             return jsonify({"error": "Job description is missing."}), 400
 
         tier = _parse_tier((request.get_json(silent=True) or {}).get("tier"))
+
+        # Daily per-IP cap (AI-01) — shared counter with the other generate routes
+        if not ai_ratelimit.check_and_increment("cv_generate", _client_ip()):
+            ai_metrics.record_rate_reject(ai_metrics.TOOL_CV_POLISH)
+            return jsonify({"error": f"Daily limit reached "
+                                     f"({ai_ratelimit.DAILY_LIMITS['cv_generate']} CV generations per day). "
+                                     f"Try again tomorrow."}), 429
 
         # One AI call: extract structure + polish for ATS
         polished = extract_and_polish(resume_text, job_description, scan_keywords, tier=tier)
@@ -1201,7 +1268,10 @@ def build_generate_from_upload():
         # Ensure uploads directory exists
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         resume_file.save(file_path)
-        file_type = filename.rsplit('.', 1)[1].lower()
+        # Derive the type from the ORIGINAL filename, which allowed_file() has
+        # already validated. secure_filename() strips non-ASCII, so a resume
+        # named e.g. 简历.pdf collapses to "pdf" and this rsplit would IndexError.
+        file_type = resume_file.filename.rsplit('.', 1)[1].lower()
 
         # Parse the resume file — try/finally guarantees cleanup
         try:
@@ -1219,6 +1289,13 @@ def build_generate_from_upload():
             return jsonify({"error": "Could not extract enough text from your resume. Please try a different file or use the manual form."}), 400
 
         tier = _parse_tier(request.form.get("tier"))
+
+        # Daily per-IP cap (AI-01) — shared counter with the other generate routes
+        if not ai_ratelimit.check_and_increment("cv_generate", _client_ip()):
+            ai_metrics.record_rate_reject(ai_metrics.TOOL_CV_POLISH)
+            return jsonify({"error": f"Daily limit reached "
+                                     f"({ai_ratelimit.DAILY_LIMITS['cv_generate']} CV generations per day). "
+                                     f"Try again tomorrow."}), 429
 
         # One AI call: extract structure + polish for ATS (same as scan flow)
         polished = extract_and_polish(resume_text, job_description, tier=tier)
@@ -1336,8 +1413,11 @@ def build_create_checkout():
             if _redis_client:
                 try:
                     _redis_client.setex(f"resumeradar:cv_template:{token}", 259200, template)
-                    _redis_client.setex(f"resumeradar:cv_email:{token}", 259200, delivery_email)
                     _redis_client.setex(f"resumeradar:cv_format:{token}", 259200, format_choice)
+                    # PRIV-01: the raw delivery_email was also stored here for
+                    # 72h. Nothing ever read it — the address is carried on the
+                    # payment metadata instead — so it was plaintext PII at
+                    # rest for no reason. Removed.
                 except Exception:
                     pass
 
@@ -2228,7 +2308,7 @@ def _send_cv_email(email, token, template, event_id):
                 </div>
             </div>
             <div style="background: #1f2937; padding: 24px; border-radius: 0 0 12px 12px; text-align: center;">
-                <p style="color: #9ca3af; margin: 0; font-size: 11px;">Your resume was processed in real-time and not stored.</p>
+                <p style="color: #9ca3af; margin: 0; font-size: 11px;">Your resume was processed in real time and is never sold or shared.</p>
             </div>
         </div>"""
 

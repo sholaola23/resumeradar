@@ -433,7 +433,7 @@ def generate_pdf_report(scan_data):
     pdf.ln(2)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(156, 163, 175)
-    pdf.cell(0, 5, 'Your resume is analyzed in real-time and never stored. Your data stays yours.', new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 5, 'Your resume is analyzed in real time and is never sold or shared. Your data stays yours.', new_x='LMARGIN', new_y='NEXT')
 
     # Output as bytes
     return pdf.output()

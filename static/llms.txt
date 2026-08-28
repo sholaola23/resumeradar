@@ -29,7 +29,7 @@ backend developer, scrum master, and machine learning engineer.
 https://resumeradar.sholastechnotes.com
 
 ## Privacy
-Resumes are analyzed in real time and never stored. Emails are stored only as HMAC hashes.
+Resumes are analyzed in real time and are never added to a database, sold, or shared. Uploaded files are deleted immediately after parsing. Temporary data auto-expires: AI results are cached for up to 1 hour, and a generated CV is held for 2 hours so it can be downloaded, extended to 72 hours for a single purchase or to the remaining life of a bundle plan (up to 30 days). Emails are stored only as HMAC hashes; payment and email delivery are handled by Stripe and Resend.
 
 ## Built by
 Olushola Oladipupo — AWS Solutions Architect (https://www.linkedin.com/in/olushola-oladipupo/)
