@@ -48,6 +48,7 @@ from backend import ai_cache
 from backend import ai_budget
 from backend import ai_metrics
 from backend import ai_ratelimit
+from backend import hiring_signal
 from backend import bundle_credits
 from backend import funnel_metrics
 
@@ -391,8 +392,14 @@ def role_landing(role_slug):
             rrole = ROLE_PAGES.get(rslug)
             if rrole:
                 related.append({"slug": rslug, "title": rrole["title"]})
+    # Weekly recruiter-chatter signal. Returns None whenever the artifact is
+    # missing, malformed or stale, in which case the block simply does not
+    # render — it must never be able to break a role page.
+    signal = hiring_signal.get_signal(role_slug)
+
     return render_template('index.html', og_image=og_image, role=role, role_slug=role_slug,
-                           role_content=content, related_roles=related)
+                           role_content=content, related_roles=related,
+                           hiring_signal=signal)
 
 
 @app.route('/ats-resume-checker')
