@@ -734,47 +734,6 @@ Include the job title, requirements, responsibilities, qualifications — everyt
             </div>
             <p class="role-guide-note">Keywords only rank you when they honestly describe your experience — the scanner below shows which ones from a real posting you can truthfully add.</p>
 
-            {% if hiring_signal %}
-            <h3 class="role-guide-subtitle">What recruiters are naming right now</h3>
-            <p class="role-signal-intro">
-                From {{ role.title }} hiring conversation on X in the week of {{ hiring_signal.week_of }}.
-                This is what people running the hiring say they want to see. It is context for your
-                shortlist, not a scoring change: your match score below always comes from the real job
-                description you paste in.
-            </p>
-            <div class="role-signal">
-                {% if hiring_signal.rising %}
-                <div class="role-signal-group">
-                    <h4>Coming up more often</h4>
-                    <div class="keyword-tags">
-                        {% for item in hiring_signal.rising %}
-                        <span class="keyword-tag matched"
-                              title="named in {{ item.mentions }} posts{% if item.evidence %}: {{ item.evidence }}{% endif %}">
-                            {{ item.skill }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-                {% if hiring_signal.cooling %}
-                <div class="role-signal-group">
-                    <h4>Mentioned less than it used to be</h4>
-                    <div class="keyword-tags">
-                        {% for item in hiring_signal.cooling %}
-                        <span class="keyword-tag missing"
-                              title="named in {{ item.mentions }} posts{% if item.evidence %}: {{ item.evidence }}{% endif %}">
-                            {{ item.skill }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-            <p class="role-guide-note">
-                Only add any of these if they honestly describe work you have done.
-            </p>
-            {% endif %}
-
             <h3 class="role-guide-subtitle">Three fixes that move {{ role.title }} resumes up the ranking</h3>
             <ol class="role-guide-tips">
                 {% for tip in role_content.tips %}

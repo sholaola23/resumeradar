@@ -3051,34 +3051,6 @@ textarea::placeholder {
     max-width: 720px;
 }
 
-/* Weekly hiring-signal block on role pages */
-.role-signal-intro {
-    font-size: 15px;
-    color: var(--gray-600, #4b5563);
-    margin-bottom: 14px;
-    max-width: 720px;
-}
-
-.role-signal {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
-}
-
-.role-signal-group {
-    background: #fff;
-    border: 1px solid var(--gray-200);
-    border-radius: 10px;
-    padding: 16px;
-}
-
-.role-signal-group h4 {
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 10px;
-    color: var(--gray-700, #374151);
-}
-
 .role-guide-tips {
     padding-left: 22px;
     max-width: 720px;
