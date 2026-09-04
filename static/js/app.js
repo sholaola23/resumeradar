@@ -37,13 +37,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // FUNNEL ANALYTICS (fire-and-forget via sendBeacon)
     // ============================================================
+    let journeyId = '';
+    try {
+        journeyId = sessionStorage.getItem('resumeradar_journey_id') || crypto.randomUUID();
+        sessionStorage.setItem('resumeradar_journey_id', journeyId);
+    } catch (e) { /* analytics must never block scanning */ }
     function trackEvent(eventName) {
         try {
-            var blob = new Blob([JSON.stringify({ event: eventName })], { type: 'application/json' });
+            var blob = new Blob([JSON.stringify({ event: eventName, journey_id: journeyId })], { type: 'application/json' });
             navigator.sendBeacon('/api/event', blob);
         } catch (e) { /* best-effort */ }
     }
     window._rr_trackEvent = trackEvent;
+    try {
+        if (!sessionStorage.getItem('resumeradar_visit_recorded')) {
+            if (localStorage.getItem('resumeradar_visited')) trackEvent('repeat_visit');
+            localStorage.setItem('resumeradar_visited', '1');
+            sessionStorage.setItem('resumeradar_visit_recorded', '1');
+        }
+    } catch (e) { /* optional local repeat-use signal, no persistent server identity */ }
+    let activeJobKey = '';
+
 
     // Per-scan event deduplication
     let currentScanId = null;
@@ -179,24 +193,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Show score preview in the popup header
-        const score = data.match_score || 0;
+        const score = data.match_score;
         const scorePreview = document.getElementById('scorePreview');
         const scorePreviewNumber = document.getElementById('scorePreviewNumber');
         const scorePreviewFill = document.getElementById('scorePreviewFill');
 
         if (scorePreview && scorePreviewNumber && scorePreviewFill) {
             // Set score text
-            scorePreviewNumber.textContent = `${score}%`;
+            scorePreviewNumber.textContent = Number.isFinite(score) ? ResumeRadarScan.scoreText(score) : '—';
 
             // Animate the circle fill
             const circumference = 226.195; // 2 * π * 36
-            const offset = circumference - (score / 100) * circumference;
+            const offset = circumference - ((Number.isFinite(score) ? score : 0) / 100) * circumference;
             scorePreviewFill.style.strokeDashoffset = circumference; // reset
             scorePreview.style.display = 'block';
 
             // Color based on score
             let color = '#dc2626';
-            if (score >= 75) color = '#059669';
+            if (!Number.isFinite(score)) color = '#64748b';
+        else if (score >= 75) color = '#059669';
             else if (score >= 50) color = '#d97706';
             scorePreviewFill.style.stroke = color;
 
@@ -208,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update heading to include score context
         if (newsletterHeading) {
-            newsletterHeading.textContent = `Your score: ${score}%`;
+            newsletterHeading.textContent = `Your estimate: ${ResumeRadarScan.scoreText(score)}`;
         }
         if (newsletterSubtitle) {
             newsletterSubtitle.textContent = 'Subscribe to Shola\'s Tech Notes to unlock your full report — missing keywords, AI suggestions, and ATS fixes. Plus get weekly tech career tips in just 3 minutes.';
@@ -575,6 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Reset per-scan events
         firedEvents.clear();
+        trackEvent('scan_started');
 
         // Show loading state
         setLoading(true);
@@ -582,6 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const formData = new FormData();
             formData.append('job_description', jobDescription);
+            formData.append('journey_id', journeyId);
 
             if (activeTab === 'upload' && hasFile) {
                 formData.append('resume_file', resumeFile.files[0]);
@@ -602,6 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
+                    trackEvent('scan_failed');
                     showError('The scan is taking too long. Please try again in a moment.');
                     setLoading(false);
                     return;
@@ -613,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (!response.ok || data.error) {
+                trackEvent('scan_failed');
                 showError(data.error || 'Something went wrong. Please try again.');
                 setLoading(false);
                 return;
@@ -620,6 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Store data for report generation
             lastScanData = data;
+            try { activeJobKey = await ResumeRadarScan.jobKey(jobDescription); } catch (e) { activeJobKey = ''; }
 
             // Set scan ID for event deduplication
             currentScanId = data.scan_id || data.request_id || String(Date.now());
@@ -647,6 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             console.error('Scan error:', err);
+            trackEvent('scan_failed');
             showError('Could not connect to the server. Please make sure the app is running and try again.');
         } finally {
             setLoading(false);
@@ -807,7 +828,7 @@ Nice to Have
     function getShareUrl(source, campaign) {
         campaign = campaign || 'user_share';
         const score = lastScanData ? lastScanData.match_score : 0;
-        const tier = score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
+        const tier = !Number.isFinite(score) ? 'unknown' : score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
         const params = new URLSearchParams({
             utm_source: source,
             utm_medium: 'social',
@@ -822,28 +843,10 @@ Nice to Have
      * @param {string} platform - 'linkedin', 'whatsapp', or other
      */
     function getShareText(platform) {
-        const score = lastScanData ? Math.round(lastScanData.match_score) : 0;
-        const missing = lastScanData ? lastScanData.total_missing : 0;
-
-        if (!score) {
-            return platform === 'linkedin'
-                ? 'Free tool that scans your resume against job descriptions and shows your ATS match score. Interesting to see what keywords you might be missing.'
-                : 'Free tool that shows your ATS resume match score — interesting to see what keywords you might be missing 📡';
-        }
-
-        if (score >= 70) {
-            return platform === 'linkedin'
-                ? `Just scored ${score}% on ResumeRadar's ATS scanner. Useful free tool if you want to check how your resume stacks up against any job description.`
-                : `Scored ${score}% on ResumeRadar 📡 Free ATS resume scanner — check how yours stacks up.`;
-        } else if (score >= 45) {
-            return platform === 'linkedin'
-                ? `Scored ${score}% on an ATS resume scanner. Interesting to see the ${missing} keywords I was missing that hiring systems actually look for. Free tool worth checking.`
-                : `${score}% ATS match — found ${missing} keywords I was missing 📡 Free resume scanner worth checking out.`;
-        } else {
-            return platform === 'linkedin'
-                ? `I just found out my resume only matches ${score}% of what ATS systems look for. This free tool shows exactly what's missing — wish I'd used it earlier.`
-                : `My resume only matches ${score}% of ATS keywords 😅 This free scanner shows exactly what to fix 📡`;
-        }
+        const score = lastScanData && lastScanData.match_score;
+        return Number.isFinite(score)
+            ? `My CV has a ${ResumeRadarScan.scoreText(score)} job-description match estimate on ResumeRadar. Useful for reviewing keywords and writing — not a prediction of hiring outcomes.`
+            : 'ResumeRadar helps compare your CV with a job description and improve your writing. Free scan, no account needed.';
     }
 
     if (shareLinkedIn) {
@@ -909,7 +912,7 @@ Nice to Have
 
         // Score
         report.push('───────────────────────────────────────────');
-        report.push(`  ATS MATCH SCORE: ${data.match_score}%`);
+        report.push(`  JOB-DESCRIPTION MATCH ESTIMATE: ${ResumeRadarScan.scoreText(data.match_score)}`);
         report.push('───────────────────────────────────────────');
         report.push(`  Keywords Matched: ${data.total_matched}`);
         report.push(`  Keywords Missing: ${data.total_missing}`);
@@ -1181,8 +1184,8 @@ Nice to Have
             if (err.message.includes('not configured')) {
                 showToast('Email service not set up yet. Opening email client...', true);
                 const reportText = generateShortReport(lastScanData);
-                const score = lastScanData.match_score;
-                const subject = encodeURIComponent(`ResumeRadar Report — ATS Match Score: ${score}%`);
+                const score = ResumeRadarScan.scoreText(lastScanData.match_score);
+                const subject = encodeURIComponent(`ResumeRadar Report — Match estimate: ${score}`);
                 const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(reportText)}`;
                 window.location.href = mailtoUrl;
                 closeModal();
@@ -1206,7 +1209,7 @@ Nice to Have
         report.push('RESUMERADAR — ATS SCAN REPORT');
         report.push(`Generated: ${new Date().toLocaleDateString()}`);
         report.push('');
-        report.push(`ATS MATCH SCORE: ${data.match_score}%`);
+        report.push(`JOB-DESCRIPTION MATCH ESTIMATE: ${ResumeRadarScan.scoreText(data.match_score)}`);
         report.push(`Keywords Matched: ${data.total_matched} | Missing: ${data.total_missing} | Total: ${data.total_job_keywords}`);
         report.push('');
 
@@ -1312,6 +1315,10 @@ Nice to Have
 
         // Matched Keywords
         renderKeywords('matchedKeywords', data.matched_keywords, 'matched');
+        for (const id of ['missingKeywords', 'matchedKeywords']) {
+            const card = document.getElementById(id).closest('.result-card');
+            if (card) card.style.display = Number.isFinite(data.match_score) ? '' : 'none';
+        }
 
         // AI Suggestions
         renderAISuggestions(data.ai_suggestions);
@@ -1323,7 +1330,7 @@ Nice to Have
         renderATSFormatting(data.ats_formatting);
 
         // Build CTA (intentionally shown only after deep results unlock)
-        renderBuildCta(data.match_score || 0);
+        renderBuildCta(data.match_score);
 
         // Scan History
         saveScanToHistory(data);
@@ -1337,41 +1344,14 @@ Nice to Have
         const list = document.getElementById('topMissingList');
         if (!card || !list) return;
 
-        const missing = data.missing_keywords;
-        if (!missing) { card.style.display = 'none'; return; }
-
-        // Flatten: missing_keywords can be {category: [kw,...]} or [kw,...]
-        let flat = [];
-        if (Array.isArray(missing)) {
-            flat = missing.map(kw => ({
-                keyword: typeof kw === 'string' ? kw : (kw.keyword || kw.name || String(kw)),
-                category: (typeof kw === 'object' && kw.category) ? kw.category : '',
-            }));
-        } else if (typeof missing === 'object') {
-            // Category-keyed object: {technical_skills: [...], soft_skills: [...]}
-            // Prioritize technical_skills first
-            const order = ['technical_skills', 'certifications', 'soft_skills', 'education', 'action_verbs'];
-            const keys = order.filter(k => k in missing).concat(Object.keys(missing).filter(k => !order.includes(k)));
-            for (const cat of keys) {
-                const kwList = missing[cat];
-                if (Array.isArray(kwList)) {
-                    for (const kw of kwList) {
-                        flat.push({ keyword: String(kw), category: cat.replace(/_/g, ' ') });
-                    }
-                }
-            }
-        }
-
-        if (flat.length === 0) { card.style.display = 'none'; return; }
-
-        const top3 = flat.slice(0, 3);
-        list.innerHTML = top3.map(item =>
-            `<div class="top-missing-item">
-                <span class="top-missing-keyword">${escapeHtml(item.keyword)}</span>
-                ${item.category ? `<span class="top-missing-category">${escapeHtml(item.category)}</span>` : ''}
-            </div>`
-        ).join('');
-
+        const recommendations = data.priority_recommendations || [];
+        if (!recommendations.length) { card.style.display = 'none'; return; }
+        list.innerHTML = recommendations.slice(0, 3).map(item => `
+            <div class="top-missing-item">
+                <strong class="top-missing-keyword">${escapeHtml(item.keyword)}</strong>
+                <span class="top-missing-category">${escapeHtml(item.priority === 'unspecified' ? 'Mentioned in job' : item.priority)}</span>
+                <div class="recommendation-detail"><p>${escapeHtml(item.reason)}</p><p>${escapeHtml(item.suggestion)}</p></div>
+            </div>`).join('');
         card.style.display = 'block';
     }
 
@@ -1431,19 +1411,24 @@ Nice to Have
         // Reset circle for re-scans
         scoreFill.style.strokeDashoffset = 339.292;
 
-        // Animate score number
-        animateNumber(scoreNumber, score);
+        const scored = Number.isFinite(score);
+        scoreNumber.classList.toggle('unscored', !scored);
+        if (scored) animateNumber(scoreNumber, score);
+        else scoreNumber.textContent = 'Not scored';
+        const explanation = document.getElementById('scoreExplanation');
+        if (explanation) explanation.textContent = data.score_explanation || 'A custom keyword coverage estimate, not an employer’s score, applicant ranking, or interview prediction.';
 
         // Animate circle
         const circumference = 339.292;
-        const offset = circumference - (score / 100) * circumference;
+        const offset = circumference - ((Number.isFinite(score) ? score : 0) / 100) * circumference;
         setTimeout(() => {
             scoreFill.style.strokeDashoffset = offset;
         }, 100);
 
         // Color based on score
         let color;
-        if (score >= 75) color = '#059669';
+        if (!Number.isFinite(score)) color = '#64748b';
+        else if (score >= 75) color = '#059669';
         else if (score >= 50) color = '#d97706';
         else color = '#dc2626';
         scoreFill.style.stroke = color;
@@ -1457,13 +1442,14 @@ Nice to Have
         if (!summaryText) {
             const N = data.total_missing || 0;
             if (score >= 75) {
-                summaryText = `You're a ${score}% match — strong position. Focus on the ${N} missing keyword${N !== 1 ? 's' : ''} below to push into interview territory.`;
+                summaryText = `Your CV covers many recognized terms in this job description. Review the ${N} missing term${N !== 1 ? 's' : ''} and prioritize requirements you can support with evidence.`;
             } else if (score >= 50) {
-                summaryText = `${score}% match — solid foundation. Adding the top missing keywords could significantly improve your shortlist chances.`;
+                summaryText = `Your CV covers some recognized terms. Review the priorities below and describe relevant experience you already have.`;
             } else {
-                summaryText = `${score}% match with ${N} gap${N !== 1 ? 's' : ''} to close. The action plan below shows exactly what to fix first.`;
+                summaryText = `We found ${N} terms not mentioned in your CV. This may reflect missing wording, unfamiliar vocabulary, or experience to develop.`;
             }
         }
+        if (!scored) summaryText = 'There is not enough recognized job information to give a useful estimate. You can still review the writing suggestions and check the requirements manually.';
         scoreSummary.innerHTML = `<p>${escapeHtml(summaryText)}</p>`;
 
         // Stats boxes
@@ -1494,33 +1480,34 @@ Nice to Have
         if (!meter || !fill || !marker || !verdict) return;
 
         const score = data.match_score;
+        if (!Number.isFinite(score)) { meter.style.display = 'none'; return; }
 
         // Determine fit tier and messaging
         let tier, tierColor, tierBg, tierIcon, tierMsg;
         if (score >= 75) {
-            tier = 'Strong Fit';
+            tier = 'High keyword coverage';
             tierColor = '#059669';
             tierBg = '#d1fae5';
             tierIcon = '🎯';
-            tierMsg = 'Your skills closely match this role. Focus on tailoring your experience bullets and you\'re in great shape.';
+            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else if (score >= 50) {
-            tier = 'Good Fit';
+            tier = 'Moderate keyword coverage';
             tierColor = '#d97706';
             tierBg = '#fef3c7';
             tierIcon = '👍';
-            tierMsg = 'Solid foundation for this role. Adding the missing keywords to your resume could move you into the strong fit zone.';
+            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else if (score >= 30) {
-            tier = 'Stretch';
+            tier = 'Some keyword coverage';
             tierColor = '#ea580c';
             tierBg = '#fff7ed';
             tierIcon = '🔄';
-            tierMsg = 'This role is a stretch right now. You\'d need to close some skill gaps — check the missing keywords for your roadmap.';
+            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else {
-            tier = 'Long Shot';
+            tier = 'Low keyword coverage';
             tierColor = '#dc2626';
             tierBg = '#fee2e2';
             tierIcon = '📈';
-            tierMsg = 'Significant gaps for this role. Consider using the missing keywords as a learning path before applying.';
+            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
         }
 
         // Fill width = score percentage
@@ -1712,7 +1699,7 @@ Nice to Have
         if (!hasAny) {
             container.innerHTML = `<p class="no-keywords">${
                 type === 'missing'
-                    ? 'No missing keywords detected — great job!'
+                    ? 'No missing recognized terms detected. This does not confirm that all job requirements are met.'
                     : 'No keyword matches found.'
             }</p>`;
         }
@@ -1943,16 +1930,8 @@ Nice to Have
 
         score = Math.round(score);
 
-        if (score >= 60) {
-            heading.textContent = '\uD83D\uDE80 Strong foundation — let\u2019s make it even stronger';
-            body.textContent = 'Your CV already matches well. Our AI will tighten your wording, strategically place keywords, and format it for ATS systems \u2014 using only your real experience.';
-        } else if (score >= 35) {
-            heading.textContent = '\uD83D\uDCA1 Good start — let\u2019s close the gaps';
-            body.textContent = 'Your CV has room to grow. Before generating, review the missing keywords above and add any skills you actually have. Our AI will then optimize your wording and weave in keywords \u2014 but it won\u2019t add experience you don\u2019t have.';
-        } else {
-            heading.textContent = '\u26A0\uFE0F Your CV has significant gaps for this role';
-            body.textContent = 'The CV Builder can polish your wording and add keywords where they honestly fit, but it cannot add skills or experience you don\u2019t have. We recommend reviewing the missing keywords above first \u2014 add any you genuinely have, then generate.';
-        }
+        heading.textContent = 'Preview a clearer CV for this job';
+        body.textContent = 'Review a tailored rewrite using your existing experience. Read the full preview before paying £2 for PDF and Word exports. Confirm every claim before applying.';
     }
 
     function renderATSFormatting(ats) {
@@ -2024,16 +2003,19 @@ Nice to Have
 
     function saveScanToHistory(data) {
         try {
-            const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            const history = getScanHistory();
+            if (history.some(entry => entry.id === currentScanId)) return;
 
             // Extract first ~60 chars of job description for label
             const jdEl = document.getElementById('jobDescription');
             const jdSnippet = jdEl ? jdEl.value.trim().substring(0, 80).replace(/\s+/g, ' ') : 'Job scan';
 
             const entry = {
-                id: Date.now(),
+                id: currentScanId,
+                jobKey: activeJobKey,
+                scoreVersion: data.score_version || '2',
                 date: new Date().toISOString(),
-                score: Math.round(data.match_score),
+                score: Number.isFinite(data.match_score) ? Math.round(data.match_score) : null,
                 matched: data.total_matched,
                 missing: data.total_missing,
                 total: data.total_job_keywords,
@@ -2050,7 +2032,8 @@ Nice to Have
 
     function getScanHistory() {
         try {
-            return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            const entries = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            return Array.isArray(entries) ? entries.filter(entry => entry && typeof entry.jdSnippet === 'string') : [];
         } catch (e) {
             return [];
         }
@@ -2074,7 +2057,8 @@ Nice to Have
         card.style.display = 'block';
 
         // --- Mini bar chart (last 10 scans, oldest to newest) ---
-        const chartData = history.slice(0, 10).reverse();
+        const latest = history[0];
+        const chartData = history.filter(entry => ResumeRadarScan.scoreDelta(latest, entry) !== null).slice(0, 10).reverse();
         const maxScore = 100;
         chart.innerHTML = `
             <div class="history-bars">
@@ -2101,17 +2085,15 @@ Nice to Have
             const snippet = entry.jdSnippet.length > 50 ? entry.jdSnippet.substring(0, 50) + '...' : entry.jdSnippet;
             let scoreColor = entry.score >= 75 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--danger)';
 
-            // Show delta from previous scan
             let delta = '';
-            if (i < recent.length - 1) {
-                const diff = entry.score - recent[i + 1].score;
-                if (diff > 0) delta = `<span class="history-delta positive">+${diff}%</span>`;
-                else if (diff < 0) delta = `<span class="history-delta negative">${diff}%</span>`;
-            }
+            const previous = history.slice(history.indexOf(entry) + 1).find(other => ResumeRadarScan.scoreDelta(entry, other) !== null);
+            const diff = ResumeRadarScan.scoreDelta(entry, previous);
+            if (diff > 0) delta = `<span class="history-delta positive">+${diff} points</span>`;
+            else if (diff < 0) delta = `<span class="history-delta negative">${diff} points</span>`;
 
             return `
                 <div class="history-entry">
-                    <div class="history-entry-score" style="color: ${scoreColor};">${entry.score}% ${delta}</div>
+                    <div class="history-entry-score" style="color: ${scoreColor};">${ResumeRadarScan.scoreText(entry.score)} ${delta}</div>
                     <div class="history-entry-detail">
                         <span class="history-entry-snippet">${escapeHtml(snippet)}</span>
                         <span class="history-entry-time">${timeStr}</span>
@@ -2131,12 +2113,12 @@ Nice to Have
     }
 
     function _trendIndicator(chartData) {
-        if (chartData.length < 2) return '';
+        if (chartData.length < 2) return '<p class="history-trend neutral">Scan a revision against the same job to compare keyword coverage.</p>';
         const first = chartData[0].score;
         const last = chartData[chartData.length - 1].score;
         const diff = last - first;
-        if (diff > 5) return `<div class="history-trend positive">📈 Up ${diff}% since your first scan — great progress!</div>`;
-        if (diff < -5) return `<div class="history-trend negative">📉 Down ${Math.abs(diff)}% — try matching more keywords from the job description.</div>`;
+        if (diff > 5) return `<div class="history-trend positive">📈 Up ${diff} points across revisions for this job.</div>`;
+        if (diff < -5) return `<div class="history-trend negative">📉 Down ${Math.abs(diff)} points for this job. Review the changes before adding any claims.</div>`;
         return `<div class="history-trend neutral">➡️ Score is holding steady. Check the missing keywords for your next optimization.</div>`;
     }
 

@@ -24,7 +24,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.resume_parser import parse_resume
-from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score
+from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
@@ -436,7 +436,7 @@ def llms_txt():
 # Honest lastmod dates — update ONLY when the page's content actually changes.
 # (Previously datetime.now() on every request, which teaches Google to
 # distrust the field entirely.)
-LASTMOD_CORE = '2026-08-27'   # / and /build (hero reframe, tier picker)
+LASTMOD_CORE = '2026-09-05'   # / and /build (hero reframe, tier picker)
 LASTMOD_ROLES = '2026-08-27'  # role pages + hub (rich content shipped)
 
 
@@ -542,6 +542,7 @@ def scan_resume():
 
         # 5. Calculate match
         match_results = calculate_match(resume_keywords, job_keywords)
+        match_results['priority_recommendations'] = analyze_requirements(extracted_resume_text, job_description, match_results)
 
         # 6. Analyze ATS formatting
         ats_check = analyze_ats_formatting(extracted_resume_text)
@@ -558,12 +559,16 @@ def scan_resume():
 
         # 8. Increment scan counter + funnel analytics
         _increment_scan_count()
-        funnel_metrics.record("scan_completed")
+        funnel_metrics.record("scan_completed", request.form.get("journey_id"))
 
         # 9. Compile final response
         response = {
             "success": True,
             "match_score": match_results["overall_score"],
+            "score_status": match_results["score_status"],
+            "score_explanation": match_results["score_explanation"],
+            "score_version": "2",
+            "priority_recommendations": match_results["priority_recommendations"],
             "simple_match_ratio": match_results["simple_match_ratio"],
             "total_job_keywords": match_results["total_job_keywords"],
             "total_matched": match_results["total_matched"],
@@ -831,6 +836,7 @@ def email_report():
                 return 0
 
         score = _as_int(scan_data.get('match_score', 0))
+        score_label = 'Not scored' if scan_data.get('match_score') is None else f'{score}%'
         total_matched = _as_int(scan_data.get('total_matched', 0))
         total_missing = _as_int(scan_data.get('total_missing', 0))
         total_job_keywords = _as_int(scan_data.get('total_job_keywords', 0))
@@ -855,10 +861,10 @@ def email_report():
             </div>
 
             <div style="background: white; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
-                <h2 style="margin: 0 0 8px; font-size: 20px; color: #1f2937;">Your ATS Match Score</h2>
+                <h2 style="margin: 0 0 8px; font-size: 20px; color: #1f2937;">Your job-description match estimate</h2>
 
                 <div style="text-align: center; margin: 24px 0;">
-                    <span style="font-size: 56px; font-weight: 800; color: {'#059669' if score >= 75 else '#d97706' if score >= 50 else '#dc2626'};">{score}%</span>
+                    <span style="font-size: 56px; font-weight: 800; color: {'#059669' if score >= 75 else '#d97706' if score >= 50 else '#dc2626'};">{score_label}</span>
                 </div>
 
                 <p style="font-size: 15px; line-height: 1.6; color: #4b5563;">{summary}</p>
@@ -900,7 +906,7 @@ def email_report():
         params = {
             "from": "ResumeRadar <reports@sholastechnotes.com>",
             "to": [email],
-            "subject": f"Your ResumeRadar Report — ATS Match Score: {score}%",
+            "subject": f"Your ResumeRadar Report — Match estimate: {score_label}",
             "html": html_body,
             "attachments": [
                 {
@@ -1031,6 +1037,29 @@ def get_scan_count():
 # CV BUILDER ROUTES
 # ============================================================
 
+def _bind_journey(token):
+    """Best-effort attribution only; never used to grant access."""
+    journey = funnel_metrics.normalize_journey_id(request.headers.get('X-ResumeRadar-Journey'))
+    if _redis_client and token and journey:
+        try:
+            _redis_client.setex(f'resumeradar:token_journey:{token}', 90 * 86400, journey)
+        except Exception:
+            pass
+    return journey
+
+
+def _token_journey(token):
+    if _redis_client and token:
+        try:
+            value = _redis_client.get(f'resumeradar:token_journey:{token}')
+            if isinstance(value, bytes):
+                value = value.decode()
+            return funnel_metrics.normalize_journey_id(value)
+        except Exception:
+            pass
+    return None
+
+
 def _parse_tier(value):
     """Validate a requested polish tier. Pro requires its Stripe price to be
     configured server-side — otherwise everything coerces to standard."""
@@ -1112,6 +1141,7 @@ def build_generate():
 
         # Generate a token and store in Redis
         token = uuid.uuid4().hex
+        _bind_journey(token)
         cv_redis_key = f"resumeradar:cv:{token}"
 
         if _redis_client:
@@ -1195,6 +1225,7 @@ def build_generate_from_scan():
 
         # Generate token and store
         token = uuid.uuid4().hex
+        _bind_journey(token)
         cv_redis_key = f"resumeradar:cv:{token}"
 
         if _redis_client:
@@ -1306,6 +1337,7 @@ def build_generate_from_upload():
 
         # Generate token and store (same pattern as generate-from-scan)
         token = uuid.uuid4().hex
+        _bind_journey(token)
         cv_redis_key = f"resumeradar:cv:{token}"
 
         if _redis_client:
@@ -1390,7 +1422,7 @@ def build_create_checkout():
                     return jsonify({"error": "Please enter a valid email address."}), 400
 
         base_url = _get_base_url()
-        funnel_metrics.record("checkout_started")
+        funnel_metrics.record("checkout_started", _token_journey(token) or _bind_journey(token))
 
         # Tier was bound server-side at generation time — never client-chosen here
         tier = _read_cv_tier(token)
@@ -1524,10 +1556,11 @@ def create_bundle_checkout():
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-        funnel_metrics.record("bundle_checkout_started")
+        funnel_metrics.record("bundle_checkout_started", request.headers.get("X-ResumeRadar-Journey"))
 
         # Generate bundle token server-side
         bundle_token = secrets.token_urlsafe(32)
+        _bind_journey(bundle_token)
         base_url = _get_base_url()
         success_url = f"{base_url}/build?bundle_payment=success&session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{base_url}/build?payment=cancelled"
@@ -2091,7 +2124,7 @@ def build_download(token):
             )
         except Exception:
             pass
-        funnel_metrics.record("download_completed")
+        funnel_metrics.record("download_completed", _token_journey(token))
 
         response.headers['X-Email-Requested'] = 'true' if delivery_email else 'false'
         return response
@@ -2534,7 +2567,7 @@ def build_webhook():
                     )
                 except Exception:
                     pass
-                funnel_metrics.record("purchase_completed")
+                funnel_metrics.record("purchase_completed", _token_journey(bundle_token))
 
                 # AUDIT: bundle created
                 try:
@@ -2604,7 +2637,7 @@ def build_webhook():
                     )
                 except Exception:
                     pass
-                funnel_metrics.record("purchase_completed")
+                funnel_metrics.record("purchase_completed", _token_journey(cv_token))
 
                 # Send email if requested
                 if delivery_email and cv_token:
@@ -2820,7 +2853,7 @@ def build_webhook_paystack():
                     )
                 except Exception:
                     pass
-                funnel_metrics.record("purchase_completed")
+                funnel_metrics.record("purchase_completed", _token_journey(bundle_token))
 
                 try:
                     audit_log.log_event(
@@ -2881,7 +2914,7 @@ def build_webhook_paystack():
                     )
                 except Exception:
                     pass
-                funnel_metrics.record("purchase_completed")
+                funnel_metrics.record("purchase_completed", _token_journey(cv_token))
 
                 if delivery_email and cv_token:
                     _send_cv_email(delivery_email, cv_token, template, f"paystack_{reference}")
@@ -3104,7 +3137,7 @@ def track_client_event():
         data = request.get_json(silent=True) or {}
         event = data.get('event', '')
         if event in funnel_metrics.CLIENT_EVENTS:
-            funnel_metrics.record(event)
+            funnel_metrics.record(event, data.get("journey_id"))
     except Exception:
         pass
     return '', 204
@@ -3125,6 +3158,11 @@ def admin_funnel():
     if not hmac_module.compare_digest(provided_token, admin_token):
         return jsonify({"error": "Unauthorized."}), 401
 
+    journey_param = request.args.get('journey_id')
+    if journey_param:
+        journey = funnel_metrics.get_journey(journey_param)
+        return (jsonify(journey), 200) if journey else (jsonify({"error": "Journey not found."}), 404)
+
     # Single date or range
     date_param = request.args.get('date', '')
     days_param = request.args.get('days', '7')
@@ -3134,7 +3172,7 @@ def admin_funnel():
         return jsonify({"date": date_param, "metrics": metrics}), 200
 
     try:
-        days = min(int(days_param), 30)
+        days = max(1, min(int(days_param), 90))
     except (ValueError, TypeError):
         days = 7
     return jsonify(funnel_metrics.get_range(days)), 200

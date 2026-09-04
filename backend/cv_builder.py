@@ -471,7 +471,7 @@ Projects: {json.dumps(projects[:5], indent=2)[:1000]}
 Certifications: {json.dumps(certifications[:5], indent=2)[:500]}
 
 STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
-1. NEVER add skills the person did not list. Only return the skills they provided.
+1. NEVER add skills the person did not list. Only return the skills they provided. Do not insert generic claims such as leadership, communication, or problem-solving without explicit support in their input.
 2. NEVER invent metrics, numbers, percentages, or impact figures. If the person wrote "improved performance" do NOT change it to "improved performance by 40%". Only include numbers the person explicitly provided.
 3. NEVER add new experience entries or bullets describing work the person did not mention.
 4. NEVER fabricate certifications, degrees, or qualifications.
@@ -702,7 +702,7 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
 2. NEVER invent or fabricate metrics, numbers, percentages, or impact figures. If the resume says "improved system performance", do NOT change it to "improved system performance by 35%". Only include numbers that are explicitly in the resume.
 3. NEVER add experience bullets describing work not mentioned in the resume.
 4. Keep education and certifications EXACTLY as they appear in the resume.
-5. For skills: only extract skills the person actually listed or clearly demonstrated in their experience bullets. Do NOT guess at skills they "probably" have.
+5. For skills: only extract skills the person actually listed or clearly demonstrated in their experience bullets. Do NOT guess at skills they "probably" have. Do not insert generic leadership, communication, or problem-solving claims without explicit evidence in their resume.
 6. NEVER omit any entries. If the resume lists 5 jobs, return ALL 5. If it lists 3 education entries, return ALL 3. If it lists 4 certifications, return ALL 4. If it lists projects, return ALL of them. Completeness is critical.
 
 WHAT YOU SHOULD DO:

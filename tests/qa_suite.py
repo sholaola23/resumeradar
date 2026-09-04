@@ -210,7 +210,7 @@ def run_tests():
 
     # Score-aware CTA on scan page
     check("Scan CTA has dynamic heading ID", 'buildCtaHeading' in html)
-    check("Scan CTA has trust badge", 'build-cta-trust' in html and 'never make anything up' in html.lower())
+    check("Scan CTA asks users to verify claims", 'build-cta-trust' in html and 'review every claim before applying' in html.lower())
 
     # PDF generation — all 3 templates
     from backend.cv_pdf_generator import generate_cv_pdf, TEMPLATES, _flatten_skills, _safe
@@ -368,8 +368,8 @@ def run_tests():
           'populateDynamicEntries' in builder_js)
     check("Email-requested header read",
           'X-Email-Requested' in builder_js)
-    check("Inline editable summary",
-          'contenteditable' in builder_js and 'preview-summary-editable' in builder_js)
+    check("Summary edits use regeneration",
+          'contenteditable="true"' not in builder_js and 'Edit &amp; Regenerate' in builder_js)
 
     app_py_path = os.path.join(project_root, 'app.py')
     with open(app_py_path, 'r') as f:
@@ -476,8 +476,8 @@ def run_tests():
     # E2E-13: Accessibility assertions — labels, roles, keyboard support
     check("Email input has label element",
           'for="deliveryEmail"' in build_html)
-    check("Summary editable in JS",
-          'contenteditable' in builder_js)
+    check("Preview exposes full readable content",
+          'preview-blurred' not in builder_js and 'preview-locked-overlay' not in builder_js)
     check("Template radios have labels",
           build_html.count('class="template-option"') == 3 and '<label' in build_html)
     check("Generate button is type submit",
@@ -553,11 +553,9 @@ def run_tests():
     check("Dynamic entries cleared before re-populate",
           '.remove()' in builder_js and 'existingEntries' in builder_js)
 
-    # Fix 4 (P2): Inline summary allows blank text (no truthy guard)
-    # The blur handler should use `if (currentPolished)` not `if (currentPolished && newText)`
-    check("Inline summary persists blank text",
-          'currentPolished.summary = newText' in builder_js and
-          'currentPolished && newText' not in builder_js)
+    # Summary is read-only in the preview; the regeneration form owns edits.
+    check("Regeneration form restores summary",
+          "document.getElementById('summary').value = currentPolished.summary || ''" in builder_js)
 
     # Fix 5 (P3): Cancelled payment shows UX feedback
     check("Payment cancelled handler exists",

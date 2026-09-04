@@ -3188,3 +3188,14 @@ textarea::placeholder {
 .footer-roles-links a:hover {
     opacity: 1;
 }
+
+/* Product review: a direct entry point and evidence-led results. */
+.hero-scan-link { display:inline-block; margin-top:20px; padding:14px 24px; border-radius:10px; background:#fff; color:#1e40af; font-weight:700; text-decoration:none; }
+.hero-scan-link:focus-visible { outline:3px solid #facc15; outline-offset:4px; }
+.hero-note { margin-top:12px; color:#e0e7ff; font-size:14px; }
+.score-explanation { color:#475569; font-size:14px; line-height:1.6; margin:16px 0; }
+.top-missing-item { align-items:flex-start; flex-wrap:wrap; }
+.recommendation-detail { flex-basis:100%; margin:6px 0 0; line-height:1.5; font-size:14px; color:#475569; }
+.recommendation-detail p { margin:6px 0; }
+.score-number.unscored { font-size:19px; }
+#scanForm { scroll-margin-top:24px; }

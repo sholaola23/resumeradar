@@ -17,7 +17,7 @@ TECHNICAL_SKILLS = {
     # Cloud & Infrastructure
     "aws", "azure", "gcp", "google cloud", "amazon web services", "cloud computing",
     "ec2", "s3", "lambda", "rds", "vpc", "iam", "cloudformation", "cloudwatch",
-    "terraform", "ansible", "puppet", "chef", "infrastructure as code", "iac",
+    "terraform", "pulumi", "ansible", "puppet", "chef", "infrastructure as code", "iac",
     # Containers & Orchestration
     "docker", "kubernetes", "k8s", "containers", "ecs", "eks", "fargate",
     "openshift", "helm", "container orchestration",
@@ -187,6 +187,8 @@ def extract_keywords_from_text(text, *, strict=False):
         original_text = text
 
     text_lower = text.lower()
+    if not strict:
+        text_lower = _positive_evidence(text_lower)
 
     found = {
         "technical_skills": set(),
@@ -203,7 +205,7 @@ def extract_keywords_from_text(text, *, strict=False):
             if _AMBIGUOUS_TECH[skill].search(original_text):
                 found["technical_skills"].add(skill)
         else:
-            if _keyword_in_text(skill, text_lower, use_stemming=not strict):
+            if _keyword_in_text(skill, text_lower, use_stemming=False):
                 found["technical_skills"].add(skill)
 
     for skill in SOFT_SKILLS:
@@ -237,7 +239,7 @@ def _keyword_in_text(keyword, text, *, use_stemming=True):
     # Escape special regex characters in the keyword
     escaped = re.escape(keyword)
     # Use word boundaries for accurate matching
-    pattern = r'\b' + escaped + r'\b'
+    pattern = r'(?<!\w)' + escaped + r'(?!\w)'
     if re.search(pattern, text, re.IGNORECASE):
         return True
 
@@ -267,7 +269,7 @@ def _expand_education(keywords):
 def calculate_match(resume_keywords, job_keywords):
     """
     Calculate match percentage between resume and job description keywords.
-    Uses a weighted scoring system that better reflects real ATS behavior:
+    Uses a custom heuristic weighted scoring system:
     - Matching core/popular skills counts more than niche ones
     - Having a good spread across categories boosts the score
     - The score is calibrated so a typical good-fit candidate lands 60-80%
@@ -291,7 +293,7 @@ def calculate_match(resume_keywords, job_keywords):
         "soft_skills": 0.15,
         "certifications": 0.20,
         "education": 0.10,
-        "action_verbs": 0.15,
+        "action_verbs": 0.0,
     }
 
     for category in ["technical_skills", "soft_skills", "certifications", "education", "action_verbs"]:
@@ -386,8 +388,8 @@ def calculate_match(resume_keywords, job_keywords):
             results["missing_keywords"][category] = sorted(missing)
             results["extra_keywords"][category] = sorted(extra)
 
-        total_job_keywords += len(job_set)
-        total_matched += len(matched)
+        total_job_keywords += results["category_scores"][category]["total"]
+        total_matched += results["category_scores"][category]["matched"]
 
     # Calculate weighted overall score
     weighted_score = 0
@@ -411,7 +413,114 @@ def calculate_match(resume_keywords, job_keywords):
     results["total_matched"] = total_matched
     results["total_missing"] = total_job_keywords - total_matched
 
+    substantive_count = sum(len(terms) for category, terms in job_keywords.items()
+                            if category != "action_verbs")
+    results["score_status"] = "estimated"
+    results["score_explanation"] = (
+        "Custom weighted keyword-overlap estimate, not an employer ATS score or hiring prediction. "
+        "Action verbs are informational and do not contribute to this match estimate."
+    )
+    if substantive_count < 3:
+        results["overall_score"] = None
+        results["score_status"] = "insufficient_evidence"
+        results["score_explanation"] = (
+            "Fewer than three substantive job-description terms were recognized. "
+            "The supported vocabulary is too limited to estimate this match reliably."
+        )
     return results
+
+
+def _positive_evidence(text):
+    """Remove explicit skill denials without discarding unrelated achievements.
+
+    Limit negation to recognized terms and experience verbs. Phrases such as
+    'without downtime' and 'never missed a deadline' are positive evidence.
+    This is intentionally a lexical check, not a semantic understanding claim.
+    """
+    vocabulary = TECHNICAL_SKILLS | SOFT_SKILLS | CERTIFICATIONS | EDUCATION_KEYWORDS
+    term = r'(?<!\w)(?:' + '|'.join(re.escape(word) for word in sorted(vocabulary, key=len, reverse=True)) + r')(?!\w)'
+    terms = term + r'(?:\s*(?:,\s*(?:or\s+|and\s+)?|and\s+|or\s+|/)\s*' + term + r')*'
+    experience = r'(?:experience|expertise|knowledge|proficiency|familiarity|skills?|certification)'
+    prefix = (r"\b(?:no|without|lack(?:s|ed|ing)?)\s+(?:" + experience + r"\s+(?:in|with|of)\s+)?"
+              r"|\b(?:never|haven['’]t|hasn['’]t|do\s+not|don['’]t|doesn['’]t)\s+(?:used?|worked\s+with|learned|known|know)\s+"
+              r"|\bnot\s+(?:familiar|experienced|proficient)\s+(?:in|with)\s+")
+    text = re.sub(r'(?:' + prefix + r')' + terms + r'(?:\s+' + experience + r')?', ' ', text, flags=re.I)
+    suffix = r"\s*[:—-]?\s*(?:no\s+" + experience + r"|not\s+(?:known|used|learned))\b"
+    return re.sub(terms + suffix, ' ', text, flags=re.I)
+
+
+def analyze_requirements(resume_text, job_description, match_results):
+    """Return source-grounded missing-term advice; priorities are textual cues only.
+
+    The original match arrays stay intact. Explicit comma/or tool alternatives
+    are suppressed only when positive resume evidence satisfies that local list.
+    """
+    resume = extract_keywords_from_text(resume_text)
+    sentences = re.split(r'(?<=[.!?])\s+|[;\n]+', _strip_jd_boilerplate(job_description))
+    evidence = []
+    section_priority = "unspecified"
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if not sentence:
+            continue
+        required = bool(re.search(r'\b(?:required|requirements|must|essential|mandatory)\b', sentence, re.I))
+        preferred = bool(re.search(r'\b(?:preferred|desirable|bonus|nice[- ]to[- ]have|optional)\b', sentence, re.I))
+        priority = "preferred" if preferred else "required" if required else section_priority
+        heading = sentence.strip(' :#-*').lower()
+        if re.fullmatch(r'(?:key |minimum |essential |required |preferred )?(?:requirements|qualifications|skills)|nice[- ]to[- ]have|desirable|bonus|optional', heading):
+            section_priority = priority if required or preferred else 'required'
+        elif heading in ('responsibilities', 'about the role', 'about us', 'benefits', 'what you will do'):
+            section_priority = 'unspecified'
+        if re.search(r"\b(?:not|never)\s+(?:required|necessary|essential)\b|\bno\s+.{0,40}\brequired\b", sentence, re.I):
+            continue
+        terms = extract_keywords_from_text(sentence, strict=True)
+        alternatives = set()
+        # A list such as Jenkins, GitHub Actions or CircleCI is one choice.
+        # Limit candidates to contiguous tool names joined only by list syntax.
+        positions = []
+        for keyword in terms['technical_skills']:
+            for match in re.finditer(r'(?<!\w)' + re.escape(keyword) + r'(?!\w)', sentence, re.I):
+                positions.append((match.start(), match.end(), keyword))
+        positions.sort(key=lambda item: (item[0], -item[1]))
+        filtered = []
+        for pos in positions:
+            if not filtered or pos[0] >= filtered[-1][1]:
+                filtered.append(pos)
+        group = []
+        has_or = False
+        for pos in filtered + [(len(sentence) + 1, len(sentence) + 1, '')]:
+            connector = sentence[group[-1][1]:pos[0]].strip() if group else ''
+            connected = bool(group and re.fullmatch(r',?\s*(?:or)?\s*|/', connector, re.I))
+            if not connected and group:
+                keys = {item[2] for item in group}
+                if has_or and keys & resume['technical_skills']:
+                    alternatives |= keys
+                group, has_or = [], False
+            if connected and re.search(r'\bor\b|/', connector, re.I):
+                has_or = True
+            group.append(pos)
+        evidence.append((sentence, priority, terms, alternatives))
+
+    recommendations = []
+    order = {'required': 0, 'unspecified': 1, 'preferred': 2}
+    for category, missing in match_results.get('missing_keywords', {}).items():
+        if category == 'action_verbs':
+            continue
+        for keyword in missing:
+            sources = [(sentence, priority) for sentence, priority, terms, alternatives in evidence
+                       if keyword in terms.get(category, set()) and keyword not in alternatives]
+            if not sources:
+                continue
+            sentence, priority = min(sources, key=lambda source: order[source[1]])
+            recommendations.append({
+                'keyword': keyword, 'category': category, 'priority': priority,
+                'reason': f'Job description: “{sentence}”',
+                'suggestion': (f'If you hold this qualification, list {keyword} accurately in your education or certifications section.'
+                               if category in ('education', 'certifications') else
+                               f'If you have used {keyword}, add a relevant experience bullet describing the project and your contribution. Otherwise, leave it out.'),
+            })
+    category_order = {'technical_skills': 0, 'certifications': 1, 'education': 2, 'soft_skills': 3}
+    return sorted(recommendations, key=lambda item: (order[item['priority']], category_order.get(item['category'], 4), item['keyword']))
 
 
 def analyze_ats_formatting(resume_text):
@@ -424,7 +533,7 @@ def analyze_ats_formatting(resume_text):
     checklist = []  # individual check results for UI detail expansion
 
     # --- Check 1: Special characters (15 pts) ---
-    has_special_chars = bool(re.search(r'[^\x00-\x7F]', resume_text))
+    has_special_chars = bool(re.search(r'[\U0001F000-\U0001FAFF\u2600-\u27BF\uFFFD]', resume_text))
     if has_special_chars:
         issues.append({
             "type": "warning",

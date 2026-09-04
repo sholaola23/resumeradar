@@ -97,7 +97,11 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
         # Round to match the UI's score circle display — the AI must cite the
         # exact number the user sees (69.6 in prompt vs "70%" on screen reads
         # as two different scores).
-        match_score = round(keyword_results.get("overall_score", 0) or 0)
+        score_value = keyword_results.get("overall_score")
+        match_score = f"{round(score_value)}%" if score_value is not None else "Not scored — too few recognized job terms"
+        priorities = keyword_results.get('priority_recommendations', [])
+        score_rule = (f"If mentioning the custom keyword coverage estimate, use exactly {match_score}."
+                      if score_value is not None else "Do not state or invent a match percentage. The result is Not scored.")
 
         from datetime import datetime
         today = datetime.now().strftime('%B %Y')
@@ -114,12 +118,15 @@ JOB DESCRIPTION:
 {_safe_truncate(job_description, 3000)}
 
 KEYWORD ANALYSIS RESULTS:
-- Overall Match Score: {match_score}%
+- Custom keyword coverage estimate: {match_score}
 - Missing Technical Skills: {', '.join(missing_technical[:15]) if missing_technical else 'None'}
 - Missing Soft Skills: {', '.join(missing_soft[:10]) if missing_soft else 'None'}
 - Missing Certifications: {', '.join(missing_certs[:5]) if missing_certs else 'None'}
 
-SCORE RULE: {match_score}% is the ONLY score the user sees. If you mention a match percentage anywhere in your response, use exactly {match_score}% — never compute, estimate, or cite any other percentage (no technical-match ratios, no category sub-scores). Percentages the user's own resume states (e.g. "reduced costs by 30%") are fine to reference.
+SCORE RULE: {score_rule} This is not an employer score or a prediction of suitability, ranking, or interviews. Never infer missing experience from missing wording alone.
+PRIORITIZED REQUIREMENTS: {json.dumps(priorities[:8])}
+Use these source-grounded priorities instead of alphabetically choosing tools. Respect required versus preferred criteria and alternative tools. Do not recommend a missing alternative when an accepted tool is already demonstrated.
+TRUTHFULNESS: Never add skills, metrics, or years of experience. Ask the user to supply real evidence; any suggested claim must be conditional on their actual experience. Do not suggest "seniority framing" to conceal an experience shortfall.
 
 IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:
 {{
@@ -541,35 +548,41 @@ def _get_fallback_suggestions(keyword_results):
     missing_soft = keyword_results.get("missing_keywords", {}).get("soft_skills", [])
     missing_certs = keyword_results.get("missing_keywords", {}).get("certifications", [])
 
-    # Generate summary based on score
-    if score >= 80:
-        suggestions["summary"] = f"Your resume is a strong match at {score}%. With a few targeted additions, you can push it even higher."
-    elif score >= 60:
-        suggestions["summary"] = f"Your resume is a decent match at {score}%, but there are notable gaps. Focus on adding missing technical keywords and you'll see a significant improvement."
-    elif score >= 40:
-        suggestions["summary"] = f"Your resume matches at {score}%. There's meaningful work needed to align it with this role. Focus on the missing technical skills and consider rewriting your summary section."
+    # Describe coverage, not suitability or interview prospects.
+    if score is None:
+        suggestions["summary"] = "Not scored: too few recognized job terms for a useful estimate. Review the job requirements manually; writing suggestions are still available."
     else:
-        suggestions["summary"] = f"Your resume currently matches at {score}%. This suggests either a significant skills gap or your resume isn't using the right terminology. Let's focus on keyword alignment first."
+        suggestions["summary"] = f"Your custom job-description match estimate is {round(score)}%. Review the priorities below and describe the experience you can support. Missing wording does not necessarily mean missing experience."
 
     # Generate keyword suggestions
     for keyword in missing_tech[:5]:
         suggestions["keyword_suggestions"].append({
             "keyword": keyword,
             "where_to_add": "Skills section or relevant experience bullets",
-            "how_to_add": f"Add '{keyword}' to your skills section. If you have experience with it, add a bullet point describing a project or task where you used {keyword}."
+            "how_to_add": f"If you have experience with {keyword}, describe a real project or task where you used it. Otherwise, do not add it as a skill."
         })
 
     # Generate quick wins
     quick_wins = []
     if missing_tech:
-        quick_wins.append(f"Add these missing technical skills to your Skills section: {', '.join(missing_tech[:5])}")
+        quick_wins.append(f"If you have used these tools, describe where you used them: {', '.join(missing_tech[:5])}")
     if missing_soft:
-        quick_wins.append(f"Incorporate these soft skills into your experience bullets: {', '.join(missing_soft[:3])}")
+        quick_wins.append(f"If supported by your experience, give examples of: {', '.join(missing_soft[:3])}")
     if missing_certs:
         quick_wins.append(f"If you hold any of these certifications, add them prominently: {', '.join(missing_certs[:3])}")
     quick_wins.append("Ensure your resume summary/objective mirrors the language of the job description.")
     quick_wins.append("Start each experience bullet point with a strong action verb (Led, Built, Improved, Designed).")
 
+    priorities = keyword_results.get('priority_recommendations')
+    if priorities is not None:
+        suggestions['keyword_suggestions'] = [
+            {'keyword': item['keyword'], 'where_to_add': 'Relevant experience or qualifications', 'how_to_add': item['suggestion']}
+            for item in priorities[:5]
+        ]
+        quick_wins = [item['suggestion'] for item in priorities[:3]] + [
+            "Describe one relevant project and your contribution using only facts you can support.",
+            "Keep job titles, dates and qualifications accurate when tailoring your CV.",
+        ]
     suggestions["quick_wins"] = quick_wins
 
     # Generate basic cover letter points from available data
@@ -578,10 +591,10 @@ def _get_fallback_suggestions(keyword_results):
     if matched_tech:
         top_skills = ', '.join(matched_tech[:3])
         cl_points.append(f"Highlight your experience with {top_skills}, which directly aligns with the role's technical requirements.")
-    if score >= 50:
-        cl_points.append("Emphasize your strong keyword match — your background shows clear alignment with this position's core needs.")
+    if score is not None and score >= 50:
+        cl_points.append("Give a concrete example of your experience with a required skill, explaining your own contribution.")
     else:
-        cl_points.append("Address the skills gap honestly — mention your eagerness to learn and any related transferable experience.")
+        cl_points.append("Explain relevant transferable experience honestly and distinguish it from skills you are still learning.")
     cl_points.append("Open with a specific reason you're drawn to this company or role, beyond just the job title.")
     suggestions["cover_letter_points"] = cl_points[:3]
 

@@ -33,7 +33,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/builder.css?v=3">
+    <link rel="stylesheet" href="/static/css/builder.css?v=4">
 </head>
 <body>
     <!-- ============ HEADER ============ -->
@@ -362,7 +362,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 <div class="preview-section" id="previewSection" style="display: none;">
                     <div class="builder-card">
                         <div class="preview-header">
-                            <h2>Your Polished CV</h2>
+                            <h2>Review your full CV</h2>
                             <button type="button" class="edit-btn" id="editBtn">Edit & Regenerate</button>
                         </div>
 
@@ -370,6 +370,8 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             Polished by AI
                         </div>
 
+                        <p class="card-hint">Read every section before paying. Check that the AI wording reflects your experience. PDF and Word export starts at £2.</p>
+                        <div id="bulletComparison" class="bullet-comparison" hidden></div>
                         <div class="preview-content" id="previewContent"></div>
                     </div>
 
@@ -469,9 +471,10 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                                 <span class="bundle-credit-item"><strong id="bundleClCount">5</strong> cover letters</span>
                             </div>
                             <div class="bundle-expiry" id="bundleExpiry">Expires in 30 days</div>
+                            <p class="card-hint">Each request uses one download credit, including repeats. PDF + Word together uses one.</p>
                         </div>
                         <button type="button" class="bundle-download-btn" id="bundleDownloadBtn">
-                            <span class="pay-btn-text">Download (included)</span>
+                            <span class="pay-btn-text">Download with bundle</span>
                             <span class="pay-btn-loading" style="display: none;">
                                 <span class="spinner spinner-sm"></span> Preparing...
                             </span>
@@ -502,12 +505,12 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                         <label class="tier-option tier-selected" data-tier="standard">
                             <input type="radio" name="cvTier" value="standard" checked>
                             <span class="tier-head"><span class="tier-name">Standard Polish</span><span class="tier-price">£2</span></span>
-                            <span class="tier-desc">ATS-optimized rewrite of every section, tailored to the job description</span>
+                            <span class="tier-desc">AI wording improvements based on your experience and the job description</span>
                         </label>
                         <label class="tier-option" data-tier="pro">
                             <input type="radio" name="cvTier" value="pro">
-                            <span class="tier-head"><span class="tier-name">Pro Review</span><span class="tier-price">£5</span></span>
-                            <span class="tier-desc">Everything in Standard, plus a senior-level gap analysis: 8+ specific improvement calls mapped to this job description</span>
+                            <span class="tier-head"><span class="tier-name">AI Pro Review</span><span class="tier-price">£5</span></span>
+                            <span class="tier-desc">AI-generated gap analysis and improvement suggestions for this job description. No human reviewer.</span>
                         </label>
                         <span class="tier-busy-note" id="tierBusyNote" style="display: none;">
                             <span class="spinner spinner-sm"></span> Re-analyzing your CV with the selected tier — this takes a moment...
@@ -516,13 +519,13 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                     {% endif %}
                     <div class="payment-content">
                         <div class="payment-info">
-                            <h2>Download Your CV</h2>
-                            <p>Get your ATS-optimized CV in PDF and Word format</p>
+                            <h2>Export this CV</h2>
+                            <p>One payment. PDF + editable Word. No subscription.</p>
                         </div>
                         <div class="payment-action">
                             <div class="payment-price" id="paymentPrice">£2</div>
                             <button type="button" class="payment-btn" id="paymentBtn">
-                                <span class="pay-btn-text">Get Your CV</span>
+                                <span class="pay-btn-text">Pay & download</span>
                                 <span class="pay-btn-loading" style="display: none;">
                                     <span class="spinner spinner-sm"></span> Redirecting...
                                 </span>
@@ -557,12 +560,11 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 </div>
 
                 <!-- Bundle Pricing (3-tier — shown by JS as upgrade option) -->
-                <div class="builder-card bundle-pricing-card" id="bundlePricingCard" style="display: none;">
-                    <h2>Save with a Bundle</h2>
-                    <p class="card-subtitle">Multiple CVs or cover letters? Bundles give you more for less.</p>
+                <details class="builder-card bundle-pricing-card secondary-options" id="bundlePricingCard" style="display: none;">
+                    <summary>Applying to several jobs? View bundles</summary>
+                    <p class="card-subtitle">Bundles cover Standard CVs, not AI Pro Review. Each bundle download request uses one CV credit, including repeat downloads. PDF + Word together uses one credit. Each generated cover letter uses one cover-letter credit; free daily cover letters remain available without a bundle.</p>
                     <div class="bundle-tiers">
                         <div class="bundle-tier" data-plan="jobhunt">
-                            <div class="bundle-tier-badge">Most Popular</div>
                             <h3>Job Hunt Pack</h3>
                             <div class="bundle-tier-price" id="bundlePriceJobhunt">£5</div>
                             <ul class="bundle-tier-features">
@@ -572,7 +574,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             </ul>
                             <button type="button" class="bundle-tier-btn" data-plan="jobhunt">Get Job Hunt Pack</button>
                         </div>
-                        <div class="bundle-tier bundle-tier-highlight" data-plan="sprint">
+                        <div class="bundle-tier" data-plan="sprint">
                             <h3>Unlimited Sprint</h3>
                             <div class="bundle-tier-price" id="bundlePriceSprint">£9</div>
                             <ul class="bundle-tier-features">
@@ -588,7 +590,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                         <input type="email" id="bundleEmail" class="payment-email-input"
                                placeholder="your@email.com" maxlength="254" required>
                     </div>
-                </div>
+                </details>
 
                 <!-- Bundle Recovery -->
                 <div class="bundle-recover-row" id="bundleRecoverRow">
@@ -602,8 +604,8 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 </div>
 
                 <!-- AI Micro-Tools -->
-                <div class="builder-card tools-card">
-                    <h2>🛠️ AI Writing Tools <span class="tools-free-badge">Free</span></h2>
+                <details class="builder-card tools-card secondary-options">
+                    <summary>Optional writing helpers</summary>
                     <p class="card-subtitle">Quick AI-powered helpers — no payment needed.</p>
 
                     <!-- Bullet Point Enhancer -->
@@ -612,7 +614,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             <span class="tool-icon">⚡</span>
                             <div class="tool-info">
                                 <span class="tool-name">Bullet Point Enhancer</span>
-                                <span class="tool-desc">Paste a weak bullet point — AI rewrites it with metrics and action verbs</span>
+                                <span class="tool-desc">Improve a bullet’s wording; verify any suggested metrics before using it</span>
                             </div>
                             <span class="tool-toggle-icon">▸</span>
                         </div>
@@ -661,7 +663,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             <div class="tool-error" id="summaryError" style="display: none;"></div>
                         </div>
                     </div>
-                </div>
+                </details>
 
                 <div class="wizard-nav">
                     <button type="button" class="wizard-nav-btn wizard-back-btn" id="wizardBackToTemplate">← Back to Template</button>
@@ -693,6 +695,6 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
         </div>
     </footer>
 
-    <script src="/static/js/builder.js?v=4"></script>
+    <script src="/static/js/builder.js?v=5"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 # ResumeRadar
 
-**See how you rank before the recruiter ever scrolls.**
+**Make your experience clear for the job.**
 
 ResumeRadar is a free ATS resume scanner with a paid AI CV builder. Upload your resume, paste a job description, and get your match score, missing keywords, and AI-powered fixes in ~30 seconds. When you're ready, a one-off £2 payment (₦ via Paystack in Nigeria) generates an ATS-optimized rewrite of your CV — no subscription, no weekly plan, no trap.
 
@@ -11,18 +11,19 @@ ResumeRadar is a free ATS resume scanner with a paid AI CV builder. Upload your 
 ## Features
 
 **Free scan**
-- **ATS Match Score** — resume-to-job match percentage with a curved scoring formula (`raw_ratio^0.7 × 100`)
-- **Keyword analysis** — matched and missing keywords across 5 categories (technical skills, soft skills, certifications, education, action verbs)
+- **Job-description match estimate** — custom weighted keyword coverage, with no score when fewer than three substantive terms are recognized; not an employer ranking or hiring prediction
+- **Keyword analysis** — matched and missing keywords across 5 categories, with source-grounded required/preferred priorities and recognition of explicit tool alternatives (technical skills, soft skills, certifications, education, action verbs)
 - **AI suggestions** — summary, strengths, improvements, quick wins, and cover-letter talking points powered by Claude
 - **Sub-scores** — ATS formatting (0-100) and recruiter tips (0-100) with expandable checklists, including a bullet-quantification checker
 - **Free AI micro-tools** — cover-letter generator (3/day), bullet enhancer (10/day), summary generator (5/day)
 - **Reports** — copy, download, or email a branded multi-page PDF report
-- **Scan history** — local-only history with score trend (localStorage, never sent to the server)
+- **Scan history** — local-only history; trends compare the same job-description hash and scoring version (localStorage, never sent to the server)
 
 **Paid CV builder (£2 one-off / bundle credits)**
 - Upload your CV + target JD → AI extracts and polishes every section for ATS systems
 - Strict anti-fabrication rules: no invented metrics, skills, jobs, or years-of-experience claims
-- 3 templates, PDF + DOCX export, email delivery
+- Full readable preview before payment; use Edit & Regenerate to change content
+- 3 templates, paid PDF + DOCX export, email delivery
 - Bundle packs with atomic credit tracking (Lua-scripted double-spend protection)
 
 **Privacy-first**
@@ -93,6 +94,17 @@ Every Claude call runs through a cost-guard layer most side projects skip:
 | Misc | `GET /api/health` · `GET /api/scan-count` · `POST /api/subscribe` · SEO routes (`/sitemap.xml`, `/robots.txt`, `/ats-resume-checker/<role>`) |
 
 All state-changing endpoints are rate-limited (flask-limiter on Redis, with in-memory fallback); webhooks verify signatures before any side effect and dedup on event id.
+
+## Product analytics
+
+The existing authenticated `/api/admin/funnel` endpoint supports `?days=90` and
+`?journey_id=<UUID>`. Daily counters and anonymous journey event timestamps are
+retained for 90 days after activity. Journey IDs are random per browser session;
+no CV text, job description, email, or IP is stored in these records. Purchase
+and successful-export events remain server-originated. Client events indicate
+attempts and visible screens, not payment proof. Repeat visits are a local-device
+signal and cannot identify users across devices. Old seven-day records cannot
+be backfilled; the longer window accumulates after deployment.
 
 ## Getting Started
 

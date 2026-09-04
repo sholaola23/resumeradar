@@ -17,6 +17,85 @@
     var selectedFormat = 'both'; // Download format: 'pdf', 'docx', or 'both'
     var selectedTier = 'standard'; // 'standard' (£2) | 'pro' (£5 Pro Review)
     var lastGenerateRequest = null; // replayed when the user switches tier
+    var lastViewedPreviewToken = null;
+
+    var memoryJourneyId = null;
+    function getJourneyId() {
+        if (memoryJourneyId) return memoryJourneyId;
+        try {
+            var stored = sessionStorage.getItem('resumeradar_journey_id');
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stored || '')) {
+                memoryJourneyId = stored;
+            }
+        } catch (_) { /* Storage may be unavailable in private browser contexts. */ }
+        if (!memoryJourneyId) {
+            memoryJourneyId = generateUuidV4();
+            try { sessionStorage.setItem('resumeradar_journey_id', memoryJourneyId); } catch (_) {}
+        }
+        return memoryJourneyId;
+    }
+
+    function journeyHeaders(headers) {
+        var result = new Headers(headers || {});
+        result.set('X-ResumeRadar-Journey', getJourneyId());
+        return result;
+    }
+
+    // Only anonymous event names and a per-session journey ID leave this helper.
+    function trackBuilderEvent(event) {
+        try {
+            fetch('/api/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event: event, journey_id: getJourneyId() }),
+                keepalive: true,
+            }).catch(function () {});
+        } catch (_) { /* Analytics must never interrupt the builder. */ }
+    }
+
+    function trackVisiblePreview() {
+        if (!currentToken || !currentPolished || lastViewedPreviewToken === currentToken) return;
+        if (!previewContent.getClientRects().length) return;
+        lastViewedPreviewToken = currentToken;
+        trackBuilderEvent('builder_preview_viewed');
+    }
+
+    async function fetchGeneration(url, options) {
+        trackBuilderEvent('builder_generation_started');
+        try {
+            var response = await fetch(url, Object.assign({}, options, { headers: journeyHeaders(options && options.headers) }));
+            var result = await response.clone().json();
+            trackBuilderEvent(response.ok && result.polished && !result.error
+                ? 'builder_generation_completed' : 'builder_generation_failed');
+            return response;
+        } catch (error) {
+            trackBuilderEvent('builder_generation_failed');
+            throw error;
+        }
+    }
+
+    function renderBulletComparison(data) {
+        var panel = document.getElementById('bulletComparison');
+        if (!panel) return;
+        panel.hidden = true;
+        panel.textContent = '';
+        // Match a job and bullet position only when structured original input exists.
+        var original = lastGenerateRequest && lastGenerateRequest.payload;
+        if (!original || !Array.isArray(original.experience)) return;
+        for (var i = 0; i < original.experience.length; i++) {
+            var before = original.experience[i];
+            var after = (data.experience || [])[i];
+            if (!after || before.company !== after.company || before.title !== after.title) continue;
+            var oldBullet = (before.bullets || [])[0];
+            var newBullet = (after.bullets || [])[0];
+            if (typeof oldBullet !== 'string' || typeof newBullet !== 'string' || oldBullet === newBullet) continue;
+            panel.innerHTML = '<h3>One wording change to review</h3><div class="bullet-comparison-grid">' +
+                '<div><strong>Your original</strong><p>' + escapeHtml(oldBullet) + '</p></div>' +
+                '<div><strong>AI rewrite</strong><p>' + escapeHtml(newBullet) + '</p></div></div>';
+            panel.hidden = false;
+            break;
+        }
+    }
 
     // Loading message rotation
     const LOADING_MESSAGES = [
@@ -143,6 +222,7 @@
                 if (previewWrapper) previewWrapper.style.display = 'block';
                 previewSection.style.display = 'block';
                 if (_rrMode.wizard) goToStep(2);
+                trackVisiblePreview();
                 break;
 
             case 'payment-return':
@@ -174,6 +254,8 @@
         if (step >= 2) {
             previewSection.style.display = 'block';
         }
+
+        if (step === 2) trackVisiblePreview();
 
         // Update step indicator dots
         document.querySelectorAll('.wizard-step').forEach(function (el) {
@@ -360,7 +442,7 @@
                 scan_keywords: scanKeywords,
             };
             lastGenerateRequest = { kind: 'json', url: '/api/build/generate-from-scan', payload: scanGenBody };
-            const response = await fetch('/api/build/generate-from-scan', {
+            const response = await fetchGeneration('/api/build/generate-from-scan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(scanGenBody),
@@ -684,7 +766,7 @@
                 formData.append('job_description', jd);
                 lastGenerateRequest = { kind: 'upload', jd: jd };
 
-                var response = await fetch('/api/build/generate-from-upload', {
+                var response = await fetchGeneration('/api/build/generate-from-upload', {
                     method: 'POST',
                     body: formData,
                 });
@@ -875,7 +957,7 @@
 
         try {
             lastGenerateRequest = { kind: 'json', url: '/api/build/generate', payload: data };
-            const response = await fetch('/api/build/generate', {
+            const response = await fetchGeneration('/api/build/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
@@ -939,9 +1021,9 @@
         }
         const certifications = data.certifications || [];
 
-        let html = '';
+        let html = '<p class="card-hint">To change any wording, use Edit &amp; Regenerate above before exporting.</p>';
 
-        // ---- VISIBLE SECTION (not blurred) ----
+        // Full readable preview; export authorization remains on the server.
         // Name + Contact
         html += `<div class="preview-name">${escapeHtml(personal.full_name || '')}</div>`;
         const contactParts = [personal.email, personal.phone, personal.location, personal.linkedin, personal.portfolio].filter(Boolean);
@@ -949,15 +1031,11 @@
             html += `<div class="preview-contact">${contactParts.map(escapeHtml).join(' | ')}</div>`;
         }
 
-        // Summary (visible — hooks the user, inline editable)
+        // Edit through the form so regenerated content matches the exported CV.
         if (data.summary) {
             html += `<div class="preview-section-title">Professional Summary</div>`;
-            html += `<div class="preview-text preview-summary-editable" contenteditable="true">${escapeHtml(data.summary)}</div>`;
+            html += `<div class="preview-text">${escapeHtml(data.summary)}</div>`;
         }
-
-        // ---- BLURRED/LOCKED SECTION ----
-        html += `<div class="preview-locked-section">`;
-        html += `<div class="preview-blurred">`;
 
         // Experience
         if (experience.length) {
@@ -1013,7 +1091,7 @@
         // Smart Suggestions (coaching tips — not added to CV)
         const allSuggestions = [...smartSuggestions, ...legacySuggested];
         if (allSuggestions.length) {
-            html += `<div class="preview-section-title">💡 Smart Suggestions to Strengthen Your CV</div>`;
+            html += `<div class="preview-section-title">Suggestions to consider — not added to your CV</div>`;
             html += `<div class="smart-suggestions-list">`;
             allSuggestions.forEach(tip => {
                 html += `<div class="smart-suggestion-item">💬 ${escapeHtml(tip)}</div>`;
@@ -1032,30 +1110,11 @@
             });
         }
 
-        // Close the blurred section and add lock overlay
-        html += `</div>`; // close .preview-blurred
-        html += `<div class="preview-locked-overlay">`;
-        html += `<p>🔒 Download the full ATS-optimized CV for £2</p>`;
-        html += `<small>Pick a template below and click Download PDF</small>`;
-        html += `</div>`;
-        html += `</div>`; // close .preview-locked-section
-
         previewContent.innerHTML = html;
+        renderBulletComparison(data);
+        trackVisiblePreview();
 
-        // Attach blur listener for inline summary editing
-        const editableSummary = previewContent.querySelector('.preview-summary-editable');
-        if (editableSummary) {
-            editableSummary.addEventListener('blur', function () {
-                const newText = editableSummary.textContent.trim();
-                if (currentPolished) {
-                    currentPolished.summary = newText;
-                    // Sync to sessionStorage if in client mode
-                    if (storageMode === 'client' && currentToken) {
-                        sessionStorage.setItem(`resumeradar_cv_${currentToken}`, JSON.stringify(currentPolished));
-                    }
-                }
-            });
-        }
+
     }
 
     // ============================================================
@@ -1224,7 +1283,7 @@
         try {
             const response = await fetch('/api/build/create-checkout', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: journeyHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     token: currentToken,
                     template: selectedTemplate,
@@ -1611,10 +1670,10 @@
                 fd.append('resume_file', buildResumeFile.files[0]);
                 fd.append('job_description', lastGenerateRequest.jd);
                 fd.append('tier', tier);
-                response = await fetch('/api/build/generate-from-upload', { method: 'POST', body: fd });
+                response = await fetchGeneration('/api/build/generate-from-upload', { method: 'POST', body: fd });
             } else {
                 var payload = Object.assign({}, lastGenerateRequest.payload, { tier: tier });
-                response = await fetch(lastGenerateRequest.url, {
+                response = await fetchGeneration(lastGenerateRequest.url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
@@ -2214,7 +2273,7 @@
 
                     var resp = await fetch('/api/build/create-bundle-checkout', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: journeyHeaders({ 'Content-Type': 'application/json' }),
                         body: JSON.stringify({
                             plan: plan,
                             email: email,

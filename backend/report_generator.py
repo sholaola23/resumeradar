@@ -160,7 +160,10 @@ def generate_pdf_report(scan_data):
     score = scan_data.get('match_score', 0)
 
     # Score color
-    if score >= 75:
+    if score is None:
+        score_color = (100, 116, 139)
+        score_label = 'Not scored'
+    elif score >= 75:
         score_color = (5, 150, 105)   # Green
         score_label = 'Strong Match'
     elif score >= 50:
@@ -171,13 +174,15 @@ def generate_pdf_report(scan_data):
         score_label = 'Needs Improvement'
 
     # Big score display
-    pdf.set_font('Helvetica', 'B', 42)
+    pdf.set_font('Helvetica', 'B', 18 if score is None else 42)
     pdf.set_text_color(*score_color)
-    pdf.cell(50, 20, f'{score}%')
+    pdf.cell(50, 20, 'Not scored' if score is None else f'{round(score)}%')
     pdf.set_font('Helvetica', 'B', 14)
     pdf.set_text_color(31, 41, 55)
-    pdf.cell(0, 20, _safe(f'ATS Match Score -- {score_label}'), new_x='LMARGIN', new_y='NEXT')
+    pdf.cell(0, 20, _safe(f'Match estimate -- {score_label}'), new_x='LMARGIN', new_y='NEXT')
     pdf.ln(4)
+
+    pdf.body_text(scan_data.get('score_explanation') or 'Custom keyword coverage estimate, not an employer score or hiring prediction.')
 
     # Stats row
     pdf.stat_row('Keywords Matched:', str(scan_data.get('total_matched', 0)), (5, 150, 105))
