@@ -1627,3 +1627,13 @@
 }
 
 .payment-card .payment-email-hint, .payment-card .format-hint { color: #e0e7ff; opacity: 1; }
+/* Purchased CV actions: PDF first, editable Word second, ZIP optional. */
+.repeat-download-actions { align-items: center; flex-wrap: wrap; }
+.repeat-download-actions .download-both-link { background: transparent; color: #1e40af; box-shadow: none; text-decoration: underline; }
+.download-access-note { font-size: .9rem; line-height: 1.65; color: #475569; max-width: 580px; margin: 16px auto; }
+.repeat-download-actions button { min-height: 44px; }
+.repeat-download-actions button:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+@media (max-width: 480px) {
+    .repeat-download-actions { flex-direction: column; }
+    .repeat-download-actions button { width: 100%; }
+}

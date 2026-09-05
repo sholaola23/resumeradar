@@ -10,6 +10,14 @@
                 !Number.isFinite(current.score) || !Number.isFinite(previous.score)) return null;
             return current.score - previous.score;
         },
+        compareScan(current, previous) {
+            const delta = utils.scoreDelta(current, previous);
+            if (delta === null) return null;
+            const before = new Set(previous.matchedKeywords || []);
+            const after = new Set(current.matchedKeywords || []);
+            return {delta, added: [...after].filter(term => !before.has(term)),
+                removed: [...before].filter(term => !after.has(term))};
+        },
         async jobKey(description) {
             const normalized = description.trim().toLowerCase().replace(/\s+/g, ' ');
             const bytes = new TextEncoder().encode(normalized);

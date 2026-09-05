@@ -135,6 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Store the last scan data for report generation
     // Exposed on window for cross-page use (CV Builder cross-sell)
     let lastScanData = null;
+    let comparisonBaseline = null;
+    // Keep the optional newsletter after the complete report and free rescan action.
+    resultsSection.appendChild(document.getElementById('inlineGateCard'));
+    document.getElementById('topMissingKeywords').before(document.getElementById('quickWins'));
     window._resumeradar_getLastScanData = function () { return lastScanData; };
 
     // ============================================================
@@ -401,17 +405,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 markSubscribed();
                 // subscribe_completed is recorded server-side in /api/subscribe
-                showToast('Subscribed! Unlocking your full report...');
+                showToast('Subscribed! Your free report is ready below.');
 
                 if (lastScanData) renderDeepResults(lastScanData);
 
             } catch (err) {
                 console.error('Inline gate signup error:', err);
-                window.open('https://www.sholastechnotes.com/', '_blank');
-                showToast('Opening newsletter page — subscribe there to unlock full results.');
-                // Graceful fallback: unlock anyway
-                markSubscribed();
-                if (lastScanData) renderDeepResults(lastScanData);
+                showToast('Signup did not complete. You can retry; your full report is still available.', true);
             } finally {
                 if (btnText) btnText.style.display = 'inline';
                 if (btnLoading) btnLoading.style.display = 'none';
@@ -657,13 +657,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (e) { /* non-critical */ }
             }
 
-            // Gate logic — progressive inline gate (default) or legacy modal (?gate=modal)
-            if (!isSubscribed() && _rrMode.gate === 'modal' && newsletterPopup) {
-                showNewsletterPopup(data);
-                trackOncePerScan('gate_shown');
-            } else {
-                renderResults(data);
-            }
+            // Every scan includes the complete free report; signup is optional.
+            renderResults(data);
 
         } catch (err) {
             console.error('Scan error:', err);
@@ -676,6 +671,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Scan Again button — clear everything so user starts fresh
     scanAgainBtn.addEventListener('click', () => {
+        comparisonBaseline = null;
+        document.getElementById('rescanHint').hidden = true;
         resultsSection.style.display = 'none';
 
         // Clear form fields
@@ -701,6 +698,27 @@ document.addEventListener('DOMContentLoaded', () => {
         hideError();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    function scanSnapshot(data) {
+        return {score: data.match_score, jobKey: activeJobKey, scoreVersion: data.score_version || '2',
+            matchedKeywords: Object.values(data.matched_keywords || {}).flat()};
+    }
+
+    function rescanUpdatedCV() {
+        if (lastScanData) comparisonBaseline = scanSnapshot(lastScanData);
+        // Keep the target job and pasted text available for editing; replace an uploaded file.
+        resultsSection.style.display = 'none';
+        if (resumeFile) resumeFile.value = '';
+        if (fileSelected) fileSelected.style.display = 'none';
+        if (dropZone) dropZone.style.display = 'block';
+        document.getElementById('rescanHint').hidden = false;
+        hideError();
+        document.getElementById('scanForm').scrollIntoView({behavior:'smooth', block:'start'});
+        const target = document.querySelector('.tab-btn.active');
+        if (target) target.focus({preventScroll:true});
+    }
+    document.getElementById('rescanUpdatedBtn').addEventListener('click', rescanUpdatedCV);
+    document.getElementById('stickyRescanBtn').addEventListener('click', rescanUpdatedCV);
 
     // ============================================================
     // DEMO SCAN — "Try a demo scan" feature
@@ -1278,12 +1296,19 @@ Nice to Have
         // 3. Quick Wins
         renderQuickWins(data);
 
-        // ===== GATE CHECK =====
-        if (isSubscribed() || gateSkipped()) {
-            renderDeepResults(data);
-        } else {
-            showInlineGate();
-            trackOncePerScan('gate_shown');
+        renderDeepResults(data);
+        if (!isSubscribed() && !gateSkipped()) showInlineGate();
+        const comparison = document.getElementById('rescanComparison');
+        comparison.hidden = !comparisonBaseline;
+        if (comparisonBaseline) {
+            const change = ResumeRadarScan.compareScan(scanSnapshot(data), comparisonBaseline);
+            if (change) {
+                comparison.innerHTML = `<h2>What changed for this job</h2><p>Keyword coverage ${change.delta > 0 ? 'increased by ' : change.delta < 0 ? 'decreased by ' : 'changed by '}${Math.abs(change.delta).toFixed(1)} percentage points.</p>
+                    <details><summary>Review keyword changes</summary><p>Newly found: ${escapeHtml(change.added.join(', ') || 'none')}.</p><p>No longer found: ${escapeHtml(change.removed.join(', ') || 'none')}.</p></details>
+                    <p>This measures keyword evidence, not your chances of being hired.</p>`;
+            } else {
+                comparison.textContent = 'This scan uses a different job description, scoring version, or has no numeric estimate, so a score comparison would not be meaningful.';
+            }
         }
 
         // Scroll to results
@@ -1396,8 +1421,6 @@ Nice to Have
 
     function showInlineGate() {
         const gateCard = document.getElementById('inlineGateCard');
-        const deepContainer = document.getElementById('deepResults');
-        if (deepContainer) deepContainer.style.display = 'none';
         if (gateCard) gateCard.style.display = 'block';
     }
 
@@ -1930,8 +1953,8 @@ Nice to Have
 
         score = Math.round(score);
 
-        heading.textContent = 'Preview a clearer CV for this job';
-        body.textContent = 'Review a tailored rewrite using your existing experience. Read the full preview before paying £2 for PDF and Word exports. Confirm every claim before applying.';
+        heading.textContent = 'Want help rewriting this CV?';
+        body.textContent = 'You can make all these improvements yourself for free. For optional writing help, preview a tailored CV using your existing experience. Exports start at £2.';
     }
 
     function renderATSFormatting(ats) {

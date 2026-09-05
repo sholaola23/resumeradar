@@ -72,6 +72,8 @@ class RepeatDownloadTests(unittest.TestCase):
             for fmt in ('pdf', 'docx', 'both', 'pdf', 'docx'):
                 result = client.get('/api/build/download/cv1?format=' + fmt)
                 self.assertEqual(result.status_code, 200, result.get_json(silent=True))
+                self.assertGreater(int(result.headers.get('X-CV-Access-Seconds', '0')), 0)
+                self.assertLessEqual(int(result.headers['X-CV-Access-Seconds']), 3600)
             self.redis.delete('resumeradar:bundle:test')
             self.assertEqual(client.get('/api/build/download/cv1').status_code, 400)
 

@@ -2142,6 +2142,22 @@ def build_download(token):
         funnel_metrics.record("download_completed", _token_journey(token))
 
         response.headers['X-Email-Requested'] = 'true' if delivery_email else 'false'
+        if _redis_client:
+            try:
+                ttl = _redis_client.ttl(f'resumeradar:cv:{token}')
+                paid_key = f'resumeradar:cv_paid:{token}'
+                paid_ttl = _redis_client.ttl(paid_key)
+                if paid_ttl >= 0:
+                    ttl = min(ttl, paid_ttl)
+                owner = _redis_client.get(paid_key)
+                if isinstance(owner, bytes):
+                    owner = owner.decode()
+                if owner and owner.startswith('bundle:'):
+                    ttl = min(ttl, _redis_client.ttl('resumeradar:bundle:' + owner[7:]))
+                if ttl >= 0:
+                    response.headers['X-CV-Access-Seconds'] = str(ttl)
+            except Exception:
+                pass  # A missing deadline must not block an already verified download.
         return response
 
     except Exception as e:

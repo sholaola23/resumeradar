@@ -280,6 +280,7 @@
         if (savedPurchase && !params.has('payment') && !params.has('from')) {
             try {
                 const saved = JSON.parse(savedPurchase);
+                if (saved.template) sessionStorage.setItem('resumeradar_cv_template', saved.template);
                 const link = document.createElement('button');
                 link.className = 'celebration-btn';
                 link.textContent = 'Download your purchased CV again — free';
@@ -304,7 +305,7 @@
             // Paystack appends ?trxref=REF&reference=REF to callback URL
             var paystackRef = params.get('reference') || params.get('trxref') || sessionStorage.getItem('resumeradar_paystack_ref');
 
-            if (token && (sessionId || paystackRef)) {
+            if (token) {
                 handlePostPayment(token, sessionId, provider, paystackRef);
             }
         }
@@ -1476,8 +1477,9 @@
     // POST-PAYMENT DOWNLOAD
     // ============================================================
     async function handlePostPayment(token, sessionId, provider, paystackRef) {
+        sessionId = sessionId || '';
+        paystackRef = paystackRef || '';
         const template = sessionStorage.getItem('resumeradar_cv_template') || 'classic';
-        sessionStorage.removeItem('resumeradar_cv_template');
         // Retrieve format — if absent (session lost), omit it and let backend resolve via metadata
         const format = sessionStorage.getItem('resumeradar_cv_format') || '';
         sessionStorage.removeItem('resumeradar_cv_format');
@@ -1492,15 +1494,20 @@
         showBuilderView('preview');
         editBtn.style.display = 'none';
         document.getElementById('wizardToTemplate').style.display = 'none';
+        document.getElementById('previewHeading').textContent = 'Preparing your purchased CV';
+        document.getElementById('previewHint').textContent = 'Checking your access and preparing the download.';
+        document.getElementById('bulletComparison').hidden = true;
+        document.getElementById('aiPolishBadge').style.display = 'none';
+        document.getElementById('extractionWarning').style.display = 'none';
         currentToken = token;
-        const recovery = {token, sessionId: sessionId || '', provider: provider || '', paystackRef: paystackRef || ''};
+        const recovery = {token, template, sessionId: sessionId || '', provider: provider || '', paystackRef: paystackRef || ''};
         sessionStorage.setItem('resumeradar_paid_download', JSON.stringify(recovery));
         const repeatControls = () => {
             const controls = document.createElement('div');
-            controls.className = 'celebration-actions';
+            controls.className = 'celebration-actions repeat-download-actions';
             for (const [value, label] of [['pdf', 'Download PDF'], ['docx', 'Download Word'], ['both', 'Download both']]) {
                 const button = document.createElement('button');
-                button.className = 'celebration-btn';
+                button.className = 'celebration-btn' + (value === 'pdf' ? '' : value === 'docx' ? ' celebration-btn-secondary' : ' download-both-link');
                 button.textContent = label + ' — free';
                 button.addEventListener('click', () => {
                     sessionStorage.setItem('resumeradar_cv_format', value);
@@ -1508,7 +1515,13 @@
                 });
                 controls.appendChild(button);
             }
-            previewContent.appendChild(controls);
+            const nextSteps = previewContent.querySelector('.celebration-next');
+            if (nextSteps) nextSteps.before(controls);
+            else previewContent.appendChild(controls);
+            const help = document.createElement('p');
+            help.className = 'download-access-note';
+            help.textContent = 'PDF for applications · Word for editing · Both downloads a ZIP file. Keep your files somewhere safe. You can return to this page in this tab to download again while access lasts.';
+            controls.after(help);
         };
 
         // Show download status.
@@ -1568,10 +1581,29 @@
 
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
+                const expired = response.status === 404 || /expired|access missing/i.test(err.error || '');
+                document.getElementById('previewHeading').textContent = expired ? 'This download is no longer available' : 'Your download needs another try';
+                document.getElementById('previewHint').textContent = expired
+                    ? 'Check your saved downloads or emailed copy. The original CV may have expired; creating a new CV is a separate purchase.'
+                    : 'Retry the download below. A repeat download does not create a new payment.';
                 previewContent.innerHTML = `<div class="download-status download-error">${escapeHtml(err.error || 'Download failed. Please try again or contact support.')}</div>`;
-                repeatControls();
+                if (expired) {
+                    sessionStorage.removeItem('resumeradar_paid_download');
+                    previewContent.insertAdjacentHTML('beforeend', '<a href="/" class="celebration-btn celebration-btn-secondary">Check a CV for free</a>');
+                } else repeatControls();
                 return;
             }
+
+            document.getElementById('previewHeading').textContent = 'Your CV is unlocked';
+            const accessSeconds = Number(response.headers.get('X-CV-Access-Seconds'));
+            document.getElementById('previewHint').textContent = accessSeconds > 0
+                ? 'Free repeat downloads available until ' + new Date(Date.now() + accessSeconds * 1000).toLocaleString(undefined, {dateStyle:'medium', timeStyle:'short'}) + ' (your local time).'
+                : 'Repeat downloads of this CV are free during your access window. Save a copy now.';
+            document.querySelectorAll('.wizard-step').forEach(el => {
+                el.classList.remove('active');
+                el.classList.add('completed');
+            });
+            document.getElementById('wizardSteps').setAttribute('aria-label', 'CV creation complete');
 
             // Read email-requested header before consuming the body
             const emailRequested = response.headers.get('X-Email-Requested') === 'true';
@@ -1636,6 +1668,8 @@
 
         } catch (err) {
             console.error('Download error:', err);
+            document.getElementById('previewHeading').textContent = 'Your download needs another try';
+            document.getElementById('previewHint').textContent = 'Check your connection and retry below. A repeat download does not create a new payment.';
             previewContent.innerHTML = '<div class="download-status download-error">Network error during download. Please try again.</div>';
             repeatControls();
         }
@@ -2232,62 +2266,16 @@
                         return;
                     }
 
-                    var useData = await useResp.json();
-                    sessionStorage.setItem('resumeradar_paid_download', JSON.stringify({
-                        token: currentToken, sessionId: '', provider: '', paystackRef: '',
-                    }));
-
-                    // 2. Download the CV (cv_paid flag now set by bundle-use)
-                    var storedCvData = sessionStorage.getItem('resumeradar_cv_' + currentToken);
-                    var downloadResp;
-
-                    if (storedCvData) {
-                        var bodyObj = {
-                            template: selectedTemplate,
-                            cv_data: JSON.parse(storedCvData),
-                            format: selectedFormat,
-                        };
-                        downloadResp = await fetch('/api/build/download/' + currentToken, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(bodyObj),
-                        });
-                    } else {
-                        var downloadUrl = '/api/build/download/' + currentToken + '?template=' + encodeURIComponent(selectedTemplate);
-                        if (selectedFormat) downloadUrl += '&format=' + encodeURIComponent(selectedFormat);
-                        downloadResp = await fetch(downloadUrl);
-                    }
-
-                    if (!downloadResp.ok) {
-                        var dlErr = await downloadResp.json().catch(function() { return {}; });
-                        showError(dlErr.error || 'Download failed. This CV is unlocked; retrying will not use another credit.');
-                        return;
-                    }
-
-                    // Trigger download
-                    var ct = downloadResp.headers.get('Content-Type') || '';
-                    var fname = 'ResumeRadar_CV.pdf';
-                    if (ct.includes('zip')) fname = 'ResumeRadar_CV.zip';
-                    else if (ct.includes('wordprocessingml') || ct.includes('docx')) fname = 'ResumeRadar_CV.docx';
-
-                    var blob = await downloadResp.blob();
-                    var dlUrl = URL.createObjectURL(blob);
-                    var a = document.createElement('a');
-                    a.href = dlUrl;
-                    a.download = fname;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(dlUrl);
+                    // Use the same deadline, retry and completion UI as a single purchase.
+                    sessionStorage.setItem('resumeradar_cv_template', selectedTemplate);
+                    sessionStorage.setItem('resumeradar_cv_format', selectedFormat);
+                    await handlePostPayment(currentToken, '', '', '');
 
                     // Update banner with new remaining count
                     var newStatus = await checkBundleStatus(activeBundleToken);
                     if (newStatus) {
                         showBundleActive(newStatus);
                     }
-
-                    // Clean up client storage
-                    if (storedCvData) sessionStorage.removeItem('resumeradar_cv_' + currentToken);
 
                 } catch (err) {
                     showError('Network error. Please try again.');

@@ -32,8 +32,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/builder.css?v=4">
+    <link rel="stylesheet" href="/static/css/style.css?v=11">
+    <link rel="stylesheet" href="/static/css/builder.css?v=5">
 </head>
 <body>
     <!-- ============ HEADER ============ -->
@@ -362,7 +362,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                 <div class="preview-section" id="previewSection" style="display: none;">
                     <div class="builder-card">
                         <div class="preview-header">
-                            <h2>Review your full CV</h2>
+                            <h2 id="previewHeading">Review your full CV</h2>
                             <button type="button" class="edit-btn" id="editBtn">Edit & Regenerate</button>
                         </div>
 
@@ -370,7 +370,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             Polished by AI
                         </div>
 
-                        <p class="card-hint">Read every section before paying. Check that the AI wording reflects your experience. PDF and Word export starts at £2.</p>
+                        <p class="card-hint" id="previewHint">Read every section before paying. Check that the AI wording reflects your experience. PDF and Word export starts at £2.</p>
                         <div id="bulletComparison" class="bullet-comparison" hidden></div>
                         <div class="preview-content" id="previewContent"></div>
                     </div>
@@ -466,7 +466,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                         <div class="bundle-banner-info">
                             <h2 id="bundlePlanName">Job Hunt Pack</h2>
                             <div class="bundle-credits-row">
-                                <span class="bundle-credit-item"><strong id="bundleCvCount">5</strong> CV downloads</span>
+                                <span class="bundle-credit-item"><strong id="bundleCvCount">5</strong> CV credits</span>
                                 <span class="bundle-credit-sep">|</span>
                                 <span class="bundle-credit-item"><strong id="bundleClCount">5</strong> cover letters</span>
                             </div>
@@ -520,7 +520,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                     <div class="payment-content">
                         <div class="payment-info">
                             <h2>Export this CV</h2>
-                            <p>One payment. PDF + editable Word. No subscription.</p>
+                            <p>Pay once for this generated CV. Repeat PDF and Word downloads are free for 72 hours. No subscription.</p>
                         </div>
                         <div class="payment-action">
                             <div class="payment-price" id="paymentPrice">£2</div>
@@ -568,7 +568,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             <h3>Job Hunt Pack</h3>
                             <div class="bundle-tier-price" id="bundlePriceJobhunt">£5</div>
                             <ul class="bundle-tier-features">
-                                <li>5 CV downloads</li>
+                                <li>5 CV credits</li>
                                 <li>5 cover letters</li>
                                 <li>Valid for 30 days</li>
                             </ul>
@@ -578,7 +578,7 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
                             <h3>Unlimited Sprint</h3>
                             <div class="bundle-tier-price" id="bundlePriceSprint">£9</div>
                             <ul class="bundle-tier-features">
-                                <li>Unlimited CV downloads</li>
+                                <li>Unlimited Standard CVs</li>
                                 <li>Unlimited cover letters</li>
                                 <li>Valid for 7 days</li>
                             </ul>
@@ -695,6 +695,6 @@ Reduced deployment time by 40% through CI/CD automation"></textarea>
         </div>
     </footer>
 
-    <script src="/static/js/builder.js?v=7"></script>
+    <script src="/static/js/builder.js?v=11"></script>
 </body>
 </html>

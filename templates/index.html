@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=9">
+    <link rel="stylesheet" href="/static/css/style.css?v=11">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -212,11 +212,11 @@
                 {% endfor %}
             </div>
             {% else %}
-            <h1>Show how your experience <span class="highlight">fits the job</span>.</h1>
-            <p class="hero-sub">Compare your CV with a job description. Find missing evidence, get specific writing suggestions, and preview a tailored CV. Built with tech and cloud applicants in mind.</p>
+            <h1>Check your CV against a job <span class="highlight">for free</span>.</h1>
+            <p class="hero-sub">Find missing evidence and get practical improvements you can make yourself. Built with tech and cloud applicants in mind.</p>
             {% endif %}
             <a class="hero-scan-link" href="#scanForm">Scan my CV — free</a>
-            <p class="hero-note">No account needed. Review your full CV preview before paying £2 for exports.</p>
+            <p class="hero-note">Full scan results. No account, payment or newsletter signup required.</p>
         </div>
     </section>
 
@@ -254,8 +254,8 @@
                 <div class="step">
                     <div class="step-number">3</div>
                     <div class="step-content">
-                        <h3>Get Your Score</h3>
-                        <p>Keywords, gaps & fixes</p>
+                        <h3>Improve Your CV</h3>
+                        <p>Review advice, edit & rescan free</p>
                     </div>
                 </div>
             </div>
@@ -266,6 +266,7 @@
     <main class="scanner-section">
         <div class="container">
             <form id="scanForm" class="scan-form" enctype="multipart/form-data">
+                <p class="rescan-hint" id="rescanHint" role="status" hidden>Your job description is kept below. Upload your updated CV or edit your pasted text, then scan again to compare.</p>
                 <div class="form-grid">
                     <!-- LEFT: Resume Input -->
                     <div class="form-panel">
@@ -340,6 +341,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
             <!-- ============ RESULTS ============ -->
             <div class="results-section" id="results" style="display: none;">
+                <div class="rescan-comparison" id="rescanComparison" role="status" hidden></div>
 
                 <!-- Toast notification -->
                 <div class="toast" id="toast" style="display: none;">
@@ -349,7 +351,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                 <!-- Score Card -->
                 <div class="result-card score-card">
-                    <h2>Your job-description match estimate</h2>
+                    <h2>Your keyword coverage</h2>
                     <div class="score-display">
                         <div class="score-circle" id="scoreCircle">
                             <svg viewBox="0 0 120 120">
@@ -388,7 +390,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                 <!-- Quick Wins (rendered by JS) -->
                 <div class="result-card quick-wins-card" id="quickWins" style="display: none;">
-                    <h2>⚡ Quick Wins</h2>
+                    <h2>Start with these improvements</h2>
                     <p class="card-subtitle">Practical changes to make your experience clearer. Use only facts you can support.</p>
                     <div class="quick-wins-list" id="quickWinsList"></div>
                 </div>
@@ -396,13 +398,13 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- ===== INLINE GATE (shown to non-subscribers) ===== -->
                 <div class="result-card inline-gate-card" id="inlineGateCard" style="display: none;">
                     <div class="inline-gate-header">
-                        <h2>Unlock your full ATS breakdown</h2>
-                        <p class="inline-gate-subtitle">Get the complete picture to improve your resume.</p>
+                        <h2>Want more career tips?</h2>
+                        <p class="inline-gate-subtitle">Optional: get Shola’s Tech Notes. Your full scan results are already available above.</p>
                     </div>
                     <div class="inline-gate-chips">
-                        <span class="gate-chip">Full keyword map</span>
-                        <span class="gate-chip">AI section rewrites</span>
-                        <span class="gate-chip">Export &amp; email report</span>
+                        <span class="gate-chip">Tech career advice</span>
+                        <span class="gate-chip">Certification guides</span>
+                        <span class="gate-chip">AI fundamentals</span>
                     </div>
                     <form class="inline-gate-form" id="inlineGateForm">
                         <div class="inline-gate-fields">
@@ -410,26 +412,26 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                             <input type="email" id="inlineGateEmail" placeholder="Email address" required autocomplete="email">
                         </div>
                         <button type="submit" class="inline-gate-btn">
-                            <span class="gate-btn-text">Subscribe &amp; Unlock</span>
+                            <span class="gate-btn-text">Subscribe to free tips</span>
                             <span class="gate-btn-loading" style="display: none;">
                                 <span class="spinner spinner-sm"></span> Subscribing...
                             </span>
                         </button>
                     </form>
                     <p class="inline-gate-trust">Join Shola's Tech Notes — free, 3 min/week. Unsubscribe anytime.</p>
-                    <button type="button" class="inline-gate-skip" id="inlineGateSkip">Skip for now</button>
+                    <button type="button" class="inline-gate-skip" id="inlineGateSkip">No thanks</button>
                 </div>
 
                 <!-- ===== DEEP TIER (hidden until subscribed) ===== -->
                 <div id="deepResults" style="display: none;">
 
-                    <!-- Report Actions (collapsed — the £2 build CTA is the primary action) -->
+                    <!-- Free report actions are available immediately. -->
                     <div class="result-card">
                         <div class="card-header-toggle" data-target="reportActionsContent" data-section="report_actions">
                             <h2>📄 Save or Share Your Report</h2>
-                            <span class="toggle-icon">+</span>
+                            <span class="toggle-icon">−</span>
                         </div>
-                        <div id="reportActionsContent" style="display: none;">
+                        <div id="reportActionsContent">
                             <div class="report-actions">
                                 <button type="button" class="report-btn" id="copyReportBtn">
                                     <span class="report-btn-icon">📋</span> Copy Report
@@ -461,7 +463,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         <p class="card-subtitle">These terms were found in the job description but not in your CV. Some may be optional or alternatives to tools you already use.</p>
                         <div class="missing-keywords-tip">
                             <span class="tip-icon-inline">💡</span>
-                            <span><strong>Already have these skills?</strong> Add them to your resume — ATS can only match what it sees. <strong>Don't have them yet?</strong> This could be a skill gap worth working on before applying.</span>
+                            <span><strong>Experience you already have:</strong> add a truthful example showing where you used it. <strong>Experience you do not have:</strong> treat it as a learning gap, not wording to add. Check the job evidence above first: optional skills and accepted alternatives are not necessarily gaps.</span>
                         </div>
                         <div class="keywords-grid" id="missingKeywords"></div>
                     </div>
@@ -485,11 +487,6 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         </div>
                     </div>
 
-                    <!-- Subtle mid-flow CV CTA -->
-                    <div class="result-card build-cta-inline-card" id="inlineBuildCtaCard">
-                        <p class="build-cta-inline-text">Ready to turn these suggestions into a polished, ATS-ready CV?</p>
-                        <button type="button" class="build-cta-inline-btn" onclick="launchBuilderFromScan()">Generate My CV — £2</button>
-                    </div>
 
                     <!-- Cover Letter Key Points -->
                     <div class="result-card cover-letter-card" id="coverLetterCard" style="display: none;">
@@ -574,21 +571,24 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         </div>
                     </div>
 
-                    <!-- Build CV Cross-sell CTA (score-aware messaging set by JS) -->
+                    <div class="result-card improve-loop">
+                        <h2>Edit, then check what changed</h2>
+                        <p>Use the advice in your own editor. Upload your updated CV or edit your pasted text, keeping this job description to compare keyword evidence.</p>
+                        <button type="button" class="scan-again-btn" id="rescanUpdatedBtn">Rescan my updated CV — free</button>
+                        <button type="button" class="report-btn" id="scanAgainBtn">Start a different job scan</button>
+                    </div>
+
+                    <!-- Optional help, after the complete free report. -->
                     <div class="result-card build-cta-card" id="buildCtaCard">
-                        <h2 id="buildCtaHeading">🚀 Get an ATS-optimized CV in seconds</h2>
-                        <p id="buildCtaBody">Our AI optimizes your wording and strategically places keywords from this job description — using only YOUR real experience. No forms to fill.</p>
+                        <h2 id="buildCtaHeading">Want help rewriting this CV?</h2>
+                        <p id="buildCtaBody">Optional writing help using your existing experience. Preview free; exports start at £2.</p>
                         <div class="build-cta-trust">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                             The rewrite is instructed to use your existing experience. Review every claim before applying.
                         </div>
-                        <button type="button" class="build-cta-btn" onclick="launchBuilderFromScan()">Generate My Optimized CV — £2 →</button>
+                        <button type="button" class="build-cta-btn" onclick="launchBuilderFromScan()">Preview an optional rewrite</button>
                     </div>
 
-                    <!-- Scan Again -->
-                    <div class="scan-again-wrapper">
-                        <button type="button" class="scan-again-btn" id="scanAgainBtn">↑ Scan Another Resume</button>
-                    </div>
 
                 </div><!-- /deepResults -->
             </div>
@@ -826,10 +826,10 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
     <!-- Mobile Sticky CTA (visible in results viewport on mobile) -->
     <div class="sticky-cta-bar" id="stickyCta" style="display: none;">
-        <button type="button" onclick="launchBuilderFromScan()">Generate Optimized CV — £2</button>
+        <button type="button" id="stickyRescanBtn">Rescan my updated CV — free</button>
     </div>
 
-    <script src="/static/js/scan-utils.js?v=1"></script>
-    <script src="/static/js/app.js?v=8"></script>
+    <script src="/static/js/scan-utils.js?v=2"></script>
+    <script src="/static/js/app.js?v=10"></script>
 </body>
 </html>

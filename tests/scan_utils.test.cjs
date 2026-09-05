@@ -18,3 +18,11 @@ test('job key ignores whitespace but distinguishes different requirements', asyn
   assert.equal(await utils.jobKey('AWS   Engineer\nPython'), await utils.jobKey('aws engineer python'));
   assert.notEqual(await utils.jobKey('AWS Engineer Python'), await utils.jobKey('AWS Engineer Java'));
 });
+
+test('rescan comparison names evidence changes only for the same job and score version', () => {
+  const before = {score:50, jobKey:'a', scoreVersion:'2', matchedKeywords:['python', 'aws']};
+  const after = {score:70, jobKey:'a', scoreVersion:'2', matchedKeywords:['python', 'docker', 'docker']};
+  assert.deepEqual(utils.compareScan?.(after, before), {delta:20, added:['docker'], removed:['aws']});
+  assert.equal(utils.compareScan?.({...after, jobKey:'b'}, before), null);
+  assert.equal(utils.compareScan?.({...after, score:null}, before), null);
+});
