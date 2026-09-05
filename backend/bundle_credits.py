@@ -69,14 +69,33 @@ local field = ARGV[1]
 local data = redis.call('GET', key)
 if not data then return cjson.encode({error="expired"}) end
 local ttl = redis.call('TTL', key)
+if ttl <= 0 then return cjson.encode({error="expired"}) end
 local bundle = cjson.decode(data)
 local remaining = bundle[field]
 if remaining == nil then return cjson.encode({error="invalid_field"}) end
-if remaining == -1 then return cjson.encode({ok=true, remaining=-1}) end
-if remaining <= 0 then return cjson.encode({error="exhausted"}) end
-bundle[field] = remaining - 1
-redis.call('SETEX', key, ttl, cjson.encode(bundle))
-return cjson.encode({ok=true, remaining=remaining-1})
+if #KEYS == 3 then
+    if redis.call('EXISTS', KEYS[2]) == 0 then
+        return cjson.encode({error="invalid_cv_token"})
+    end
+    local paid = redis.call('GET', KEYS[3])
+    if paid then
+        if paid == '1' or paid == ARGV[2] then
+            return cjson.encode({ok=true, remaining=remaining, already_paid=true})
+        end
+        return cjson.encode({error="payment_conflict"})
+    end
+end
+if remaining ~= -1 then
+    if remaining <= 0 then return cjson.encode({error="exhausted"}) end
+    remaining = remaining - 1
+    bundle[field] = remaining
+    redis.call('SETEX', key, ttl, cjson.encode(bundle))
+end
+if #KEYS == 3 then
+    redis.call('SETEX', KEYS[3], ttl, ARGV[2])
+    redis.call('EXPIRE', KEYS[2], ttl)
+end
+return cjson.encode({ok=true, remaining=remaining, already_paid=false})
 """
 
 # ---------------------------------------------------------------------------
@@ -90,6 +109,7 @@ def init(redis_client):
     """Initialize bundle module with the app's Redis client. Call once at startup."""
     global _redis, _lua_script
     _redis = redis_client
+    _lua_script = None
     if _redis:
         try:
             _lua_script = _redis.register_script(_DECREMENT_LUA)
@@ -261,10 +281,17 @@ def use_credit(bundle_token, credit_type, cv_token=None):
 
         if _lua_script:
             # Atomic Lua decrement
-            result_raw = _lua_script(keys=[bundle_key], args=[field])
+            keys = [bundle_key]
+            if credit_type == 'cv' and cv_token:
+                keys.extend([cv_key, f'{_CV_PAID_PREFIX}{cv_token}'])
+            result_raw = _lua_script(keys=keys, args=[field, 'bundle:' + bundle_token])
             result = json.loads(result_raw)
+            return result
         else:
-            # Fallback: non-atomic (less safe but functional)
+            # Never charge CV credits without atomic debit + entitlement.
+            if credit_type == 'cv':
+                return {"error": "Service unavailable"}
+            # Legacy cover-letter path (operation idempotency handled by caller).
             data_raw = _redis.get(bundle_key)
             if not data_raw:
                 return {"error": "expired"}

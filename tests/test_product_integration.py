@@ -10,6 +10,16 @@ from backend.report_generator import generate_pdf_report
 from backend import cv_builder
 
 class ProductTests(unittest.TestCase):
+    def test_ai_context_excludes_satisfied_tool_alternatives(self):
+        from backend import ai_analyzer
+        context = getattr(ai_analyzer, '_recommendation_context', None)
+        self.assertIsNotNone(context)
+        missing, excluded = context({
+            'missing_keywords': {'technical_skills': ['docker', 'jenkins']},
+            'priority_recommendations': [{'keyword': 'docker', 'category': 'technical_skills'}],
+        })
+        self.assertEqual(missing['technical_skills'], ['docker'])
+        self.assertEqual(excluded, ['jenkins'])
     def test_short_skills_heading_ends_education_section(self):
         resume = """EDUCATION
 BSc Computer Science | University of Manchester | 2020

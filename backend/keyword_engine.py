@@ -40,7 +40,7 @@ TECHNICAL_SKILLS = {
     "sql", "nosql", "postgresql", "mysql", "mongodb", "dynamodb", "redis",
     "elasticsearch", "cassandra", "oracle", "database", "data modeling",
     "etl", "data pipeline", "data warehouse", "redshift", "bigquery",
-    "snowflake", "apache spark", "kafka", "airflow",
+    "snowflake", "apache spark", "spark", "tableau", "kafka", "airflow",
     # AI & ML
     "machine learning", "deep learning", "artificial intelligence", "ai", "ml",
     "nlp", "natural language processing", "computer vision", "tensorflow",
@@ -121,6 +121,7 @@ EDUCATION_EQUIVALENCES = [
 # or compound-context matching to avoid false positives like
 # "scalable" → "scala" or "rest of the team" → "rest".
 _AMBIGUOUS_TECH = {
+    "spark":    re.compile(r'\bSpark\b|(?i:\bapache spark\b)'),
     "react":    re.compile(r'\bReact(?:\.?js)?\b'),
     "scala":    re.compile(r'\bScala\b'),
     "express":  re.compile(r'\bExpress(?:\.?js)?\b'),
@@ -490,7 +491,7 @@ def analyze_requirements(resume_text, job_description, match_results):
         has_or = False
         for pos in filtered + [(len(sentence) + 1, len(sentence) + 1, '')]:
             connector = sentence[group[-1][1]:pos[0]].strip() if group else ''
-            connected = bool(group and re.fullmatch(r',?\s*(?:or)?\s*|/', connector, re.I))
+            connected = bool(pos[2] and group and re.fullmatch(r',?\s*(?:or)?\s*|/', connector, re.I))
             if not connected and group:
                 keys = {item[2] for item in group}
                 if has_or and keys & resume['technical_skills']:

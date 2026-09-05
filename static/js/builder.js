@@ -276,6 +276,18 @@
     // ============================================================
     function _builderInit() {
         const params = new URLSearchParams(window.location.search);
+        const savedPurchase = sessionStorage.getItem('resumeradar_paid_download');
+        if (savedPurchase && !params.has('payment') && !params.has('from')) {
+            try {
+                const saved = JSON.parse(savedPurchase);
+                const link = document.createElement('button');
+                link.className = 'celebration-btn';
+                link.textContent = 'Download your purchased CV again — free';
+                link.addEventListener('click', () => handlePostPayment(
+                    saved.token, saved.sessionId, saved.provider, saved.paystackRef));
+                uploadSection.prepend(link);
+            } catch (_) { /* Invalid local recovery data is ignored. */ }
+        }
 
         // Post-scan: hide upload section, auto-generate CV from scan data
         if (params.get('from') === 'scan') {
@@ -1322,6 +1334,14 @@
                 return;
             }
 
+            if (result.already_paid) {
+                sessionStorage.setItem('resumeradar_cv_format', selectedFormat);
+                sessionStorage.setItem('resumeradar_cv_template', selectedTemplate);
+                setPaymentLoading(false);
+                await handlePostPayment(currentToken, '', '', '');
+                return;
+            }
+
             // Store template + format choice for post-payment
             sessionStorage.setItem('resumeradar_cv_template', selectedTemplate);
             sessionStorage.setItem('resumeradar_cv_format', selectedFormat);
@@ -1468,7 +1488,30 @@
         sessionStorage.removeItem('resumeradar_cv_token');
         sessionStorage.removeItem('resumeradar_stripe_session');
 
-        // Show download status (showBuilderView already called before handlePostPayment)
+        // Use the visible preview step for status; step 4 hides its parent.
+        showBuilderView('preview');
+        editBtn.style.display = 'none';
+        document.getElementById('wizardToTemplate').style.display = 'none';
+        currentToken = token;
+        const recovery = {token, sessionId: sessionId || '', provider: provider || '', paystackRef: paystackRef || ''};
+        sessionStorage.setItem('resumeradar_paid_download', JSON.stringify(recovery));
+        const repeatControls = () => {
+            const controls = document.createElement('div');
+            controls.className = 'celebration-actions';
+            for (const [value, label] of [['pdf', 'Download PDF'], ['docx', 'Download Word'], ['both', 'Download both']]) {
+                const button = document.createElement('button');
+                button.className = 'celebration-btn';
+                button.textContent = label + ' — free';
+                button.addEventListener('click', () => {
+                    sessionStorage.setItem('resumeradar_cv_format', value);
+                    handlePostPayment(token, sessionId, provider, paystackRef);
+                });
+                controls.appendChild(button);
+            }
+            previewContent.appendChild(controls);
+        };
+
+        // Show download status.
         builderForm.style.display = 'none';
         previewSection.style.display = 'block';
         previewContent.innerHTML = '<div class="download-status"><span class="spinner"></span> Preparing your CV download...</div>';
@@ -1521,13 +1564,12 @@
             }
 
             // Clean up client storage after successful download
-            if (response.ok && storedCvData) {
-                sessionStorage.removeItem(`resumeradar_cv_${token}`);
-            }
+            // Keep client-fallback data for free repeat downloads in this tab.
 
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
-                previewContent.innerHTML = `<div class="download-status download-error">${err.error || 'Download failed. Please try again or contact support.'}</div>`;
+                previewContent.innerHTML = `<div class="download-status download-error">${escapeHtml(err.error || 'Download failed. Please try again or contact support.')}</div>`;
+                repeatControls();
                 return;
             }
 
@@ -1584,6 +1626,8 @@
                 </div>
             `;
 
+            repeatControls();
+
             // Fire confetti
             createConfetti(previewContent.querySelector('.celebration-container'));
 
@@ -1593,6 +1637,7 @@
         } catch (err) {
             console.error('Download error:', err);
             previewContent.innerHTML = '<div class="download-status download-error">Network error during download. Please try again.</div>';
+            repeatControls();
         }
     }
 
@@ -2167,9 +2212,8 @@
                 bundleDownloadBtn.disabled = true;
 
                 try {
-                    // 1. Use bundle credit. operation_id is REQUIRED by the
-                    // server (UUIDv4) — it's the only thing protecting us
-                    // from a double-spend race on a double-click.
+                    // The server atomically charges once per generated CV;
+                    // operation_id also makes individual request retries safe.
                     var operationId = generateUuidV4();
                     var useResp = await fetch('/api/build/bundle-use', {
                         method: 'POST',

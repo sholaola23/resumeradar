@@ -58,6 +58,18 @@ def _safe_truncate(text, max_chars):
     return truncated
 
 
+def _recommendation_context(results):
+    missing = results.get('missing_keywords', {})
+    if 'priority_recommendations' not in results:
+        return missing, []
+    allowed = {(item['category'], item['keyword']) for item in results['priority_recommendations']}
+    filtered = {category: [word for word in words if (category, word) in allowed]
+                for category, words in missing.items() if category != 'action_verbs'}
+    excluded = sorted({word for category, words in missing.items() if category != 'action_verbs'
+                       for word in words if (category, word) not in allowed})
+    return filtered, excluded
+
+
 def get_ai_suggestions(resume_text, job_description, keyword_results):
     """
     Use Claude API to generate intelligent, personalized resume suggestions.
@@ -91,9 +103,10 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
         client = make_client(api_key)
 
         # Build a focused prompt with the analysis context
-        missing_technical = keyword_results.get("missing_keywords", {}).get("technical_skills", [])
-        missing_soft = keyword_results.get("missing_keywords", {}).get("soft_skills", [])
-        missing_certs = keyword_results.get("missing_keywords", {}).get("certifications", [])
+        recommendation_missing, excluded_terms = _recommendation_context(keyword_results)
+        missing_technical = recommendation_missing.get("technical_skills", [])
+        missing_soft = recommendation_missing.get("soft_skills", [])
+        missing_certs = recommendation_missing.get("certifications", [])
         # Round to match the UI's score circle display — the AI must cite the
         # exact number the user sees (69.6 in prompt vs "70%" on screen reads
         # as two different scores).
@@ -126,6 +139,7 @@ KEYWORD ANALYSIS RESULTS:
 SCORE RULE: {score_rule} This is not an employer score or a prediction of suitability, ranking, or interviews. Never infer missing experience from missing wording alone.
 PRIORITIZED REQUIREMENTS: {json.dumps(priorities[:8])}
 Use these source-grounded priorities instead of alphabetically choosing tools. Respect required versus preferred criteria and alternative tools. Do not recommend a missing alternative when an accepted tool is already demonstrated.
+EXCLUDED TERMS: {json.dumps(excluded_terms)}. These are satisfied alternatives or lack actionable requirement evidence. Do not describe them as required gaps anywhere, including the summary, quick wins, or keyword suggestions.
 TRUTHFULNESS: Never add skills, metrics, or years of experience. Ask the user to supply real evidence; any suggested claim must be conditional on their actual experience. Do not suggest "seniority framing" to conceal an experience shortfall.
 
 IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:

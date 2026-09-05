@@ -505,8 +505,8 @@ def run_tests():
 
     # E2E-2/3/4: Success URL refresh, webhook replay, out-of-order timing
     # These require real Stripe sessions and Redis state — verified via structural assertions
-    check("Download route enforces download limit (max 3)",
-          'dl_count >= 3' in app_source or 'Download limit' in app_source)
+    # Repeat-download authorization and concurrency now have real Redis
+    # behavioral coverage in tests/test_repeat_downloads.py.
     check("Webhook extends CV data TTL for retry window",
           '.expire(' in app_source and 'resumeradar:cv:' in app_source)
     check("SETNX dedup releases on failure for retry recovery",
@@ -522,8 +522,6 @@ def run_tests():
           'if not _redis_client:' in app_source)
 
     # E2E-8: Download limit enforcement
-    check("Download counter tracked in Redis",
-          'cv_downloads' in app_source and 'incr' in app_source)
 
     # E2E-9: TTL expiry behavior — graceful error messaging
     check("Expired CV data returns user-friendly message",
@@ -2119,7 +2117,14 @@ def _run_bundle_use_race_tests():
     try:
         app_module._redis_client = mock
         bundle_credits._redis = mock
-        bundle_credits._lua_script = None  # force Python fallback path
+        # This test isolates operation-id replay at the HTTP boundary.
+        # Atomic CV debit/entitlement is covered against real Redis separately.
+        def debit_stub(keys, args):
+            data = json.loads(mock.get(keys[0]))
+            data[args[0]] -= 1
+            mock.setex(keys[0], 172800, json.dumps(data))
+            return json.dumps({'ok': True, 'remaining': data[args[0]]})
+        bundle_credits._lua_script = debit_stub
         # Disable the rate limiter so its Redis backend (which may point at
         # a dev-local Redis that isn't running) doesn't 500 the test.
         app_module.limiter.enabled = False

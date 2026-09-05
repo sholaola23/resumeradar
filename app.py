@@ -1370,6 +1370,18 @@ def build_generate_from_upload():
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
+def _cv_has_paid_access(token):
+    """Check server entitlement and, for bundle purchases, its live owner."""
+    if not _redis_client:
+        return False
+    value = _redis_client.get(f'resumeradar:cv_paid:{token}')
+    if isinstance(value, bytes):
+        value = value.decode()
+    if value and value.startswith('bundle:'):
+        return bool(_redis_client.exists('resumeradar:bundle:' + value[7:]))
+    return value == '1'
+
+
 @app.route('/api/build/create-checkout', methods=['POST'])
 @limiter.limit("30 per hour")
 def build_create_checkout():
@@ -1420,6 +1432,9 @@ def build_create_checkout():
                 print("WARNING: email-validator not installed. Using basic email check.")
                 if "@" not in delivery_email or "." not in delivery_email.split("@")[-1]:
                     return jsonify({"error": "Please enter a valid email address."}), 400
+
+        if _cv_has_paid_access(token):
+            return jsonify({"success": True, "already_paid": True})
 
         base_url = _get_base_url()
         funnel_metrics.record("checkout_started", _token_journey(token) or _bind_journey(token))
@@ -1788,10 +1803,16 @@ def bundle_use():
             bundle_credits.release_operation_claim(operation_id, fingerprint)
             return jsonify({"error": error}), status
 
-        response_data = {"success": True, "remaining": result.get("remaining")}
+        response_data = {"success": True, "remaining": result.get("remaining"),
+                         "already_paid": result.get("already_paid", False)}
 
         # Store for idempotency (H3) — replaces the pending claim
         bundle_credits.store_operation_result(operation_id, fingerprint, response_data)
+
+        if result.get('already_paid'):
+            resp = jsonify(response_data)
+            resp.headers['Cache-Control'] = 'no-store'
+            return resp
 
         # AUDIT: bundle credit used
         try:
@@ -1994,13 +2015,13 @@ def build_download(token):
             bundle_paid = False
             if _redis_client:
                 try:
-                    bundle_paid = bool(_redis_client.get(f"resumeradar:cv_paid:{token}"))
+                    bundle_paid = _cv_has_paid_access(token)
                 except Exception:
                     pass
             if bundle_paid:
                 payment = {"verified": True, "template": template, "delivery_email": "", "format": dl_format}
             else:
-                return jsonify({"error": "Missing payment session."}), 400
+                return jsonify({"error": "Payment access missing or expired."}), 400
 
         if not payment.get("verified"):
             return jsonify({"error": payment.get("reason", "Payment verification failed.")}), 403
@@ -2029,13 +2050,7 @@ def build_download(token):
                 if stored:
                     cv_data = json.loads(stored)
 
-                    # Check download limit (max 3)
-                    dl_key = f"resumeradar:cv_downloads:{token}"
-                    dl_count = int(_redis_client.get(dl_key) or 0)
-                    if dl_count >= 3:
-                        return jsonify({"error": "Download limit reached (3 downloads max)."}), 403
-                    _redis_client.incr(dl_key)
-                    _redis_client.expire(dl_key, 7200)
+                    # The existing expiry bounds access; repeats cost nothing.
             except Exception as redis_err:
                 print(f"Redis retrieve error: {redis_err}")
         else:
@@ -2598,7 +2613,7 @@ def build_webhook():
                     if _redis_client:
                         try:
                             paid_key = f"resumeradar:cv_paid:{cv_token}"
-                            _redis_client.setex(paid_key, 7200, "1")
+                            _redis_client.setex(paid_key, 259200, "1")
                             _redis_client.expire(f"resumeradar:cv:{cv_token}", 259200)
                             # Map payment_intent → cv token so charge.refunded /
                             # charge.dispute.created can revoke the entitlement.
