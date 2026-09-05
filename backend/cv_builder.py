@@ -7,6 +7,7 @@ Follows same pattern as ai_analyzer.py.
 import os
 import json
 import re
+from difflib import SequenceMatcher
 
 from backend import ai_budget
 from backend import ai_metrics
@@ -40,7 +41,8 @@ def _model_kwargs(tier):
 # General section heading: matches UPPERCASE or Title Case headings,
 # 8+ chars, on their own line. Allows trailing colon/dash.
 _SECTION_HEADING_RE = re.compile(
-    r'^\s*(?:[A-Z][A-Z\s&,/()\-:]{7,}|'                       # ALL CAPS: "PROFESSIONAL EXPERIENCE:"
+    r'^\s*(?:(?:SKILLS?|WORK|AWARDS?)|'                       # Common short headings
+    r'[A-Z][A-Z\s&,/()\-:]{7,}|'                              # ALL CAPS: "PROFESSIONAL EXPERIENCE:"
     r'(?:[A-Z][a-z]+\s*(?:[&,/:\-]\s*)?){2,})\s*[:\-]?\s*$',  # Title Case: "Professional Experience:"
     re.MULTILINE
 )
@@ -341,6 +343,35 @@ def _normalize_for_dedup(text):
     if not text:
         return ""
     return re.sub(r'\s+', ' ', text.lower().strip())
+
+
+def _canonicalize_suggestion_terms(suggestions, job_description):
+    """Correct near-miss technical spellings using terms present in the JD."""
+    source_terms = re.findall(r'\b[A-Za-z][A-Za-z0-9+#.-]{4,}\b', job_description or '')
+    technical_terms = [
+        term for term in source_terms
+        if any(char.isupper() for char in term[1:]) or any(char.isdigit() for char in term)
+    ]
+    if not technical_terms:
+        return suggestions
+
+    def replace_term(match):
+        word = match.group(0)
+        if not any(char.isupper() for char in word[1:]) and not any(char.isdigit() for char in word):
+            return word
+        if any(word == term for term in technical_terms):
+            return word
+        closest = max(
+            technical_terms,
+            key=lambda term: SequenceMatcher(None, word.lower(), term.lower()).ratio(),
+        )
+        ratio = SequenceMatcher(None, word.lower(), closest.lower()).ratio()
+        return closest if ratio >= 0.88 else word
+
+    return [
+        re.sub(r'\b[A-Za-z][A-Za-z0-9+#.-]{4,}\b', replace_term, suggestion)
+        for suggestion in suggestions
+    ]
 
 
 # ============================================================
@@ -815,6 +846,11 @@ Respond with ONLY valid JSON:
 
             result = json.loads(clean_text)
             result["ai_polished"] = True
+
+            if isinstance(result.get("smart_suggestions"), list):
+                result["smart_suggestions"] = _canonicalize_suggestion_terms(
+                    result["smart_suggestions"], job_description
+                )
 
             # --- Post-extraction safety net ---
             # 1. Deterministic fallback: merge missing education/certs

@@ -7,8 +7,39 @@ with patch.dict(os.environ, {}, clear=True), patch('dotenv.load_dotenv'):
     import app as product
 from backend.ai_analyzer import _get_fallback_suggestions
 from backend.report_generator import generate_pdf_report
+from backend import cv_builder
 
 class ProductTests(unittest.TestCase):
+    def test_short_skills_heading_ends_education_section(self):
+        resume = """EDUCATION
+BSc Computer Science | University of Manchester | 2020
+
+SKILLS
+AWS, Terraform, Docker
+
+CERTIFICATIONS
+AWS Solutions Architect Associate
+"""
+        entries = cv_builder._extract_section_entries(
+            resume, cv_builder._EDU_HEADING_RE
+        )
+        self.assertEqual(
+            entries,
+            ['BSc Computer Science | University of Manchester | 2020'],
+        )
+
+    def test_suggestion_terms_use_job_description_spelling(self):
+        canonicalize = getattr(cv_builder, '_canonicalize_suggestion_terms', None)
+        self.assertIsNotNone(canonicalize)
+        suggestions = canonicalize(
+            ['Have you used DynamoCDB, CloudFront, or Route 53?'],
+            'Experience with DynamoDB, CloudFront, and Route 53 is required.',
+        )
+        self.assertEqual(
+            suggestions,
+            ['Have you used DynamoDB, CloudFront, or Route 53?'],
+        )
+
     def test_unknown_domain_returns_no_score_through_api_and_pdf(self):
         with patch.dict(os.environ, {}, clear=True):
             response = product.app.test_client().post('/api/scan', data={
