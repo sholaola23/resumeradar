@@ -40,6 +40,18 @@ AWS Solutions Architect Associate
             ['Have you used DynamoDB, CloudFront, or Route 53?'],
         )
 
+    def test_configured_staging_origin_can_record_client_events(self):
+        with patch.object(
+            product, '_public_base_url',
+            'https://resumeradar-staging.onrender.com',
+        ):
+            self.assertTrue(product._origin_allowed(
+                'https://resumeradar-staging.onrender.com'
+            ))
+            self.assertTrue(product._origin_allowed(
+                'https://resumeradar-staging.onrender.com/build?from=scan'
+            ))
+
     def test_unknown_domain_returns_no_score_through_api_and_pdf(self):
         with patch.dict(os.environ, {}, clear=True):
             response = product.app.test_client().post('/api/scan', data={

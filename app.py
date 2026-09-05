@@ -3116,7 +3116,15 @@ def _origin_allowed(origin_or_referer):
         candidate = f"{parsed.scheme}://{parsed.netloc}"
     except Exception:
         return False
-    return candidate in _ALLOWED_ORIGINS
+    allowed_origins = set(_ALLOWED_ORIGINS)
+    if _public_base_url:
+        try:
+            configured = urlparse(_public_base_url)
+            if configured.scheme and configured.netloc:
+                allowed_origins.add(f"{configured.scheme}://{configured.netloc}")
+        except Exception:
+            pass
+    return candidate in allowed_origins
 
 
 @app.route('/api/event', methods=['POST'])
