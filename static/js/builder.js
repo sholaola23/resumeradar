@@ -2233,6 +2233,9 @@
                     }
 
                     var useData = await useResp.json();
+                    sessionStorage.setItem('resumeradar_paid_download', JSON.stringify({
+                        token: currentToken, sessionId: '', provider: '', paystackRef: '',
+                    }));
 
                     // 2. Download the CV (cv_paid flag now set by bundle-use)
                     var storedCvData = sessionStorage.getItem('resumeradar_cv_' + currentToken);
@@ -2257,7 +2260,7 @@
 
                     if (!downloadResp.ok) {
                         var dlErr = await downloadResp.json().catch(function() { return {}; });
-                        showError(dlErr.error || 'Download failed. Your credit was used. Please try again.');
+                        showError(dlErr.error || 'Download failed. This CV is unlocked; retrying will not use another credit.');
                         return;
                     }
 

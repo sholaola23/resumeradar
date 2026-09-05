@@ -48,3 +48,10 @@ Payment regressions use a disposable Redis server on a private Unix socket:
 concurrent unlocks, exhausted bundles, new CVs, expiry preservation, invalid CVs,
 more than three downloads, format changes, refund revocation, and duplicate
 checkout avoidance. No real billing accounts are used by these tests.
+
+Staging verification on 5 September 2026: reused the existing sandbox purchase
+for ZIP, Word, PDF, and a fourth ZIP download, then verified the return-to-builder
+recovery button. The synthetic live CI alternative check now accepts GitHub
+Actions without calling Jenkins or CircleCI missing requirements in its summary
+or keyword advice. The local suite passed 36 unit/integration tests, 458 QA checks,
+and three JavaScript tests. This does not establish accuracy across real applicants.
