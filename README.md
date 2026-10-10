@@ -141,7 +141,7 @@ python tests/qa_suite.py           # full: includes live AI + PDF checks
 
 ## Built By
 
-**[Olushola Oladipupo](https://www.linkedin.com/in/olushola-oladipupo/)** — AWS Solutions Architect
+**[Olushola Oladipupo](https://www.linkedin.com/in/olushola-oladipupo/)**
 
 Helping people break into tech and cloud, one resume at a time.
 
