@@ -110,13 +110,17 @@ be backfilled; the longer window accumulates after deployment.
 
 ### "Was this useful?" feedback
 
-Under each report a visitor can tap Yes or No. Each tap is one funnel counter
-(`feedback_yes`, `feedback_no`) in `/api/admin/funnel`. After the tap they can
+Under each report a visitor can tap Yes or No. Each tap adds one to a daily
+funnel counter (`feedback_yes`, `feedback_no`) in `/api/admin/funnel`. These
+counts are daily only: the journey ID the page sends is ignored for them
+(`DAILY_ONLY_EVENTS` in `backend/funnel_metrics.py`), so a vote is never tied
+to a browser session. After the tap they can
 add an optional comment, which goes to `POST /api/feedback` and is read back at
 the authenticated `GET /api/admin/feedback?days=30`.
 
 A stored comment holds four fields only: the cleaned text (500 characters at
-most, with email addresses, links and phone numbers replaced by `[removed]`),
+most, with email addresses, links (including bare domains such as `janedoe.dev`
+and `linkedin.com/in/...`) and phone numbers replaced by `[removed]`),
 the UTC date, the vote, and whether the visitor ticked "may quote". No IP,
 journey ID, score, email or CV text is stored with it, and it is never logged.
 Comments expire after 90 days, with at most 200 kept per day. Only comments

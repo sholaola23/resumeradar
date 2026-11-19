@@ -23,7 +23,16 @@ MAX_COMMENT_CHARS = 500
 MAX_COMMENTS_PER_DAY = 200  # bounds Redis memory if someone floods the form
 
 _EMAIL = re.compile(r"\S+@\S+")
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+# Links: any scheme (https, ftp, ...), www., a domain followed by a path
+# (linkedin.com/in/x), or a bare domain on a common top-level domain
+# (janedoe.dev). Tech names such as Node.js, Next.js and ASP.NET are kept.
+_URL = re.compile(
+    r"(?:\b[a-z][a-z0-9+.-]*://|\bwww\.)\S+"
+    r"|\b(?:[a-z0-9-]+\.)+(?!js\b)[a-z]{2,}/\S*"
+    r"|\b(?:[a-z0-9-]+\.)+(?:com|co|uk|org|io|dev|me|app|ai|info|biz|xyz|tech|site|online|"
+    r"page|blog|link|ly|gl|so|sh|cc|tv|eu|us|ca|au|de|fr|ng|in|za|ie|nz)\b(?![\w-]|\.\w)",
+    re.IGNORECASE,
+)
 # Nine or more digits, so dates (2026-11-19) and scores are left alone.
 _PHONE = re.compile(r"\+?\(?\d(?:[\s().-]{0,2}\d){8,}")
 _REMOVED = "[removed]"

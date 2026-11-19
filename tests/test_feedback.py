@@ -44,6 +44,14 @@ class MemoryRedis:
         bucket[field] = str(int(bucket.get(field, 0)) + amount)
         return self
 
+    def hset(self, key, mapping):
+        self.hashes.setdefault(key, {}).update({k: str(v) for k, v in mapping.items()})
+        return self
+
+    def hsetnx(self, key, field, value):
+        self.hashes.setdefault(key, {}).setdefault(field, str(value))
+        return self
+
     def hgetall(self, key):
         return self.hashes.get(key, {}).copy()
 
@@ -76,6 +84,12 @@ class CleanCommentTests(unittest.TestCase):
             'Ring (020) 7946-0958': '7946',
             'See https://linkedin.com/in/jane-doe for more': 'linkedin',
             'my site is www.janedoe.dev': 'janedoe',
+            'find me at linkedin.com/in/qa-person': 'qa-person',
+            'code on github.com/janedoe': 'janedoe',
+            'portfolio: janedoe.dev': 'janedoe',
+            'old files at ftp://files.example.org/cv': 'files.example',
+            'see JaneDoe.co.uk.': 'JaneDoe',
+            'blog jane-doe.blog today': 'jane-doe',
         }
         for text, leaked in cases.items():
             with self.subTest(text=text):
@@ -86,6 +100,13 @@ class CleanCommentTests(unittest.TestCase):
     def test_ordinary_comments_are_kept_word_for_word(self):
         text = 'On 2026-11-19 the 3 missing keywords were spot on. Scored 62 then 81 then 90.'
         self.assertEqual(feedback.clean_comment(text), text)
+
+    def test_tech_names_and_ordinary_dots_are_kept(self):
+        for text in ('Great for Node.js and Next.js roles.', 'Vue.js, Express.js and ASP.NET listed.',
+                     'Node.js/Express was matched.', 'Scored 3.5 then 4.0, e.g. better.',
+                     'Python 3.11 and v2.0 came up.'):
+            with self.subTest(text=text):
+                self.assertEqual(feedback.clean_comment(text), text)
 
     def test_messy_input(self):
         self.assertEqual(feedback.clean_comment('  line one\r\n\tline two\x00\x1b[31m  '), 'line one line two [31m')
@@ -170,6 +191,17 @@ class FeedbackRouteTests(FeedbackTestCase):
         self.client.post('/api/event', json={'event': 'feedback_comment'}, headers=ORIGIN)
         day = funnel_metrics.get_day()
         self.assertEqual((day['feedback_yes'], day['feedback_no'], day['feedback_comment']), (1, 1, 0))
+
+    def test_votes_are_never_tied_to_a_journey(self):
+        journey = '12345678-1234-4234-8234-123456789abc'
+        for event in ('feedback_yes', 'feedback_no'):
+            self.client.post('/api/event', json={'event': event, 'journey_id': journey}, headers=ORIGIN)
+        self.post({'useful': True, 'comment': 'Nice.', 'journey_id': journey})
+        self.assertEqual([k for k in self.redis.hashes if 'journey' in k], [])
+        self.assertNotIn('123456781234', json.dumps(self.redis.hashes))
+        # Other events still keep their journey, so the funnel is unchanged.
+        self.client.post('/api/event', json={'event': 'scan_started', 'journey_id': journey}, headers=ORIGIN)
+        self.assertIn('resumeradar:journey:12345678123442348234123456789abc', self.redis.hashes)
 
 
 class FeedbackAdminTests(FeedbackTestCase):

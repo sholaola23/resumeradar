@@ -72,6 +72,14 @@ CLIENT_EVENTS = frozenset({
     "feedback_no",
 })
 
+# Events counted by day only. A journey ID sent with them is ignored, so a
+# "Was this useful?" vote is never tied to a browser session.
+DAILY_ONLY_EVENTS = frozenset({
+    "feedback_yes",
+    "feedback_no",
+    "feedback_comment",
+})
+
 _redis = None
 
 
@@ -107,7 +115,7 @@ def record(event_name, journey_id=None):
         pipe.hincrby(key, event_name, 1)
         pipe.expire(key, _FUNNEL_TTL)
         pipe.execute()
-        normalized = normalize_journey_id(journey_id)
+        normalized = None if event_name in DAILY_ONLY_EVENTS else normalize_journey_id(journey_id)
         if normalized:
             journey_key = _JOURNEY_PREFIX + normalized
             now = datetime.now(timezone.utc).isoformat()
