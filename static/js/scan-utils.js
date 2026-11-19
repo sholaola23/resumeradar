@@ -18,6 +18,28 @@
             return {delta, added: [...after].filter(term => !before.has(term)),
                 removed: [...before].filter(term => !after.has(term))};
         },
+        /* Job description view: where each listed term sits, and how many are marked.
+           Positions are element ids: jd-term-<segment> or jd-term-<segment>-<part>. */
+        jobTermIndex(segments) {
+            const positions = {};
+            const terms = {matched: new Set(), missing: new Set()};
+            const add = (keyword, id) => {
+                const list = positions[keyword] = positions[keyword] || [];
+                if (!list.includes(id)) list.push(id);
+            };
+            (segments || []).forEach((segment, index) => {
+                if (!segment || !terms[segment.status]) return;
+                const id = `jd-term-${index}`;
+                terms[segment.status].add(segment.keyword);
+                add(segment.keyword, id);
+                (segment.parts || []).forEach((part, partIndex) => {
+                    if (!part || !terms[part.status]) return;
+                    terms[part.status].add(part.keyword);
+                    add(part.keyword, `${id}-${partIndex}`);
+                });
+            });
+            return {positions, matched: terms.matched.size, missing: terms.missing.size};
+        },
         async jobKey(description) {
             const normalized = description.trim().toLowerCase().replace(/\s+/g, ' ');
             const bytes = new TextEncoder().encode(normalized);

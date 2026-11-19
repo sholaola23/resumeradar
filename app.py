@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.resume_parser import parse_resume
-from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements
+from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
@@ -602,6 +602,9 @@ def scan_resume():
             "category_scores": match_results["category_scores"],
             "matched_keywords": match_results["matched_keywords"],
             "missing_keywords": match_results["missing_keywords"],
+            # The visitor's own job text, marked up for the "View in job
+            # description" panel. Computed per request; never stored or logged.
+            "job_description_view": locate_job_terms(job_description, match_results),
             "ats_formatting": ats_check,
             "recruiter_tips": recruiter_tips,
             "ai_suggestions": ai_suggestions,

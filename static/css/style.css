@@ -1358,13 +1358,13 @@ textarea::placeholder {
 
 .keyword-tag.missing {
     background: var(--danger-light);
-    color: var(--danger);
+    color: #991b1b;
     border: 1px solid #fca5a5;
 }
 
 .keyword-tag.matched {
     background: var(--success-light);
-    color: var(--success);
+    color: #065f46;
     border: 1px solid #6ee7b7;
 }
 
@@ -3270,3 +3270,21 @@ button:focus-visible, a:focus-visible { outline: 3px solid #2563eb; outline-offs
 .recommendation-detail p { margin:6px 0; }
 .score-number.unscored { font-size:19px; }
 #scanForm { scroll-margin-top:24px; }
+
+/* View in job description */
+.jd-view-card summary { cursor:pointer; list-style-position:outside; margin-left:18px; min-height:44px; display:list-item; }
+.jd-view-card summary h2 { display:inline; margin:0; }
+.jd-view-card summary:focus-visible { outline:3px solid #2563eb; outline-offset:3px; }
+.jd-view-card details[open] summary { margin-bottom:16px; }
+.jd-view-card .card-subtitle { margin-top:0; }
+.jd-view-legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin:0 0 16px; font-size:14px; color:var(--gray-600); }
+.jd-view-text { white-space:pre-wrap; overflow-wrap:anywhere; font-size:15px; line-height:1.9; color:var(--gray-800); background:var(--gray-50); border:1px solid var(--gray-200); border-radius:var(--radius-sm); padding:16px; }
+.jd-term { padding:1px 4px; border-radius:4px; font-weight:600; scroll-margin:96px 0; }
+.jd-term.matched { background:var(--success-light); color:#064e3b; border-bottom:2px solid #047857; }
+.jd-term.missing { background:var(--danger-light); color:#7f1d1d; border-bottom:2px dashed #b91c1c; }
+.jd-term .jd-term { padding:0 2px; }
+.jd-term.active, .jd-term:focus { outline:3px solid #2563eb; outline-offset:2px; }
+.jd-term-note { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.jd-view-note { margin:16px 0 0; font-size:14px; line-height:1.6; color:var(--gray-600); }
+button.keyword-tag { font-family:inherit; cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
+button.keyword-tag:hover { text-decoration-style:solid; }

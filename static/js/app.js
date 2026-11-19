@@ -136,6 +136,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Exposed on window for cross-page use (CV Builder cross-sell)
     let lastScanData = null;
     let comparisonBaseline = null;
+    // Job description segments for "View in job description". Kept apart from
+    // lastScanData so the job text is never posted back with a report request.
+    let lastJobView = [];
+    let jobTermIndex = ResumeRadarScan.jobTermIndex([]);
     // Keep the optional newsletter after the complete report and free rescan action.
     resultsSection.appendChild(document.getElementById('inlineGateCard'));
     document.getElementById('topMissingKeywords').before(document.getElementById('quickWins'));
@@ -638,6 +642,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Store data for report generation
+            lastJobView = data.job_description_view || [];
+            delete data.job_description_view;
             lastScanData = data;
             try { activeJobKey = await ResumeRadarScan.jobKey(jobDescription); } catch (e) { activeJobKey = ''; }
 
@@ -1271,6 +1277,9 @@ Nice to Have
         // Sub-score bars (Formatting + Recruiter Tips)
         renderSubScoreBars(data);
 
+        // Job description view first: the keyword lists link into it
+        renderJobView(data);
+
         // Missing Keywords (full)
         renderKeywords('missingKeywords', data.missing_keywords, 'missing');
 
@@ -1647,7 +1656,9 @@ Nice to Have
             section.innerHTML = `
                 <div class="keywords-section-title">${labels[category] || category}</div>
                 <div class="keyword-tags">
-                    ${words.map(w => `<span class="keyword-tag ${type}">${escapeHtml(w)}</span>`).join('')}
+                    ${words.map(w => category !== 'action_verbs' && jobTermIndex.positions[w]
+                        ? `<button type="button" class="keyword-tag keyword-jump ${type}" data-jd-keyword="${escapeHtml(w)}" aria-label="${escapeHtml(w)}: show in job description">${escapeHtml(w)}</button>`
+                        : `<span class="keyword-tag ${type}">${escapeHtml(w)}</span>`).join('')}
                 </div>
             `;
             container.appendChild(section);
@@ -1661,6 +1672,77 @@ Nice to Have
             }</p>`;
         }
     }
+
+    // ============================================================
+    // VIEW IN JOB DESCRIPTION
+    // ============================================================
+    function renderJobView(data) {
+        const card = document.getElementById('jobViewCard');
+        const text = document.getElementById('jobViewText');
+        if (!card || !text) return;
+        jobTermIndex = ResumeRadarScan.jobTermIndex(lastJobView);
+        const marked = jobTermIndex.matched + jobTermIndex.missing;
+        card.hidden = !marked || !Number.isFinite(data.match_score);
+        text.textContent = '';
+        if (card.hidden) { jobTermIndex = ResumeRadarScan.jobTermIndex([]); return; }
+        const notes = {matched: ' (found in your CV)', missing: ' (not found in your CV)'};
+        // Browsers submit line breaks as CRLF; show them as single breaks.
+        const clean = (value) => String(value).replace(/\r\n?/g, '\n');
+        const markFor = (piece, id) => {
+            const mark = document.createElement('mark');
+            mark.className = `jd-term ${piece.status}`;
+            mark.id = id;
+            mark.tabIndex = -1;
+            return mark;
+        };
+        const noteFor = (status) => {
+            const note = document.createElement('span');
+            note.className = 'jd-term-note';
+            note.textContent = notes[status];
+            return note;
+        };
+        lastJobView.forEach((segment, index) => {
+            if (!notes[segment.status]) { text.append(clean(segment.text)); return; }
+            const mark = markFor(segment, `jd-term-${index}`);
+            if (Array.isArray(segment.parts)) {
+                segment.parts.forEach((part, partIndex) => {
+                    if (!notes[part.status]) { mark.append(clean(part.text)); return; }
+                    const inner = markFor(part, `jd-term-${index}-${partIndex}`);
+                    inner.append(clean(part.text), noteFor(part.status));
+                    mark.appendChild(inner);
+                });
+            } else {
+                mark.append(clean(segment.text));
+            }
+            mark.appendChild(noteFor(segment.status));
+            text.appendChild(mark);
+        });
+        const count = (n) => `${n} ${n === 1 ? 'term' : 'terms'}`;
+        document.getElementById('jobViewMatchedCount').textContent = count(jobTermIndex.matched);
+        document.getElementById('jobViewMissingCount').textContent = count(jobTermIndex.missing);
+        document.getElementById('jobViewDetails').open = false;
+    }
+
+    // A keyword in the lists jumps to where the job mentions it; selecting it
+    // again moves to the next mention.
+    const jobJumpCursor = {};
+    document.getElementById('deepResults').addEventListener('click', (event) => {
+        const tag = event.target.closest('.keyword-jump');
+        if (!tag) return;
+        const keyword = tag.dataset.jdKeyword;
+        const positions = jobTermIndex.positions[keyword];
+        if (!positions) return;
+        const visit = (jobJumpCursor[keyword] || 0) % positions.length;
+        jobJumpCursor[keyword] = visit + 1;
+        const mark = document.getElementById(positions[visit]);
+        if (!mark) return;
+        document.getElementById('jobViewDetails').open = true;
+        document.querySelectorAll('.jd-term.active').forEach(el => el.classList.remove('active'));
+        mark.classList.add('active');
+        mark.focus({preventScroll: true});
+        const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        mark.scrollIntoView({behavior: calm ? 'instant' : 'smooth', block: 'center'});
+    });
 
     function renderAISuggestions(suggestions) {
         const container = document.getElementById('aiSuggestions');
