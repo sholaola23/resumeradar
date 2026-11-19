@@ -223,7 +223,10 @@ class FeedbackAdminTests(FeedbackTestCase):
 class FeedbackPageTests(FeedbackTestCase):
     def test_card_and_script_are_on_the_scan_page(self):
         home = self.client.get('/').data.decode()
-        for needle in ('id="feedbackCard"', 'Was this report useful?', '/static/js/feedback.js'):
+        # The privacy sentence names every field backend/feedback.py stores.
+        for needle in ('id="feedbackCard"', 'Was this report useful?', '/static/js/feedback.js',
+                       'your comment, your Yes or No answer, whether you allow quoting and today',
+                       'delete it after 90 days'):
             self.assertIn(needle, home)
         script = self.client.get('/static/js/feedback.js')
         self.addCleanup(script.close)

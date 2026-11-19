@@ -84,7 +84,7 @@ _redis = None
 
 
 def init(redis_client):
-    """Initialize with the app's Redis client."""
+    """Initialise with the app's Redis client."""
     global _redis
     _redis = redis_client
 
