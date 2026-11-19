@@ -1,8 +1,14 @@
 name: Claude review
 
 # A final, read-only Claude review of a ResumeRadar pull request (Shola, 19 Nov
-# 2026, copied from the D-Care and Bachel review workflows). Each review costs
-# about $1 to $3 of API credit, so it is kept for level 2 and 3 pull requests.
+# 2026, first copied from the D-Care and Bachel review workflows). Each review
+# costs about $1 to $3, so it is kept for level 2 and 3 pull requests.
+#
+# It calls the Claude API directly (.github/scripts/claude_review.py) rather
+# than the Claude Code GitHub Action, because the Max plan's monthly API credit
+# covers the Claude API but not Claude Code: Anthropic says runs started by the
+# Claude Code GitHub Action count as Claude Code usage
+# (support.claude.com/en/articles/17154008, checked 19 Nov 2026).
 # It runs only on a comment that starts with "@claude-qa review" from Shola's
 # account: typed by him, or posted by a project thread through the Claude
 # GitHub app. Never on its own.
@@ -12,13 +18,14 @@ name: Claude review
 # rules it is checked against. The pull request's code is checked out beside it
 # at pr-head/.
 #
-# Claude reads untrusted text (the diff, the PR body and comments), so it gets
-# no shell, git, GitHub CLI or web tools and no file writes. It reads only
-# inside the workspace; the workflow saves the diff and the PR's text there for
-# it. It can't post anything itself: it prints its review, and a later step
-# that Claude doesn't control checks the text for secrets and posts it.
+# Claude reads untrusted text (the diff, the PR body and comments), so its only
+# tools are list, read and search, confined to pr-head/ and .review/. It has no
+# shell, git, network or file writes, and the script and checklist come from
+# the default branch, never from the pull request. It can't post anything
+# itself: the script saves its review, and a later step that Claude doesn't
+# control checks the text for secrets and posts it.
 #
-# No API key is stored. The action authenticates with workload identity
+# No API key is stored. The script authenticates with workload identity
 # federation: it swaps this job's GitHub OIDC token for a short-lived Claude
 # token. The Claude Console rule (resumeradar-claude-review,
 # fdrl_01Rz7KhZyfUoJqm786YiqFBd) only accepts this
@@ -62,7 +69,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      # Lets the action ask GitHub for this job's OIDC token (federation).
+      # Lets the script ask GitHub for this job's OIDC token (federation).
       id-token: write
     env:
       PR: ${{ github.event.issue.number }}
@@ -118,44 +125,31 @@ jobs:
 
       - name: Review
         id: review
-        uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
-        with:
-          anthropic_federation_rule_id: fdrl_01Rz7KhZyfUoJqm786YiqFBd
-          anthropic_organization_id: e53a9ad2-0c54-4729-96ef-88cd3a72d7f0
-          anthropic_service_account_id: svac_01NwcfWaZLNTbuSKRAMNiPUX
-          anthropic_workspace_id: wrkspc_01CVogoTepaBZs1G5ABVxoTc
-          github_token: ${{ github.token }}
-          # Shola already has write access, so this skips no check for him (the
-          # job only runs on his comments). Setting it switches the action to
-          # its mode for untrusted content: git gets the token from a credential
-          # helper that reads the environment, so it is never written into
-          # .git/config. It also turns on the action's best-effort scrub of
-          # subprocess environments (Claude has no shell here anyway).
-          allowed_non_write_users: sholaola23
-          prompt: "/resumeradar-final-review pr=${{ github.event.issue.number }} base=${{ steps.refs.outputs.base }} head=${{ steps.refs.outputs.head }}"
-          # Only Agent is pre-approved. Read, Grep and Glob work inside the
-          # workspace without approval and are refused outside it, because
-          # nobody can approve them in a headless run. The deny list is a
-          # second guard for the places that hold secrets. Read denies also
-          # cover Grep and Glob. The .git denies are a backstop, as .git holds
-          # no token (see allowed_non_write_users above).
-          claude_args: >-
-            --model claude-opus-5-5 --max-turns 80
-            --allowedTools "Agent"
-            --disallowedTools "Bash,Write,Edit,NotebookEdit,WebFetch,WebSearch,Read(//proc/**),Read(//sys/**),Read(//dev/**),Read(//etc/**),Read(//root/**),Read(//home/runner/.*/**),Read(/${{ runner.temp }}/**),Read(**/.git/**),Read(**/.git)"
+        env:
+          ANTHROPIC_FEDERATION_RULE_ID: fdrl_01Rz7KhZyfUoJqm786YiqFBd
+          ANTHROPIC_ORGANIZATION_ID: e53a9ad2-0c54-4729-96ef-88cd3a72d7f0
+          ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01NwcfWaZLNTbuSKRAMNiPUX
+          ANTHROPIC_WORKSPACE_ID: wrkspc_01CVogoTepaBZs1G5ABVxoTc
+          BASE: ${{ steps.refs.outputs.base }}
+          HEAD: ${{ steps.refs.outputs.head }}
+          SKILL: .claude/skills/resumeradar-final-review/SKILL.md
+        run: |
+          # The SDK is pinned and installed outside the workspace, so Claude's
+          # read tools never see it. No GitHub token is passed to this step.
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet anthropic==2.6.0
+          REVIEW_OUT="$RUNNER_TEMP/review.md" "$RUNNER_TEMP/venv/bin/python" .github/scripts/claude_review.py
 
       - name: Post the review
         if: steps.review.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
           HEAD: ${{ steps.refs.outputs.head }}
         run: |
           body="$RUNNER_TEMP/review.md"
-          # A missing or broken file gives an empty review, which the verdict
-          # check below reports on the pull request.
-          jq -r '[.[] | select(.type == "result")] | last | .result // empty' \
-            "$EXECUTION_FILE" > "$body" || : > "$body"
+          # A missing file gives an empty review, which the verdict check below
+          # reports on the pull request.
+          [ -f "$body" ] || : > "$body"
           # Never post anything that carries a key or a token, whatever the
           # review text says.
           if grep -qF -- "$GH_TOKEN" "$body" ||
