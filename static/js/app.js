@@ -777,69 +777,65 @@ document.addEventListener('DOMContentLoaded', () => {
 London, UK | jamie.smith@example.com | +44 7700 900123 | linkedin.com/in/jamiesmith-demo
 
 PROFESSIONAL SUMMARY
-Cloud Engineer with 4 years of experience designing and deploying scalable infrastructure on AWS. Skilled in CI/CD pipelines, infrastructure as code, and container orchestration. Passionate about automation, cost optimisation, and building reliable cloud-native systems.
+Software Engineer with 4 years of experience building web applications and APIs for growing product teams. Skilled in Python, Django and React, with a focus on clean code, automated testing and fast, reliable releases.
 
 EXPERIENCE
 
-Cloud Engineer | TechStream Solutions | Jan 2022 - Present
-- Designed and deployed AWS infrastructure using Terraform across 3 production environments
-- Built CI/CD pipelines with GitHub Actions reducing deployment time by 60%
-- Managed Kubernetes clusters on EKS serving 2M+ daily requests
-- Implemented CloudWatch monitoring and alerting, reducing incident response time by 45%
-- Led migration of 12 legacy applications to containerised microservices on Docker
+Software Engineer | TechStream Solutions | Jan 2022 - Present
+- Built and maintained a Django and PostgreSQL booking platform used by 40,000 customers a month
+- Designed REST APIs consumed by web and mobile apps, cutting page load time by 35%
+- Set up CI/CD pipelines with GitHub Actions, reducing release time from a day to 20 minutes
+- Introduced pytest and unit testing standards, raising test coverage from 30% to 85%
+- Moved background jobs to Redis queues, removing timeouts at peak traffic
+- Added monitoring and alerting that cut the time to spot incidents by half
 
-Junior Cloud Engineer | DataFlow Inc | Jun 2020 - Dec 2021
-- Provisioned and maintained EC2, S3, RDS, and Lambda resources for development teams
-- Automated routine tasks using Python and Bash scripting, saving 15 hours per week
-- Assisted in achieving SOC 2 compliance by implementing IAM best practices
-- Created CloudFormation templates for repeatable environment deployments
+Junior Developer | DataFlow Inc | Jun 2020 - Dec 2021
+- Built React components and JavaScript features for a customer dashboard
+- Wrote SQL reports and Python scripts that saved the support team 15 hours a week
+- Packaged services with Docker so new developers could set up in under an hour
+- Took part in code reviews and Agile sprint planning
 
 EDUCATION
 BSc Computer Science | University of Manchester | 2020
 
 SKILLS
-AWS (EC2, S3, RDS, Lambda, EKS, CloudWatch, IAM, VPC, CloudFormation)
-Terraform, Docker, Kubernetes, GitHub Actions, Linux, Python, Bash
-CI/CD, Infrastructure as Code, Monitoring, Agile
+Python, Django, Flask, JavaScript, React, HTML, CSS
+PostgreSQL, SQL, Redis, REST, Docker, Git, GitHub Actions, Linux
+CI/CD, pytest, unit testing, Agile, Scrum`;
 
-CERTIFICATIONS
-AWS Solutions Architect Associate
-AWS Cloud Practitioner`;
-
-    const DEMO_JOB = `Senior Cloud Engineer
+    const DEMO_JOB = `Senior Software Engineer
 
 About the Role
-We are looking for a Senior Cloud Engineer to join our Platform team and help scale our cloud infrastructure. You will design, build, and maintain reliable, secure, and cost-effective cloud solutions on AWS.
+We are looking for a Senior Software Engineer to join our Product team and help us build features our customers love. You will design, build and run the web services and interfaces behind our booking platform.
 
 Responsibilities
-- Design and implement scalable, highly available cloud architectures on AWS
-- Build and maintain CI/CD pipelines for automated deployments
-- Manage container orchestration using Kubernetes and Docker
-- Implement infrastructure as code using Terraform and CloudFormation
-- Monitor system performance and optimise for cost and reliability
-- Collaborate with development teams to improve deployment workflows
-- Implement security best practices including IAM policies, VPC networking, and encryption
-- Participate in on-call rotation and incident response
-- Mentor junior engineers and contribute to engineering standards
+- Build new features across our Python back end and TypeScript front end
+- Design and maintain REST and GraphQL APIs used by our web and mobile apps
+- Write well-tested code and keep our CI/CD pipelines fast and reliable
+- Run services in Docker and Kubernetes and improve how we deploy them
+- Monitor performance and fix issues before customers notice them
+- Work closely with product managers and designers to shape new features
+- Review code, mentor junior engineers and help set engineering standards
 
 Requirements
-- 5+ years of experience in cloud engineering or DevOps
-- Strong expertise with AWS services (EC2, S3, RDS, Lambda, EKS, CloudFront, Route 53, DynamoDB)
-- Proficiency in Infrastructure as Code (Terraform, CloudFormation, or Pulumi)
-- Experience with container technologies (Docker, Kubernetes, ECS)
-- Strong scripting skills (Python, Bash, or Go)
-- Experience with CI/CD tools (Jenkins, GitHub Actions, GitLab CI, or CircleCI)
-- Knowledge of monitoring and observability tools (CloudWatch, Datadog, Prometheus, Grafana)
-- Understanding of networking concepts (VPC, DNS, load balancing, CDN)
+- 5+ years of experience in software engineering
+- Strong Python skills with a web framework (Django, FastAPI or Flask)
+- Commercial experience with TypeScript and React
+- Solid knowledge of PostgreSQL and SQL
+- Experience with Docker and Kubernetes
+- Experience building and running microservices
+- Experience designing GraphQL or REST APIs
+- Experience with CI/CD tools (GitHub Actions, Jenkins or CircleCI)
+- Knowledge of monitoring tools (Prometheus, Grafana or similar)
 - Excellent communication and collaboration skills
 - Problem-solving mindset with attention to detail
 
 Nice to Have
-- AWS Solutions Architect Professional certification
-- Experience with serverless architectures
-- Knowledge of security frameworks (SOC 2, ISO 27001)
-- Experience with cost optimisation and FinOps practices
-- Familiarity with Ansible or other configuration management tools`;
+- Experience with Kafka or other event streaming tools
+- Knowledge of OAuth and web security best practices
+- Understanding of GDPR and handling personal data
+- Experience with Elasticsearch
+- Familiarity with Terraform`;
 
     if (demoScanBtn) {
         demoScanBtn.addEventListener('click', (e) => {

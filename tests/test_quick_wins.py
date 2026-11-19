@@ -46,8 +46,8 @@ class KeywordDisplayTests(unittest.TestCase):
         resume, jd = demo()
         with patch.object(product, 'get_ai_suggestions', return_value={'ai_powered': False}):
             data = product.app.test_client().post('/api/scan', data={'resume_text': resume, 'job_description': jd}).get_json()
-        self.assertEqual(data['keyword_display']['cloudfront'], 'CloudFront')
-        self.assertIn('cloudfront', data['missing_keywords']['technical_skills'])  # matching stays lower-case
+        self.assertEqual(data['keyword_display']['typescript'], 'TypeScript')
+        self.assertIn('typescript', data['missing_keywords']['technical_skills'])  # matching stays lower-case
 
 
 class PriorityTests(unittest.TestCase):
@@ -55,7 +55,7 @@ class PriorityTests(unittest.TestCase):
         resume, jd = demo()
         top = [item['keyword'] for item in engine.analyze_requirements(resume, jd, match(resume, jd))[:3]]
         self.assertNotEqual(top, sorted(top))
-        self.assertEqual(top[0], 'networking')  # named twice in the requirements
+        self.assertEqual(top[0], 'typescript')  # named twice and a definite ask
 
     def test_listed_examples_are_one_of_and_rank_below_definite_asks(self):
         jd = 'Requirements\nExperience with monitoring tools (Datadog, Prometheus, Grafana).\nMust know Kubernetes and Docker.'
@@ -108,7 +108,7 @@ class CategoryAndReportTests(unittest.TestCase):
         self.assertNotIn('(1/1)', text)
         self.assertIn('Technical Skills', text)
         self.assertIn('resumeradar.sholastechnotes.com', text)
-        self.assertIn('CloudFront', text)
+        self.assertIn('TypeScript', text)
 
     def test_page_and_text_report_share_the_three_term_rule(self):
         script = (ROOT / 'static/js/app.js').read_text()
