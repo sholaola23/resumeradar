@@ -769,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('stickyRescanBtn').addEventListener('click', rescanUpdatedCV);
 
     // ============================================================
-    // EXAMPLE REPORT — fills in a sample CV and job, then scans
+    // EXAMPLE REPORT: fills in a sample CV and job, then scans
     // ============================================================
     const demoScanBtn = document.getElementById('demoScanBtn');
 

@@ -31,7 +31,9 @@ FREE_ECONOMY_THRESHOLD = 0.60
 NO_THINKING = {"thinking": {"type": "disabled"}}
 
 # Cache name for scan suggestions. Change the suffix whenever the scan prompt
-# changes, so answers written for the old prompt are not reused.
+# changes, so answers written for the old prompt are not reused. The prompt
+# includes analyze_requirements output (priorities, excluded terms) from
+# keyword_engine, so a change there needs a new suffix too.
 SCAN_CACHE_TOOL = "scan_suggestions:v1"
 _SCAN_KEYS = {"summary", "strengths", "critical_improvements", "keyword_suggestions",
               "rewrite_suggestions", "quick_wins", "cover_letter_points"}
@@ -169,7 +171,7 @@ SCORE RULE: {score_rule} This is not an employer score or a prediction of suitab
 PRIORITIZED REQUIREMENTS: {json.dumps(priorities[:8])}
 Use these source-grounded priorities instead of alphabetically choosing tools. Respect required versus preferred criteria and alternative tools. Do not recommend a missing alternative when an accepted tool is already demonstrated.
 EXCLUDED TERMS: {json.dumps(excluded_terms)}. These are satisfied alternatives or lack actionable requirement evidence. Do not describe them as required gaps anywhere, including the summary, quick wins, or keyword suggestions.
-WORDING: Call the document a "CV", not a "resume", and use UK spelling. Write tool and product names with their usual capitalisation (CDN, CloudFront).
+WORDING: Call the document a "CV", not a "resume", and use UK spelling. Write tool and product names with their usual capitalisation (CDN, PostgreSQL).
 TRUTHFULNESS: Never add skills, metrics, or years of experience. Ask the user to supply real evidence; any suggested claim must be conditional on their actual experience. Do not suggest "seniority framing" to conceal an experience shortfall.
 
 IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:
