@@ -131,7 +131,7 @@ def run_tests():
             ('results', 'Results section'),
             ('copyReportBtn', 'Copy report button'),
             ('downloadReportBtn', 'Download PDF button'),
-            ('shareLinkedIn', 'Share LinkedIn button'),
+            ('shareCard', 'Share card'),
             ('newsletterPopup', 'Newsletter popup'),
             ('errorMessage', 'Error message div'),
         ]
