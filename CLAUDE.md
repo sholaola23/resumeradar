@@ -64,7 +64,7 @@ There is no CI test job. The only workflow is the Claude review (below), so run 
 
 ## Claude review
 
-A comment starting `@claude-qa review` on a PR, from Shola's account (typed, or posted through the Claude GitHub app), runs `.github/workflows/resumeradar-claude-review.yml`. It calls the Claude API through `.github/scripts/claude_review.py` with read-only tools, against the checklist in `.claude/skills/resumeradar-final-review/SKILL.md` read from `master`, never from the PR. It signs in by workload identity federation, so no key is stored. It bills the "ResumeRadar GitHub reviews" workspace, which has a $10 monthly spend limit. Because the workflow and checklist are read from `master`, a change to either only takes effect after merge.
+A comment starting `@claude-qa review` on a PR, from Shola's account (typed, or posted through the Claude GitHub app), runs `.github/workflows/resumeradar-claude-review.yml`. It calls the Claude API through `.github/scripts/claude_review.py` with read-only tools, against the checklist in `.claude/skills/resumeradar-final-review/SKILL.md` read from `master`, never from the PR. It signs in by workload identity federation, so no key is stored. It bills the "ResumeRadar GitHub reviews" workspace, which has a $30 monthly spend limit. Because the workflow and checklist are read from `master`, a change to either only takes effect after merge.
 
 ## What failure looks like
 
