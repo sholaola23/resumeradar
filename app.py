@@ -5,6 +5,7 @@ Built by Olushola Oladipupo
 """
 
 import os
+import posixpath
 import json
 import uuid
 import hmac as hmac_module
@@ -275,7 +276,7 @@ def _cv_builder_disabled():
         return None
     if (path == '/build' or path.startswith('/build/') or path.startswith('/api/build/')
             or (path.startswith('/static/')
-                and os.path.basename(path) in ('builder.js', 'builder.css'))):
+                and posixpath.basename(posixpath.normpath(path)) in ('builder.js', 'builder.css'))):
         abort(404)
 
 @app.route('/')
