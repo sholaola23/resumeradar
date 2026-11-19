@@ -1358,13 +1358,13 @@ textarea::placeholder {
 
 .keyword-tag.missing {
     background: var(--danger-light);
-    color: var(--danger);
+    color: #991b1b;
     border: 1px solid #fca5a5;
 }
 
 .keyword-tag.matched {
     background: var(--success-light);
-    color: var(--success);
+    color: #065f46;
     border: 1px solid #6ee7b7;
 }
 

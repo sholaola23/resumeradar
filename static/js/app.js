@@ -1751,12 +1751,14 @@ Nice to Have
         if (card.hidden) { jobTermIndex = ResumeRadarScan.jobTermIndex([]); return; }
         const notes = {matched: ' (found in your CV)', missing: ' (not found in your CV)'};
         lastJobView.forEach((segment, index) => {
-            if (!notes[segment.status]) { text.append(segment.text); return; }
+            // Browsers submit line breaks as CRLF; show them as single breaks.
+            const segmentText = String(segment.text).replace(/\r\n?/g, '\n');
+            if (!notes[segment.status]) { text.append(segmentText); return; }
             const mark = document.createElement('mark');
             mark.className = `jd-term ${segment.status}`;
             mark.id = `jd-term-${index}`;
             mark.tabIndex = -1;
-            mark.textContent = segment.text;
+            mark.textContent = segmentText;
             const note = document.createElement('span');
             note.className = 'jd-term-note';
             note.textContent = notes[segment.status];
@@ -1787,7 +1789,7 @@ Nice to Have
         mark.classList.add('active');
         mark.focus({preventScroll: true});
         const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        mark.scrollIntoView({behavior: calm ? 'auto' : 'smooth', block: 'center'});
+        mark.scrollIntoView({behavior: calm ? 'instant' : 'smooth', block: 'center'});
     });
 
     function renderAISuggestions(suggestions) {
