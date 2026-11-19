@@ -541,10 +541,11 @@ def _positive_evidence(text):
 
 
 # A list introduced as examples ("monitoring tools (A, B, C)", "such as A, B")
-# names options, so one of them is enough. Used by analyze_requirements.
+# names options, so one of them is enough. A plain "Technologies: A, B, C"
+# heading is a full list, not a choice. Used by analyze_requirements.
 _EXAMPLE_LIST_LEAD = re.compile(
-    r'\b(?:tools?|technologies|frameworks?|platforms?|languages?)\s*[(:]\s*$'
-    r'|\b(?:such as|for example|like)\s*[(:]?\s*$', re.I)
+    r'\b(?:tools?|technologies|frameworks?|platforms?|languages?)\s*\(\s*$'
+    r'|\b(?:such as|for example|e\.g\.|like)\s*[(:]?\s*$', re.I)
 
 
 def analyze_requirements(resume_text, job_description, match_results):
@@ -599,7 +600,7 @@ def analyze_requirements(resume_text, job_description, match_results):
                         alternatives |= keys
                     else:
                         for key in keys:
-                            one_of[key] = sorted(keys - {key})
+                            one_of.setdefault(key, set()).update(keys - {key})
                 group, has_or = [], False
             if connected and re.search(r'\bor\b|/', connector, re.I):
                 has_or = True
@@ -613,7 +614,7 @@ def analyze_requirements(resume_text, job_description, match_results):
         if category == 'action_verbs':
             continue
         for keyword in missing:
-            sources = [(order[priority], index, sentence, priority, one_of.get(keyword, []))
+            sources = [(order[priority], index, sentence, priority, sorted(one_of.get(keyword, ())))
                        for index, (sentence, priority, terms, alternatives, one_of) in enumerate(evidence)
                        if keyword in terms.get(category, set()) and keyword not in alternatives]
             if not sources:
@@ -672,7 +673,7 @@ def analyze_ats_formatting(resume_text):
         issues.append({
             "type": "warning",
             "message": f"Missing standard section headers: {', '.join(missing_sections).title()}",
-            "detail": "ATS systems look for standard section headers to categorise your information. Make sure you have clearly labeled sections."
+            "detail": "ATS systems look for standard section headers to categorise your information. Make sure you have clearly labelled sections."
         })
 
     sections_found_ratio = (len(required_sections) - len(missing_sections)) / len(required_sections)

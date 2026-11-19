@@ -67,6 +67,16 @@ class PriorityTests(unittest.TestCase):
         order = [item['keyword'] for item in items]
         self.assertLess(order.index('kubernetes'), order.index('datadog'))
 
+    def test_plain_heading_list_is_a_full_list_not_a_choice(self):
+        jd = 'Required technologies: AWS, Docker, Kubernetes.'
+        keys = {item['keyword'] for item in engine.analyze_requirements('AWS', jd, match('AWS', jd))}
+        self.assertTrue({'docker', 'kubernetes'} <= keys)
+
+    def test_term_in_two_option_lists_names_both(self):
+        jd = 'Required: CI tools such as Jenkins or CircleCI, and deploy tools like Jenkins or Spinnaker.'
+        by = {item['keyword']: item for item in engine.analyze_requirements('Python', jd, match('Python', jd))}
+        self.assertEqual(set(by['jenkins']['one_of']), {'CircleCI', 'Spinnaker'})
+
     def test_or_list_is_one_of_when_none_is_held(self):
         jd = 'Required: CI/CD tools (Jenkins, GitHub Actions or CircleCI). Python required.'
         by = {item['keyword']: item for item in engine.analyze_requirements('Docker', jd, match('Docker', jd))}
@@ -115,7 +125,27 @@ class ScanCacheTests(unittest.TestCase):
              patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
             self.assertEqual(ai_analyzer.get_ai_suggestions('cv', 'job', {}), cached)
         client.assert_not_called()
-        self.assertEqual(get.call_args[0], (ai_analyzer.SCAN_CACHE_TOOL, 'cv', 'job'))
+        self.assertEqual(get.call_args[0][0], ai_analyzer.SCAN_CACHE_TOOL)
+
+    def test_capitalisation_edit_is_a_different_cache_entry(self):
+        self.assertNotEqual(ai_analyzer._scan_cache_inputs('Used cdn', 'job'),
+                            ai_analyzer._scan_cache_inputs('Used CDN', 'job'))
+
+    def test_cut_off_answer_is_not_cached(self):
+        class Msg:
+            content = [type('B', (), {'type': 'text', 'text': '{"summary": "half", "strengths": ["a"'})()]
+            usage = None
+        client = type('C', (), {})()
+        client.messages = type('M', (), {'create': staticmethod(lambda **kw: Msg())})()
+        with patch.object(ai_analyzer.ai_cache, 'cache_get', return_value=None), \
+             patch.object(ai_analyzer.ai_cache, 'cache_set') as put, \
+             patch.object(ai_analyzer, 'make_client', return_value=client), \
+             patch.object(ai_analyzer.ai_budget, 'check_budget', return_value=True), \
+             patch.object(ai_analyzer.ai_budget, 'spent_fraction', return_value=0), \
+             patch.object(ai_analyzer.ai_budget, 'record_usage'), \
+             patch.dict(os.environ, {'ANTHROPIC_API_KEY': 'test-key'}):
+            ai_analyzer.get_ai_suggestions('cv', 'job', {'missing_keywords': {}})
+        put.assert_not_called()
 
     def test_fallback_is_not_cached(self):
         with patch.object(ai_analyzer.ai_cache, 'cache_get', return_value=None), \

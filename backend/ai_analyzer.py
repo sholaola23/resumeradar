@@ -33,6 +33,22 @@ NO_THINKING = {"thinking": {"type": "disabled"}}
 # Cache name for scan suggestions. Change the suffix whenever the scan prompt
 # changes, so answers written for the old prompt are not reused.
 SCAN_CACHE_TOOL = "scan_suggestions:v1"
+_SCAN_KEYS = {"summary", "strengths", "critical_improvements", "keyword_suggestions",
+              "rewrite_suggestions", "quick_wins", "cover_letter_points"}
+
+
+def _scan_cache_inputs(resume_text, job_description):
+    """Cache inputs for scan suggestions.
+
+    The shared cache lower-cases and collapses spacing, which suits the writing
+    tools but would hand back stale advice after a capitalisation-only edit
+    ("cdn" to "CDN"). Hashing the exact text first keeps those edits distinct.
+    The month is included because the prompt states today's date.
+    """
+    import hashlib
+    from datetime import datetime
+    exact = lambda text: hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+    return exact(resume_text), exact(job_description), datetime.now().strftime("%Y-%m")
 
 
 def make_client(api_key):
@@ -95,7 +111,8 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
     # An identical CV and job description within the hour reuses the earlier
     # answer (same 1-hour cache as the writing tools). This is what keeps the
     # one-click example scan from costing an AI call on every click.
-    cached = ai_cache.cache_get(SCAN_CACHE_TOOL, resume_text, job_description)
+    cache_inputs = _scan_cache_inputs(resume_text, job_description)
+    cached = ai_cache.cache_get(SCAN_CACHE_TOOL, *cache_inputs)
     if cached is not None:
         return cached
 
@@ -235,9 +252,11 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
                     clean_text = clean_text[json_start:]
 
             clean_text = clean_text.strip()
+            repaired = False
 
             # If JSON is truncated (no closing brace), try to repair it
             if clean_text.startswith("{") and not clean_text.endswith("}"):
+                repaired = True
                 # Count braces to find how many we need to close
                 open_braces = clean_text.count("{") - clean_text.count("}")
                 open_brackets = clean_text.count("[") - clean_text.count("]")
@@ -260,7 +279,9 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
 
             suggestions = json.loads(clean_text)
             suggestions["ai_powered"] = True
-            ai_cache.cache_set(SCAN_CACHE_TOOL, suggestions, resume_text, job_description)
+            # Only a complete answer is reused; a cut-off one is retried next time.
+            if not repaired and _SCAN_KEYS <= suggestions.keys():
+                ai_cache.cache_set(SCAN_CACHE_TOOL, suggestions, *cache_inputs)
             return suggestions
 
         except (json.JSONDecodeError, ValueError) as parse_error:

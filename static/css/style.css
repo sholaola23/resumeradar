@@ -3290,3 +3290,4 @@ button.demo-link { background: none; border: 0; padding: 12px 4px; min-height: 4
 .keyword-tag.matched { color: #065f46; }
 .cl-btn-free { opacity: 1; }
 .contact-item.found { color: #047857; }
+.results-jump a[hidden] { display: none; }

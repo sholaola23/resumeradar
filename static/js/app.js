@@ -163,10 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Milestone-aware copy
                 const num = count.toLocaleString();
                 let text = `${num}+ CVs scanned`;
-                if (count >= 1000) text = `${num}+ CVs scanned — join the movement`;
+                if (count >= 1000) text = `${num}+ CVs scanned. Join the movement`;
                 else if (count >= 750) text = `${num}+ job seekers have scanned their CVs`;
                 else if (count >= 500) text = `${num}+ CVs scanned and counting`;
-                else if (count >= 250) text = `${num}+ CVs scanned — are you next?`;
+                else if (count >= 250) text = `${num}+ CVs scanned. Are you next?`;
 
                 scanCountEl.textContent = text;
 
@@ -870,7 +870,10 @@ Nice to Have
             trackEvent('demo_scan');
 
             // 5. Run the scan straight away, so one click shows a full report
-            if (!scanBtn.disabled) scanForm.requestSubmit();
+            if (!scanBtn.disabled) {
+                if (scanForm.requestSubmit) scanForm.requestSubmit();
+                else scanBtn.click();
+            }
         });
     }
 
