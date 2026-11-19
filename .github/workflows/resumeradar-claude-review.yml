@@ -167,8 +167,31 @@ jobs:
           # The verdict must be the review's last non-empty line.
           verdict="$(grep -v '^[[:space:]]*$' "$body" | tail -n 1 || true)"
           if ! printf '%s\n' "$verdict" | grep -qxE "CLAUDE-QA: (PASS|CHANGES NEEDED) @ $HEAD"; then
-            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
-              "Claude review finished without a verdict for $HEAD, so nothing was posted. Run log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            # Still show what the review said (it passed the secret check
+            # above), so the cause is visible. It is wrapped so it never counts:
+            # the comment's last line is not a verdict line, and earlier
+            # reviews are only read from their last line.
+            if ! grep -q '[^[:space:]]' "$body"; then
+              gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body \
+                "Claude review finished with no text for $HEAD, so there is no verdict. Run log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              exit 1
+            fi
+            note="$RUNNER_TEMP/no-verdict.md"
+            {
+              echo "Claude review finished without a valid verdict line for $HEAD, so this review does not count. Its text is below so the cause can be seen. Run log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              echo
+              echo '<details><summary>Review text</summary>'
+              echo
+              echo '````text'
+              head -c 60000 "$body"
+              echo
+              echo '````'
+              echo
+              echo '</details>'
+              echo
+              echo "No valid verdict for $HEAD."
+            } > "$note"
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$note"
             exit 1
           fi
           gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$body"
