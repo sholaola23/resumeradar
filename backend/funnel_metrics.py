@@ -67,6 +67,20 @@ CLIENT_EVENTS = frozenset({
     "cover_letter_started",
 })
 
+# Referral loop: aggregate daily counts only, no identity of sharer or friend.
+# The ?ref= sources mirror REF_SOURCES in static/js/scan-utils.js.
+REF_SOURCES = ("whatsapp", "linkedin", "copy", "native", "qr", "group", "job")
+_REFERRAL_EVENTS = frozenset({
+    "share_prompt_shown",
+    "share_clicked",
+    "job_link_created",
+    "job_link_opened",
+    "referred_scan_completed",
+    *(f"ref_visit_{source}" for source in REF_SOURCES),
+})
+VALID_EVENTS = VALID_EVENTS | _REFERRAL_EVENTS
+CLIENT_EVENTS = CLIENT_EVENTS | _REFERRAL_EVENTS
+
 _redis = None
 
 
@@ -102,7 +116,8 @@ def record(event_name, journey_id=None):
         pipe.hincrby(key, event_name, 1)
         pipe.expire(key, _FUNNEL_TTL)
         pipe.execute()
-        normalized = normalize_journey_id(journey_id)
+        # Referral events stay daily totals only: never tie them to a journey.
+        normalized = None if event_name in _REFERRAL_EVENTS else normalize_journey_id(journey_id)
         if normalized:
             journey_key = _JOURNEY_PREFIX + normalized
             now = datetime.now(timezone.utc).isoformat()
