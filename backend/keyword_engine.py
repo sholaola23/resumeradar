@@ -529,9 +529,11 @@ def analyze_requirements(resume_text, job_description, match_results):
 def locate_job_terms(job_description, match_results):
     """Split the job description into segments marking each recognised term.
 
-    Returns a list of {"text"} and {"text", "keyword", "category", "status",
-    "also"} segments whose text joins back to the job description exactly.
-    "also" names shorter listed terms that sit inside this one. Status is
+    Returns a list of {"text"} and {"text", "keyword", "category", "status"}
+    segments whose text joins back to the job description exactly. A marked
+    segment holding a shorter listed term also has "parts": the same text split
+    into plain and marked pieces, so the inner term keeps its own status.
+    Every listed term gets at least one mark carrying its own status. Status is
     "matched" or "missing", taken from match_results, so this view is the same
     evidence as the keyword lists. Text after the equal-opportunity boilerplate
     marker is returned unmarked because extraction ignores it. Action verbs are
@@ -565,19 +567,55 @@ def locate_job_terms(job_description, match_results):
             if found:
                 break  # same order as _keyword_in_text: exact form, then stem
 
-    # Longest term wins where two overlap ("google cloud" over "cloud").
+    # Longest term wins where two overlap ("google cloud" over "cloud"). A
+    # term inside it ("aws" in "aws certified") gets its own mark within that
+    # one, so it keeps its own status.
     spans.sort(key=lambda span: (span[0], span[0] - span[1]))
-    segments, cursor = [], 0
+    marks, cursor = [], 0
     for start, end, keyword, category, label in spans:
-        if start < cursor:
-            # Covered by a longer term: keep it findable from that segment.
-            if keyword != segments[-1]["keyword"] and keyword not in segments[-1]["also"]:
-                segments[-1]["also"].append(keyword)
+        if start >= cursor:
+            marks.append({"span": (start, end), "keyword": keyword, "category": category,
+                          "status": label, "inner": []})
+            cursor = end
             continue
+        outer = marks[-1]
+        inner = outer["inner"]
+        if keyword == outer["keyword"] or any(item["keyword"] == keyword for item in inner):
+            continue
+        if end <= cursor and (not inner or start >= inner[-1]["span"][1]):
+            inner.append({"span": (start, end), "keyword": keyword, "category": category, "status": label})
+        elif end > cursor:
+            # Overlaps only partly ("cloud computing" after "Google Cloud"):
+            # mark the part not already marked, so it keeps its own status.
+            rest = cursor
+            while rest < end and scanned[rest].isspace():
+                rest += 1
+            marks.append({"span": (rest, end), "keyword": keyword, "category": category,
+                          "status": label, "inner": []})
+            cursor = end
+
+    def piece(mark):
+        start, end = mark["span"]
+        return {"text": job_description[start:end], "keyword": mark["keyword"],
+                "category": mark["category"], "status": mark["status"]}
+
+    segments, cursor = [], 0
+    for mark in marks:
+        start, end = mark["span"]
         if start > cursor:
             segments.append({"text": job_description[cursor:start]})
-        segments.append({"text": job_description[start:end], "keyword": keyword,
-                         "category": category, "status": label, "also": []})
+        segment = piece(mark)
+        if mark["inner"]:
+            parts, at = [], start
+            for item in mark["inner"]:
+                if item["span"][0] > at:
+                    parts.append({"text": job_description[at:item["span"][0]]})
+                parts.append(piece(item))
+                at = item["span"][1]
+            if at < end:
+                parts.append({"text": job_description[at:end]})
+            segment["parts"] = parts
+        segments.append(segment)
         cursor = end
     if cursor < len(job_description):
         segments.append({"text": job_description[cursor:]})

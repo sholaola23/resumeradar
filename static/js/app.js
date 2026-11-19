@@ -1750,19 +1750,35 @@ Nice to Have
         text.textContent = '';
         if (card.hidden) { jobTermIndex = ResumeRadarScan.jobTermIndex([]); return; }
         const notes = {matched: ' (found in your CV)', missing: ' (not found in your CV)'};
-        lastJobView.forEach((segment, index) => {
-            // Browsers submit line breaks as CRLF; show them as single breaks.
-            const segmentText = String(segment.text).replace(/\r\n?/g, '\n');
-            if (!notes[segment.status]) { text.append(segmentText); return; }
+        // Browsers submit line breaks as CRLF; show them as single breaks.
+        const clean = (value) => String(value).replace(/\r\n?/g, '\n');
+        const markFor = (piece, id) => {
             const mark = document.createElement('mark');
-            mark.className = `jd-term ${segment.status}`;
-            mark.id = `jd-term-${index}`;
+            mark.className = `jd-term ${piece.status}`;
+            mark.id = id;
             mark.tabIndex = -1;
-            mark.textContent = segmentText;
+            return mark;
+        };
+        const noteFor = (status) => {
             const note = document.createElement('span');
             note.className = 'jd-term-note';
-            note.textContent = notes[segment.status];
-            mark.appendChild(note);
+            note.textContent = notes[status];
+            return note;
+        };
+        lastJobView.forEach((segment, index) => {
+            if (!notes[segment.status]) { text.append(clean(segment.text)); return; }
+            const mark = markFor(segment, `jd-term-${index}`);
+            if (Array.isArray(segment.parts)) {
+                segment.parts.forEach((part, partIndex) => {
+                    if (!notes[part.status]) { mark.append(clean(part.text)); return; }
+                    const inner = markFor(part, `jd-term-${index}-${partIndex}`);
+                    inner.append(clean(part.text), noteFor(part.status));
+                    mark.appendChild(inner);
+                });
+            } else {
+                mark.append(clean(segment.text));
+            }
+            mark.appendChild(noteFor(segment.status));
             text.appendChild(mark);
         });
         const count = (n) => `${n} ${n === 1 ? 'term' : 'terms'}`;
@@ -1782,7 +1798,7 @@ Nice to Have
         if (!positions) return;
         const visit = (jobJumpCursor[keyword] || 0) % positions.length;
         jobJumpCursor[keyword] = visit + 1;
-        const mark = document.getElementById(`jd-term-${positions[visit]}`);
+        const mark = document.getElementById(positions[visit]);
         if (!mark) return;
         document.getElementById('jobViewDetails').open = true;
         document.querySelectorAll('.jd-term.active').forEach(el => el.classList.remove('active'));

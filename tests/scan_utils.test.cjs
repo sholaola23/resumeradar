@@ -27,18 +27,20 @@ test('rescan comparison names evidence changes only for the same job and score v
   assert.equal(utils.compareScan?.({...after, score:null}, before), null);
 });
 
-test('job view index finds every mention of a term, including one inside a longer term', () => {
+test('job view index finds every mention, with a term inside a longer one keeping its own status', () => {
   const segments = [
     {text: 'We use '},
-    {text: 'GitHub Actions', keyword: 'github actions', category: 'technical_skills', status: 'missing', also: ['github']},
+    {text: 'GitHub Actions', keyword: 'github actions', category: 'technical_skills', status: 'missing',
+     parts: [{text: 'GitHub', keyword: 'github', category: 'technical_skills', status: 'matched'}, {text: ' Actions'}]},
     {text: ' and '},
-    {text: 'Python', keyword: 'python', category: 'technical_skills', status: 'matched', also: []},
+    {text: 'Python', keyword: 'python', category: 'technical_skills', status: 'matched'},
     {text: '. More '},
     {text: 'python', keyword: 'python', category: 'technical_skills', status: 'matched'},
   ];
   const index = utils.jobTermIndex?.(segments);
-  assert.deepEqual(index.positions, {'github actions': [1], github: [1], python: [3, 5]});
-  assert.equal(index.matched, 1);
+  assert.deepEqual(index.positions, {'github actions': ['jd-term-1'], github: ['jd-term-1-0'],
+    python: ['jd-term-3', 'jd-term-5']});
+  assert.equal(index.matched, 2);  // github and python
   assert.equal(index.missing, 1);
 });
 test('job view index is empty for missing or malformed segments', () => {

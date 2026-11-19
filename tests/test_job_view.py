@@ -23,6 +23,8 @@ JOBS = {
     'repeats': 'Python Python python PYTHON. Docker, docker. Kubernetes; kubernetes. Terraform and terraform again for ten words.',
     'legal_footer': 'We need Python and Terraform for our platform team today. We are an equal opportunity employer '
                     'and value Kubernetes, leadership and communication.',
+    'nested_status': 'Must hold AWS Certified Solutions Architect. Use GitHub Actions for builds and write unit testing '
+                     'plans; Google Cloud computing a plus, along with ten more words here.',
     'no_terms': 'We seek a florist to arrange bouquets and care for blooms in our shop every day.',
     'huge': ('Requirements: Python, Kubernetes, Terraform and strong communication. ' * 3000),
 }
@@ -35,7 +37,18 @@ def view(job, cv=CV):
 
 
 def marked(segments):
-    return [segment for segment in segments if 'status' in segment]
+    """Every mark, including marks inside a longer one."""
+    found = []
+    for segment in segments:
+        if 'status' in segment:
+            found.append(segment)
+            found.extend(part for part in segment.get('parts', []) if 'status' in part)
+    return found
+
+
+def listed(match):
+    return {(key[:-len('_keywords')], keyword) for key in ('matched_keywords', 'missing_keywords')
+            for category, keywords in match[key].items() if category != 'action_verbs' for keyword in keywords}
 
 
 class JobViewTests(unittest.TestCase):
@@ -44,16 +57,18 @@ class JobViewTests(unittest.TestCase):
             with self.subTest(job=name):
                 self.assertEqual(''.join(segment['text'] for segment in view(job)[1]), job)
 
-    def test_every_listed_term_can_be_found_in_the_view(self):
+    def test_every_listed_term_has_a_mark_with_its_own_status(self):
         for name, job in JOBS.items():
             with self.subTest(job=name):
                 match, segments = view(job)
-                findable = {keyword for segment in marked(segments)
-                            for keyword in [segment['keyword']] + segment['also']}
-                for key in ('matched_keywords', 'missing_keywords'):
-                    for category, keywords in match[key].items():
-                        if category != 'action_verbs':
-                            self.assertFalse(set(keywords) - findable, (key, category))
+                marks = {(segment['status'], segment['keyword']) for segment in marked(segments)}
+                self.assertEqual(listed(match), marks)
+
+    def test_parts_rebuild_their_mark_exactly(self):
+        for name, job in JOBS.items():
+            for segment in view(job)[1]:
+                if 'parts' in segment:
+                    self.assertEqual(''.join(part['text'] for part in segment['parts']), segment['text'], name)
 
     def test_marks_carry_the_same_status_as_the_lists(self):
         for name, job in JOBS.items():
@@ -81,22 +96,32 @@ class JobViewTests(unittest.TestCase):
             self.assertIn(word, texts)
         self.assertEqual(texts.count('R'), 1)  # the skill, not the R in R&D
 
-    def test_longer_term_wins_and_keeps_the_shorter_one_findable(self):
-        segments = {segment['text']: segment for segment in marked(view(JOBS['nested_names'])[1])}
-        self.assertIn('github', segments['GitHub Actions']['also'])
-        self.assertEqual(segments['GitHub Actions']['status'], 'missing')
+    def test_longer_term_wins_and_the_shorter_one_keeps_its_own_status(self):
+        segments = {segment['text']: segment for segment in view(JOBS['nested_status'])[1] if 'status' in segment}
+        expected = {'AWS Certified': ('missing', 'AWS', 'matched'),
+                    'GitHub Actions': ('missing', 'GitHub', 'matched')}
+        for text, (outer, inner_text, inner) in expected.items():
+            with self.subTest(term=text):
+                self.assertEqual(segments[text]['status'], outer)
+                inner_parts = [part for part in segments[text]['parts'] if part.get('text') == inner_text]
+                self.assertEqual([part['status'] for part in inner_parts], [inner])
         self.assertNotIn('GitHub', segments)
-        self.assertIn('Google Cloud', segments)
 
     def test_marks_exclude_surrounding_separators(self):
         job = 'We build with C# daily, using (R) and /Go/ for scripts, across ten further words here.'
         texts = [segment['text'] for segment in marked(view(job)[1])]
         self.assertEqual(texts, ['C#', 'R', 'Go'])
 
-    def test_a_term_never_lists_itself_as_nested(self):
+    def test_a_term_never_nests_inside_itself(self):
         for name, job in JOBS.items():
-            for segment in marked(view(job)[1]):
-                self.assertNotIn(segment['keyword'], segment['also'], name)
+            for segment in view(job)[1]:
+                inner = [part['keyword'] for part in segment.get('parts', []) if 'status' in part]
+                self.assertNotIn(segment.get('keyword'), inner, name)
+
+    def test_partly_overlapping_terms_each_keep_a_mark(self):
+        segments = {segment['keyword']: segment['text'] for segment in view(JOBS['nested_status'])[1] if 'status' in segment}
+        self.assertEqual(segments['google cloud'], 'Google Cloud')
+        self.assertEqual(segments['cloud computing'], 'computing')
 
     def test_word_forms_are_marked_where_the_job_uses_them(self):
         found = {segment['keyword']: segment['text'] for segment in marked(view(JOBS['word_forms'])[1])}

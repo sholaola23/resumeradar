@@ -3236,6 +3236,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid #2563eb; outline-offs
 .jd-term { padding:1px 4px; border-radius:4px; font-weight:600; scroll-margin:96px 0; }
 .jd-term.matched { background:var(--success-light); color:#064e3b; border-bottom:2px solid #047857; }
 .jd-term.missing { background:var(--danger-light); color:#7f1d1d; border-bottom:2px dashed #b91c1c; }
+.jd-term .jd-term { padding:0 2px; }
 .jd-term.active, .jd-term:focus { outline:3px solid #2563eb; outline-offset:2px; }
 .jd-term-note { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .jd-view-note { margin:16px 0 0; font-size:14px; line-height:1.6; color:var(--gray-600); }
