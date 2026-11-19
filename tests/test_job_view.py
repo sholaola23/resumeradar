@@ -88,6 +88,16 @@ class JobViewTests(unittest.TestCase):
         self.assertNotIn('GitHub', segments)
         self.assertIn('Google Cloud', segments)
 
+    def test_marks_exclude_surrounding_separators(self):
+        job = 'We build with C# daily, using (R) and /Go/ for scripts, across ten further words here.'
+        texts = [segment['text'] for segment in marked(view(job)[1])]
+        self.assertEqual(texts, ['C#', 'R', 'Go'])
+
+    def test_a_term_never_lists_itself_as_nested(self):
+        for name, job in JOBS.items():
+            for segment in marked(view(job)[1]):
+                self.assertNotIn(segment['keyword'], segment['also'], name)
+
     def test_word_forms_are_marked_where_the_job_uses_them(self):
         found = {segment['keyword']: segment['text'] for segment in marked(view(JOBS['word_forms'])[1])}
         self.assertEqual(found.get('collaboration'), 'collaborate')

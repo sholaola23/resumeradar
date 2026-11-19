@@ -557,7 +557,7 @@ def locate_job_terms(job_description, match_results):
             for match in pattern.finditer(scanned):
                 start, end = match.span()
                 # Some context patterns consume a leading separator, e.g. " R".
-                while start < end and not scanned[start].isalnum():
+                while start < end and scanned[start] in " \t\r\n,;(/":
                     start += 1
                 if start < end:
                     spans.append((start, end, keyword, category, label))
@@ -571,7 +571,7 @@ def locate_job_terms(job_description, match_results):
     for start, end, keyword, category, label in spans:
         if start < cursor:
             # Covered by a longer term: keep it findable from that segment.
-            if keyword not in segments[-1]["also"]:
+            if keyword != segments[-1]["keyword"] and keyword not in segments[-1]["also"]:
                 segments[-1]["also"].append(keyword)
             continue
         if start > cursor:
