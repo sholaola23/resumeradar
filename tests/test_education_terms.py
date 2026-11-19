@@ -203,6 +203,14 @@ class CvSide(unittest.TestCase):
         edu = cv_education('EDUCATION\nImperial College London\nMechanical Engineering, 2015 - 2019')
         self.assertIn('engineering', edu)
 
+    def test_short_degree_name_before_subject_on_cv(self):
+        cv = ('EDUCATION\nMS Statistics, Georgia Tech\n- Thesis on forecasting\n- Teaching assistant\n'
+              '- Dean\'s list\n\nBS Computer Science, Georgia Tech')
+        self.assertIn('computer science', cv_education(cv))
+        for line in ('BS Computer Science', 'BS, Computer Science', 'MA Mathematics'):
+            with self.subTest(line=line):
+                self.assertTrue(engine._has_degree_cue(line.lower()))
+
     def test_engineering_job_title_on_cv_is_not_a_degree(self):
         self.assertNotIn('engineering', cv_education('Engineering Manager at Acme\nLed a team of 8.'))
 

@@ -128,8 +128,12 @@ _DEGREE_WORD = re.compile(r"(?<![\w-])degrees?\b(?!\s+of\b)", re.IGNORECASE)
 _DOCTORATE = re.compile(r"\bdoctora(?:te|l)s?\b", re.IGNORECASE)
 
 # Words that show a sentence is about a qualification.
+_FIELD_NAMES = "|".join(re.escape(field) for field in sorted(EDUCATION_FIELDS))
 _DEGREE_CUE = re.compile(
-    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|[bm]sc|[bm]\.?eng|[bm]\.?tech|(?:ba|bs|ma)(?=\s+(?:in|degree|hons|or)\b|\s*\(hons\))|(?<!\d)(?<!\d\s)ms(?=\s+(?:in|degree)\b)|"
+    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|[bm]sc|[bm]\.?eng|[bm]\.?tech|"
+    r"(?:ba|bs|ma)(?=\s+(?:in|degree|hons|or)\b|\s*\(hons\))|(?<!\d)(?<!\d\s)ms(?=\s+(?:in|degree)\b)|"
+    # "BS Computer Science" or "MS, Statistics": the short name followed by a subject.
+    r"(?:ba|bs|ma|ms),?\s+(?=(?:" + _FIELD_NAMES + r")\b)|"
     r"hnd|hnc|llb|bcom|(?:under|post)?graduates?|"
     r"diplomas?|university|college|studied|major(?:ing)?\s+in|qualified\s+in)\b|"
     r"\b[bm]\.(?:s|a|sc|eng|tech)\.",
