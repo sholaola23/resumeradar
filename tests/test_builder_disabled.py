@@ -20,6 +20,8 @@ BLOCKED = [
     ('POST', '/api/build/free-download-nigeria'),
     ('GET', '/api/build/download/abc'),
     ('GET', '/api/build/check-payment/abc'),
+    ('GET', '/static/js/builder.js'),
+    ('GET', '/static/css/builder.css'),
 ]
 
 

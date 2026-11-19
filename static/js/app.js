@@ -1354,7 +1354,6 @@ Nice to Have
         // ATS Formatting
         renderATSFormatting(data.ats_formatting);
 
-        // Build CTA (intentionally shown only after deep results unlock)
 
         // Scan History
         saveScanToHistory(data);
