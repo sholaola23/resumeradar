@@ -132,6 +132,16 @@ class SubjectAlternatives(unittest.TestCase):
                 self.assertIn('computer science', result['matched_keywords']['education'])
                 self.assertEqual(result['missing_keywords']['education'], [])
 
+    def test_or_a_related_subject_is_one_requirement(self):
+        jd = 'Requirements: a degree in computer science or a related engineering subject.'
+        groups = engine.extract_keywords_from_text(jd, strict=True)['education_alternatives']
+        self.assertEqual(groups, [frozenset({'computer science', 'engineering'})])
+        result = self.score('EDUCATION\nBSc (Hons), University of Leeds', jd)
+        edu = result['category_scores']['education']
+        # degree and one subject are asked for; the CV has the degree only.
+        self.assertEqual((edu['matched'], edu['total']), (1, 2))
+        self.assertEqual(result['total_missing'], result['total_job_keywords'] - result['total_matched'])
+
     def test_or_list_with_no_subject_lists_every_option(self):
         result = self.score('EDUCATION\nBA History, University of York',
                             "Bachelor's degree in Computer Science or Engineering.")

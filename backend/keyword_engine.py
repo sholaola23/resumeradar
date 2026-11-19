@@ -137,7 +137,8 @@ _DEGREE_CUE = re.compile(
 # "Computer Science, Engineering or a related field" is one requirement: the
 # fields are joined only by commas, "or", "and/or" or "/", with an "or" or
 # "/" somewhere in the list, or the list ends with "or a related field".
-_FIELD_JOIN = re.compile(r"\s*(?:,\s*)?(?:(?:and\s*/\s*)?or\s+|/\s*)?", re.IGNORECASE)
+_FIELD_JOIN = re.compile(r"\s*(?:,\s*)?(?:(?:and\s*/\s*)?or\s+(?:(?:an?|any)\s+)?(?:other\s+)?"
+                         r"(?:(?:related|similar|equivalent|relevant)\s+)?|/\s*)?", re.IGNORECASE)
 _RELATED_FIELD = re.compile(r"\s*,?\s*or\s+(?:an?\s+|any\s+)?(?:other\s+)?(?:related|similar|equivalent|relevant)\b",
                             re.IGNORECASE)
 # On a CV the subject often sits a line or two from the degree or heading.
@@ -507,7 +508,11 @@ def calculate_match(resume_keywords, job_keywords):
             results["extra_keywords"][category] = sorted(
                 original_resume_edu - _expand_education(original_job_edu))
             # Fix score to use original JD term count, not expanded
-            orig_total = len(original_job_edu)
+            # Fields offered as a choice ask for one subject, not each of them.
+            orig_total = len(original_job_edu) - sum(
+                len(group & original_job_edu) - 1
+                for group in job_keywords.get("education_alternatives", [])
+                if len(group & original_job_edu) > 1)
             orig_matched = len(edu_matched_display)
             category_score = (orig_matched / orig_total * 100) if orig_total else 100
             results["category_scores"][category] = {
