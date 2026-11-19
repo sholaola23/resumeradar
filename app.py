@@ -469,7 +469,7 @@ def llms_txt():
 # (Previously datetime.now() on every request, which teaches Google to
 # distrust the field entirely.)
 LASTMOD_CORE = '2026-11-19'   # / and /privacy (wording pass, privacy page)
-LASTMOD_ROLES = '2026-11-19'  # role pages + hub (headline wording pass)
+LASTMOD_ROLES = '2026-11-19'  # role pages + hub (headline and guide wording pass)
 
 
 @app.route('/sitemap.xml')

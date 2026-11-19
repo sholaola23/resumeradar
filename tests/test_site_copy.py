@@ -55,6 +55,12 @@ class SiteCopyTest(unittest.TestCase):
             for phrase in BANNED:
                 self.assertFalse(phrase in body, f'{phrase!r} on {path}')
 
+    def test_role_guides_do_not_promise_a_ranking(self):
+        from app import ROLE_PAGES
+        for slug in ROLE_PAGES:
+            body = self.page(f'/ats-resume-checker/{slug}').lower().replace('ranking model', '').replace('applicant ranking', '')
+            self.assertNotRegex(body, r'\b(out|under)?rank', slug)
+
     def test_static_text_carries_no_stale_promises(self):
         for parts in [('static', 'llms.txt'), ('static', 'js', 'app.js'),
                       ('backend', 'report_generator.py'), ('templates', '404.html')]:
