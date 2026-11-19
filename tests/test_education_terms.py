@@ -173,7 +173,8 @@ class MoreDegreeWords(unittest.TestCase):
         self.assertNotIn('master', jd_education('Located in Boston, MA or remote.'))
         self.assertNotIn('bachelor', jd_education('Work closely with the BA or PM.'))
         self.assertNotIn('master', jd_education('Ms or Mr Smith.'))
-        self.assertNotIn('master', cv_education('Boston, MA / Statistics consultant'))
+        self.assertNotIn('master', cv_education('Boston, MA\nStatistics consultant'))
+        self.assertNotIn('master', jd_education('Office in Boston, MA\nDegree in Statistics preferred.'))
         self.assertIn('bachelor', jd_education('BA or BSc in Economics.'))
         self.assertIn('master', jd_education('BS or MS degree in Statistics.'))
 

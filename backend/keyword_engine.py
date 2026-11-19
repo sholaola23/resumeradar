@@ -121,8 +121,8 @@ _FIELD_NAMES = "|".join(re.escape(field) for field in sorted(EDUCATION_FIELDS))
 # subject ("BS Computer Science"), so "Boston, MA" and "50 ms" are not.
 # "or" counts only when another degree name follows ("BA or BSc", "MA or MS in"),
 # not in "Boston, MA or remote" or "the BA or PM".
-_SHORT_DEGREE_CONTEXT = (r"(?=\s+(?:in|degree|hons)\b|\s*\(hons\)|,?\s+(?:" + _FIELD_NAMES + r")\b|"
-                         r"\s+or\s+(?:[bm]\.?(?:sc|eng|tech|[as])\.?|ph\.?d|mba|bachelor|master)\b)")
+_SHORT_DEGREE_CONTEXT = (r"(?=[ \t]+(?:in|degree|hons)\b|[ \t]*\(hons\)|,?[ \t]+(?:" + _FIELD_NAMES + r")\b|"
+                         r"[ \t]+or[ \t]+(?:[bm]\.?(?:sc|eng|tech|[as])\.?|ph\.?d|mba|bachelor|master)\b)")
 # Degree names that are not keywords of their own count as their level, so a
 # BEng meets "bachelor's degree" and an MS meets "master's".
 _BACHELOR_DEGREE = re.compile(
