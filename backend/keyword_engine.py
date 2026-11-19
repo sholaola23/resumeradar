@@ -107,6 +107,27 @@ EDUCATION_KEYWORDS = {
     "bsc", "msc", "b.s.", "m.s.", "b.a.", "m.a.",
 }
 
+# Fields of study. In a job description these only name a qualification when
+# a degree word sits next to them ("BSc in Engineering"). On their own they are
+# usually job titles, team names or skills: "Engineering Manager", "our data
+# science team", "strong statistics".
+EDUCATION_FIELDS = {
+    "computer science", "information technology", "engineering",
+    "mathematics", "statistics", "data science", "business administration",
+}
+
+# Words that show a line is about a qualification.
+_DEGREE_CUE = re.compile(
+    r"\b(?:bachelor|masters?\b|master['’]s|mba|ph\.?d|doctorate|degrees?|"
+    r"bsc|msc|beng|meng|b\.s\.|m\.s\.|b\.a\.|m\.a\.|(?:under|post)?graduate|"
+    r"qualifications?|qualified\s+in|diploma|university|studied|major(?:ing)?\s+in)",
+    re.IGNORECASE)
+_DEGREE_CUE_REACH = 150  # characters either side of the field, on the same line
+
+# "master" is the degree only as "master's", "masters", "master of" or
+# "master degree", never in "Scrum Master", "master data" or "mastering".
+_MASTER_DEGREE = re.compile(r"\bmaster(?:['’]?s\b|\s+(?:of|in)\b|\s+degree)", re.IGNORECASE)
+
 # Education terms that are equivalent for matching purposes.
 # If a JD says "bachelor" and a resume says "bsc", that's a match.
 EDUCATION_EQUIVALENCES = [
@@ -218,7 +239,7 @@ def extract_keywords_from_text(text, *, strict=False):
             found["certifications"].add(cert)
 
     for edu in EDUCATION_KEYWORDS:
-        if _keyword_in_text(edu, text_lower):
+        if _education_in_text(edu, text_lower, strict=strict):
             found["education"].add(edu)
 
     for verb in ACTION_VERBS:
@@ -254,6 +275,33 @@ def _keyword_in_text(keyword, text, *, use_stemming=True):
                 return True
 
     return False
+
+
+def _education_in_text(term, text, *, strict=False):
+    """Check for an education term without stemming.
+
+    Stemming turned "engineering" into "engineer", so every Engineer job title
+    read as an engineering degree. Only the term itself or its plural counts.
+    In strict mode (job descriptions), a field of study also needs a degree
+    word on the same line, so "Engineering Manager" is not a qualification.
+    """
+    if term == "master":
+        return bool(_MASTER_DEGREE.search(text))
+    pattern = re.compile(r'(?<!\w)' + re.escape(term) + r's?(?!\w)', re.IGNORECASE)
+    if not strict or term not in EDUCATION_FIELDS:
+        return bool(pattern.search(text))
+    return any(_near_degree_cue(text, match.start(), match.end())
+               for match in pattern.finditer(text))
+
+
+def _near_degree_cue(text, start, end):
+    """True when a degree word is on the same line, close to text[start:end]."""
+    line_start = text.rfind('\n', 0, start) + 1
+    line_end = text.find('\n', end)
+    if line_end == -1:
+        line_end = len(text)
+    window = text[max(line_start, start - _DEGREE_CUE_REACH):min(line_end, end + _DEGREE_CUE_REACH)]
+    return bool(_DEGREE_CUE.search(window))
 
 
 def _expand_education(keywords):
