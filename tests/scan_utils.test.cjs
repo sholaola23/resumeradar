@@ -26,3 +26,23 @@ test('rescan comparison names evidence changes only for the same job and score v
   assert.equal(utils.compareScan?.({...after, jobKey:'b'}, before), null);
   assert.equal(utils.compareScan?.({...after, score:null}, before), null);
 });
+
+test('job view index finds every mention of a term, including one inside a longer term', () => {
+  const segments = [
+    {text: 'We use '},
+    {text: 'GitHub Actions', keyword: 'github actions', category: 'technical_skills', status: 'missing', also: ['github']},
+    {text: ' and '},
+    {text: 'Python', keyword: 'python', category: 'technical_skills', status: 'matched', also: []},
+    {text: '. More '},
+    {text: 'python', keyword: 'python', category: 'technical_skills', status: 'matched'},
+  ];
+  const index = utils.jobTermIndex?.(segments);
+  assert.deepEqual(index.positions, {'github actions': [1], github: [1], python: [3, 5]});
+  assert.equal(index.matched, 1);
+  assert.equal(index.missing, 1);
+});
+test('job view index is empty for missing or malformed segments', () => {
+  for (const input of [undefined, null, [], [null, {text: 'plain'}, {text: 'x', keyword: 'x', status: 'other'}]]) {
+    assert.deepEqual(utils.jobTermIndex?.(input), {positions: {}, matched: 0, missing: 0});
+  }
+});

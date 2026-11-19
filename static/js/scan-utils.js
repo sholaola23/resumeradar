@@ -18,6 +18,19 @@
             return {delta, added: [...after].filter(term => !before.has(term)),
                 removed: [...before].filter(term => !after.has(term))};
         },
+        /* Job description view: where each listed term sits, and how many are marked. */
+        jobTermIndex(segments) {
+            const positions = {};
+            const terms = {matched: new Set(), missing: new Set()};
+            (segments || []).forEach((segment, index) => {
+                if (!segment || !terms[segment.status]) return;
+                terms[segment.status].add(segment.keyword);
+                for (const keyword of [segment.keyword, ...(segment.also || [])]) {
+                    (positions[keyword] = positions[keyword] || []).push(index);
+                }
+            });
+            return {positions, matched: terms.matched.size, missing: terms.missing.size};
+        },
         async jobKey(description) {
             const normalized = description.trim().toLowerCase().replace(/\s+/g, ' ');
             const bytes = new TextEncoder().encode(normalized);
