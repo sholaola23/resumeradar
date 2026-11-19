@@ -77,6 +77,14 @@ class PriorityTests(unittest.TestCase):
         by = {item['keyword']: item for item in engine.analyze_requirements('Python', jd, match('Python', jd))}
         self.assertEqual(set(by['jenkins']['one_of']), {'CircleCI', 'Spinnaker'})
 
+    def test_eg_list_stays_in_its_sentence(self):
+        for jd in ['Required: a cloud platform, e.g. AWS, Azure, GCP.',
+                   'Required: a cloud platform (e.g. AWS, Azure, GCP).']:
+            with self.subTest(jd=jd):
+                by = {item['keyword']: item for item in engine.analyze_requirements('Python', jd, match('Python', jd))}
+                self.assertEqual(by['aws']['priority'], 'required')
+                self.assertEqual(set(by['aws']['one_of']), {'Azure', 'GCP'})
+
     def test_or_list_is_one_of_when_none_is_held(self):
         jd = 'Required: CI/CD tools (Jenkins, GitHub Actions or CircleCI). Python required.'
         by = {item['keyword']: item for item in engine.analyze_requirements('Docker', jd, match('Docker', jd))}

@@ -555,7 +555,8 @@ def analyze_requirements(resume_text, job_description, match_results):
     are suppressed only when positive resume evidence satisfies that local list.
     """
     resume = extract_keywords_from_text(resume_text)
-    sentences = re.split(r'(?<=[.!?])\s+|[;\n]+', _strip_jd_boilerplate(job_description))
+    # Do not end a sentence at "e.g." or "i.e.": the list after it belongs to the same ask.
+    sentences = re.split(r'(?<!\be\.g\.)(?<!\bi\.e\.)(?<=[.!?])\s+|[;\n]+', _strip_jd_boilerplate(job_description))
     evidence = []
     section_priority = "unspecified"
     for sentence in sentences:

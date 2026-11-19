@@ -888,14 +888,16 @@ Nice to Have
      */
     function getShareUrl(source, campaign) {
         campaign = campaign || 'user_share';
-        const score = lastScanData ? lastScanData.match_score : 0;
-        const tier = !Number.isFinite(score) ? 'unknown' : score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
         const params = new URLSearchParams({
             utm_source: source,
             utm_medium: 'social',
             utm_campaign: campaign,
-            score_tier: tier,
         });
+        // The header Share is not about a scan, so its link carries no score band.
+        if (source !== 'header') {
+            const score = lastScanData ? lastScanData.match_score : 0;
+            params.set('score_tier', !Number.isFinite(score) ? 'unknown' : score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low');
+        }
         return `${baseSiteUrl}?${params.toString()}`;
     }
 
