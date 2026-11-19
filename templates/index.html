@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=12">
+    <link rel="stylesheet" href="/static/css/style.css?v=13">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -480,6 +480,20 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         <div class="keywords-grid" id="matchedKeywords"></div>
                     </div>
 
+                    <!-- Job description with matched and missing terms marked -->
+                    <div class="result-card jd-view-card" id="jobViewCard" hidden>
+                        <details id="jobViewDetails">
+                            <summary><h2>🔍 View in job description</h2></summary>
+                            <p class="card-subtitle">Your job description with the recognised terms marked, so you can see how the employer uses each one. Select a keyword in the lists above to jump to it.</p>
+                            <p class="jd-view-legend">
+                                <span><mark class="jd-term matched">Found in your CV</mark> <span id="jobViewMatchedCount"></span></span>
+                                <span><mark class="jd-term missing">Not found in your CV</mark> <span id="jobViewMissingCount"></span></span>
+                            </p>
+                            <div class="jd-view-text" id="jobViewText" tabindex="0" role="region" aria-label="Job description with keywords marked"></div>
+                            <p class="jd-view-note">Only terms this tool recognises are marked. Unmarked text can still matter to the employer, and a marked term may be optional. Read the sentence around it before you decide.</p>
+                        </details>
+                    </div>
+
                     <!-- AI Suggestions (collapsed by default) -->
                     <div class="result-card ai-card">
                         <div class="card-header-toggle" data-target="aiContent" data-section="ai">
@@ -811,8 +825,8 @@ Include the job title, requirements, responsibilities, qualifications — everyt
         <button type="button" id="stickyRescanBtn">Rescan my updated CV — free</button>
     </div>
 
-    <script src="/static/js/scan-utils.js?v=3"></script>
-    <script src="/static/js/app.js?v=12"></script>
+    <script src="/static/js/scan-utils.js?v=4"></script>
+    <script src="/static/js/app.js?v=13"></script>
     <script src="/static/js/share.js?v=1"></script>
 </body>
 </html>
