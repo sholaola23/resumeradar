@@ -36,6 +36,10 @@ class RepeatDownloadTests(unittest.TestCase):
         cls.tmp.cleanup()
 
     def setUp(self):
+        # The builder is off in production; these tests cover its dormant code.
+        patcher = patch.dict('os.environ', {'CV_BUILDER_ENABLED': 'true'})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.redis.flushdb()  # Only our private Unix-socket Redis instance.
         bundle_credits.init(self.redis)
         self.redis.setex('resumeradar:bundle:test', 3600,

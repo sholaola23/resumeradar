@@ -24,6 +24,10 @@ import uuid
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# The CV builder is off in production; switch it on here so its dormant code
+# stays tested. tests/test_builder_disabled.py checks the production default.
+os.environ['CV_BUILDER_ENABLED'] = 'true'
+
 from app import app
 
 # ============================================================
@@ -209,8 +213,7 @@ def run_tests():
         check("Build page has privacy badge", 'privacy-badge' in build_html)
 
     # Score-aware CTA on scan page
-    check("Scan CTA has dynamic heading ID", 'buildCtaHeading' in html)
-    check("Scan CTA asks users to verify claims", 'build-cta-trust' in html and 'review every claim before applying' in html.lower())
+    check("Scan page has no paid CV builder prompt", 'buildCtaCard' not in html and 'href="/build"' not in html and '£2' not in html)
 
     # PDF generation — all 3 templates
     from backend.cv_pdf_generator import generate_cv_pdf, TEMPLATES, _flatten_skills, _safe
@@ -539,8 +542,8 @@ def run_tests():
     app_js_path = os.path.join(project_root, 'static', 'js', 'app.js')
     with open(app_js_path, 'r') as f:
         app_js = f.read()
-    check("Builder handoff falls back to scan response resume_text",
-          'scanData.resume_text' in app_js and 'textareaText' in app_js)
+    check("Scan page JS no longer links to the paid builder",
+          'launchBuilderFromScan' not in app_js and "'/build" not in app_js)
 
     # Fix 2 (P2): ImportError fallback validates email instead of silently dropping
     check("ImportError fallback logs warning and validates",
@@ -1960,10 +1963,8 @@ Created a developer productivity tool with 500 GitHub stars
           'id="quickWins"' in html)
     check("HTML: sticky CTA bar present",
           'id="stickyCta"' in html)
-    check("HTML: build CTA appears after deep results container",
-          html.find('id=\"buildCtaCard\"') > html.find('id=\"deepResults\"'))
-    check("HTML: free rescan appears before optional paid rewrite",
-          0 <= html.find('id=\"rescanUpdatedBtn\"') < html.find('id=\"buildCtaCard\"'))
+    check("HTML: free rescan button present",
+          'id=\"rescanUpdatedBtn\"' in html)
     check("HTML: collapsible category header present",
           'data-target="categoryContent"' in html)
     check("HTML: collapsible AI header present",

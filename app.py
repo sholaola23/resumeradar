@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 import html as html_module
 import re as re_module
 from datetime import datetime, timezone, timedelta
-from flask import Flask, request, jsonify, render_template, send_from_directory, Response
+from flask import Flask, request, jsonify, render_template, send_from_directory, Response, abort
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -261,6 +261,23 @@ def allowed_file(filename):
 # ROUTES
 # ============================================================
 
+# The paid CV builder is switched off (Nov 2026): ResumeRadar runs as a free
+# scanner only. Every builder page, checkout, download and payment webhook
+# returns 404 unless CV_BUILDER_ENABLED=true. The code stays so it can be
+# restored later (the QA suite turns it on to keep testing it). The Resend
+# delivery webhook stays open because scan-report emails use it too.
+@app.before_request
+def _cv_builder_disabled():
+    if os.getenv('CV_BUILDER_ENABLED', 'false').lower() == 'true':
+        return None
+    path = request.path
+    if path == '/api/build/webhook/resend':
+        return None
+    if (path == '/build' or path.startswith('/build/') or path.startswith('/api/build/')
+            or (path.startswith('/static/')
+                and os.path.basename(path) in ('builder.js', 'builder.css'))):
+        abort(404)
+
 @app.route('/')
 @limiter.exempt
 def index():
@@ -447,7 +464,6 @@ def sitemap_xml():
     base = 'https://resumeradar.sholastechnotes.com'
     pages = [
         {'loc': f'{base}/', 'priority': '1.0', 'changefreq': 'weekly', 'lastmod': LASTMOD_CORE},
-        {'loc': f'{base}/build', 'priority': '0.8', 'changefreq': 'monthly', 'lastmod': LASTMOD_CORE},
         {'loc': f'{base}/ats-resume-checker/', 'priority': '0.8', 'changefreq': 'monthly', 'lastmod': LASTMOD_ROLES},
     ]
     # Add programmatic SEO role pages
