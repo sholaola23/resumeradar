@@ -254,6 +254,14 @@ def _client_ip():
     return (request.remote_addr or 'unknown').strip()
 
 
+# Input size ceilings for /api/scan. The keyword engine's cost grows with
+# text length (measured ~18s of CPU per MB), and the 5MB body cap alone let
+# one request hold a worker for ~90s. Real CVs and job adverts are a small
+# fraction of these limits: a long six-page CV is about 25,000 characters.
+MAX_JOB_DESCRIPTION_CHARS = 20_000
+MAX_RESUME_CHARS = 50_000
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -518,9 +526,15 @@ def scan_resume():
         if len(job_description.split()) < 10:
             return jsonify({"error": "The job description seems too short. Please paste the full job description."}), 400
 
+        if len(job_description) > MAX_JOB_DESCRIPTION_CHARS:
+            return jsonify({"error": f"The job description is too long. Please paste just the job advert (up to {MAX_JOB_DESCRIPTION_CHARS:,} characters)."}), 400
+
         # 2. Get the resume (file upload or pasted text)
         resume_text = request.form.get('resume_text', '').strip()
         resume_file = request.files.get('resume_file')
+
+        if not (resume_file and resume_file.filename) and len(resume_text) > MAX_RESUME_CHARS:
+            return jsonify({"error": f"Your CV text is too long. Please paste just your CV (up to {MAX_RESUME_CHARS:,} characters)."}), 400
 
         file_path = None
         file_type = None
@@ -559,6 +573,11 @@ def scan_resume():
             return jsonify({"error": parse_result["error"]}), 400
 
         extracted_resume_text = parse_result["text"]
+
+        # A file passes the 5MB and page limits but can still hold far more
+        # text than a CV (for example 50 dense pages), so check what came out.
+        if len(extracted_resume_text) > MAX_RESUME_CHARS:
+            return jsonify({"error": f"That file holds more text than a CV usually does (over {MAX_RESUME_CHARS:,} characters). Please upload just your CV."}), 400
 
         # 4. Extract keywords from both resume and job description
         resume_keywords = extract_keywords_from_text(extracted_resume_text)
