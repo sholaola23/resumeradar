@@ -2,7 +2,9 @@
 
 **Make your experience clear for the job.**
 
-ResumeRadar is a free ATS resume scanner with a paid AI CV builder. Upload your resume, paste a job description, and get your match score, missing keywords, and AI-powered fixes in ~30 seconds. When you're ready, a one-off £2 payment (₦ via Paystack in Nigeria) generates an ATS-optimized rewrite of your CV — no subscription, no weekly plan, no trap.
+ResumeRadar is a free ATS resume scanner. Upload your resume, paste a job description, and get your match score, missing keywords, and AI-powered fixes in ~30 seconds.
+
+> **November 2026:** the paid CV builder is switched off. `/build` and every `/api/build/*` route return 404 (see `_cv_builder_disabled` in `app.py`). The builder code is kept so it can be restored later.
 
 **Live at:** [resumeradar.sholastechnotes.com](https://resumeradar.sholastechnotes.com)
 
@@ -19,7 +21,7 @@ ResumeRadar is a free ATS resume scanner with a paid AI CV builder. Upload your 
 - **Reports** — copy, download, or email a branded multi-page PDF report
 - **Scan history** — local-only history; trends compare the same job-description hash and scoring version (localStorage, never sent to the server)
 
-**Paid CV builder (£2 one-off / bundle credits)**
+**Paid CV builder (switched off, November 2026)**
 - Upload your CV + target JD → AI extracts and polishes every section for ATS systems
 - Strict anti-fabrication rules: no invented metrics, skills, jobs, or years-of-experience claims
 - Full readable preview before payment; use Edit & Regenerate to change content

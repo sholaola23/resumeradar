@@ -9,13 +9,9 @@ ResumeRadar is a free online tool that helps job seekers check their resume agai
 - AI-powered resume suggestions, quick wins, and cover-letter talking points
 - Free AI micro-tools: cover letter generator, bullet enhancer, summary generator
 - ATS formatting and recruiter-tips sub-scores
-- CV Builder: AI rewrites your CV for a target job — strict no-fabrication rules (no invented metrics, skills, or years of experience)
 
 ## Pricing
-- Resume scan: free, no signup
-- Standard Polish CV rewrite: £2 one-off (no subscription)
-- Pro Review CV rewrite with senior-level gap analysis: £5 one-off
-- Bundle credit packs available; Naira (Paystack) payment supported for Standard
+- Free. No signup, no payment.
 
 ## Role-specific checkers
 Free ATS resume checkers with keyword guides for 15 roles, at
@@ -29,7 +25,7 @@ backend developer, scrum master, and machine learning engineer.
 https://resumeradar.sholastechnotes.com
 
 ## Privacy
-Resumes are analyzed in real time and are never added to a database, sold, or shared. Uploaded files are deleted immediately after parsing. Temporary data auto-expires: AI results are cached for up to 1 hour, and a generated CV is held for 2 hours so it can be downloaded, extended to 72 hours for a single purchase or to the remaining life of a bundle plan (up to 30 days). Emails are stored only as HMAC hashes; payment and email delivery are handled by Stripe and Resend.
+Resumes are analyzed in real time and are never added to a database, sold, or shared. Uploaded files are deleted immediately after parsing. Temporary data auto-expires: AI results are cached for up to 1 hour. Emails are stored only as HMAC hashes; email delivery is handled by Resend.
 
 ## Built by
 ResumeRadar team

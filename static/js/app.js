@@ -1355,7 +1355,6 @@ Nice to Have
         renderATSFormatting(data.ats_formatting);
 
         // Build CTA (intentionally shown only after deep results unlock)
-        renderBuildCta(data.match_score);
 
         // Scan History
         saveScanToHistory(data);
@@ -1946,17 +1945,6 @@ Nice to Have
         });
     })();
 
-    function renderBuildCta(score) {
-        const heading = document.getElementById('buildCtaHeading');
-        const body = document.getElementById('buildCtaBody');
-        if (!heading || !body) return;
-
-        score = Math.round(score);
-
-        heading.textContent = 'Want help rewriting this CV?';
-        body.textContent = 'You can make all these improvements yourself for free. For optional writing help, preview a tailored CV using your existing experience. Exports start at £2.';
-    }
-
     function renderATSFormatting(ats) {
         const container = document.getElementById('atsFormatting');
         container.innerHTML = '';
@@ -2198,37 +2186,3 @@ Nice to Have
     }
 });
 
-
-// ============================================================
-// CV BUILDER CROSS-SELL: Launch Builder from Scan Results
-// Global function called by onclick in the cross-sell CTA
-// ============================================================
-function launchBuilderFromScan() {
-    try {
-        const scanData = window._resumeradar_getLastScanData ? window._resumeradar_getLastScanData() : null;
-        if (!scanData) {
-            alert('No scan data available. Please run a scan first.');
-            return;
-        }
-
-        // Collect data to pass to the builder
-        // For file-upload users the textarea is empty, so fall back to resume_text from scan response
-        const textareaText = document.getElementById('resumeText') ? document.getElementById('resumeText').value : '';
-        const builderData = {
-            resumeText: textareaText || scanData.resume_text || '',
-            jobDescription: document.getElementById('jobDescription') ? document.getElementById('jobDescription').value : '',
-            matchedKeywords: scanData.matched_keywords || {},
-            missingKeywords: scanData.missing_keywords || {},
-        };
-
-        // Store in sessionStorage for the builder page to read
-        sessionStorage.setItem('resumeradar_scan_for_builder', JSON.stringify(builderData));
-
-        // Track funnel event + navigate to builder
-        if (window._rr_trackEvent) window._rr_trackEvent('cv_optimize_clicked');
-        window.location.href = '/build?from=scan';
-    } catch (e) {
-        console.error('Launch builder error:', e);
-        window.location.href = '/build';
-    }
-}
