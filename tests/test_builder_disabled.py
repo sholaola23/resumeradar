@@ -2,11 +2,14 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.pop('CV_BUILDER_ENABLED', None)
 
-from app import app  # noqa: E402
+# Import with an empty environment and no .env, so a local .env can't switch
+# the builder on or load real credentials into the test process.
+with patch.dict(os.environ, {}, clear=True), patch('dotenv.load_dotenv'):
+    from app import app  # noqa: E402
 
 BLOCKED = [
     ('GET', '/build'),
@@ -25,11 +28,19 @@ BLOCKED = [
     ('GET', '/static/js//builder.js'),
     ('GET', '/static/./js/builder.js'),
     ('GET', '/static/js/../js/builder.js'),
+    ('GET', '/static/js/builder.js/'),
+    ('GET', '/static/css/builder.css/.'),
+    ('GET', '/static/js/builder.js%2F'),
 ]
 
 
 class BuilderDisabledTest(unittest.TestCase):
     def setUp(self):
+        # The switch is read on every request, so keep it unset for each test.
+        env = {k: v for k, v in os.environ.items() if k != 'CV_BUILDER_ENABLED'}
+        patcher = patch.dict(os.environ, env, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.client = app.test_client()
 
     def test_builder_routes_return_404(self):
