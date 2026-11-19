@@ -135,6 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Exposed on window for cross-page use (CV Builder cross-sell)
     let lastScanData = null;
     let comparisonBaseline = null;
+    // Job description segments for "View in job description". Kept apart from
+    // lastScanData so the job text is never posted back with a report request.
+    let lastJobView = [];
+    let jobTermIndex = ResumeRadarScan.jobTermIndex([]);
     // Keep the optional newsletter after the complete report and free rescan action.
     resultsSection.appendChild(document.getElementById('inlineGateCard'));
     document.getElementById('topMissingKeywords').before(document.getElementById('quickWins'));
@@ -686,6 +690,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Store data for report generation
+            lastJobView = data.job_description_view || [];
+            delete data.job_description_view;
             lastScanData = data;
             try { activeJobKey = await ResumeRadarScan.jobKey(jobDescription); } catch (e) { activeJobKey = ''; }
 
@@ -869,105 +875,6 @@ Nice to Have
             if (!scanBtn.disabled) {
                 if (scanForm.requestSubmit) scanForm.requestSubmit();
                 else scanBtn.click();
-            }
-        });
-    }
-
-    // ============================================================
-    // SHARE BUTTONS (UTM-tracked)
-    // ============================================================
-    const shareLinkedIn = document.getElementById('shareLinkedIn');
-    const shareWhatsApp = document.getElementById('shareWhatsApp');
-    const shareCopyLink = document.getElementById('shareCopyLink');
-    const baseSiteUrl = 'https://resumeradar.sholastechnotes.com';
-
-    /**
-     * Build a share URL with UTM parameters for tracking in Beehiiv.
-     * @param {string} source - e.g. 'linkedin', 'twitter', 'whatsapp', 'copy'
-     * @param {string} campaign - e.g. 'user_share', 'post_subscribe'
-     */
-    function getShareUrl(source, campaign) {
-        campaign = campaign || 'user_share';
-        const params = new URLSearchParams({
-            utm_source: source,
-            utm_medium: 'social',
-            utm_campaign: campaign,
-        });
-        // The header Share is not about a scan, so its link carries no score band.
-        if (source !== 'header') {
-            const score = lastScanData ? lastScanData.match_score : 0;
-            params.set('score_tier', !Number.isFinite(score) ? 'unknown' : score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low');
-        }
-        return `${baseSiteUrl}?${params.toString()}`;
-    }
-
-    /**
-     * Get score-tiered share text — works for job seekers AND curious users.
-     * @param {string} platform - 'linkedin', 'whatsapp', or other
-     */
-    function getShareText(platform) {
-        const score = lastScanData && lastScanData.match_score;
-        return Number.isFinite(score)
-            ? `My CV has a ${ResumeRadarScan.scoreText(score)} job-description match estimate on ResumeRadar. Useful for reviewing keywords and writing — not a prediction of hiring outcomes.`
-            : 'ResumeRadar helps compare your CV with a job description and improve your writing. Free scan, no account needed.';
-    }
-
-    if (shareLinkedIn) {
-        shareLinkedIn.addEventListener('click', () => {
-            const shareUrl = getShareUrl('linkedin');
-            const text = getShareText('linkedin');
-            const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(text)}`;
-            window.open(url, '_blank', 'width=600,height=500');
-        });
-    }
-
-    if (shareWhatsApp) {
-        shareWhatsApp.addEventListener('click', () => {
-            const shareUrl = getShareUrl('whatsapp');
-            const text = getShareText('whatsapp') + '\n\n' + shareUrl;
-            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank', 'width=600,height=500');
-        });
-    }
-
-    // Header "Share": the phone's share sheet where there is one, otherwise copy the link.
-    const headerShareBtn = document.getElementById('headerShareBtn');
-    if (headerShareBtn) {
-        headerShareBtn.addEventListener('click', async () => {
-            const shareUrl = getShareUrl('header');
-            const label = headerShareBtn.textContent;
-            if (navigator.share) {
-                try {
-                    await navigator.share({ title: 'ResumeRadar', text: 'Check your CV against a job description for free.', url: shareUrl });
-                } catch (e) { /* the person closed the share sheet */ }
-                return;
-            }
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                headerShareBtn.textContent = 'Link copied';
-            } catch (e) {
-                headerShareBtn.textContent = 'Copy failed';
-            }
-            setTimeout(() => { headerShareBtn.textContent = label; }, 2000);
-        });
-    }
-
-    if (shareCopyLink) {
-        shareCopyLink.addEventListener('click', async () => {
-            const shareUrl = getShareUrl('copy');
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                showToast('Link copied! Share it with someone who could use it.');
-            } catch (e) {
-                const textarea = document.createElement('textarea');
-                textarea.value = shareUrl;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                showToast('Link copied! Share it with someone who could use it.');
             }
         });
     }
@@ -1354,6 +1261,9 @@ Nice to Have
         // Show results section
         resultsSection.style.display = 'block';
         trackOncePerScan('partial_results_viewed');
+        try {
+            if (sessionStorage.getItem('resumeradar_ref')) trackOncePerScan('referred_scan_completed');
+        } catch (e) { /* optional aggregate count */ }
 
         // ===== FREE TIER =====
         // 1. Score
@@ -1369,12 +1279,18 @@ Nice to Have
         if (!isSubscribed() && !gateSkipped()) showInlineGate();
         const comparison = document.getElementById('rescanComparison');
         comparison.hidden = !comparisonBaseline;
+        document.getElementById('sharePrompt').hidden = true;
         if (comparisonBaseline) {
             const change = ResumeRadarScan.compareScan(scanSnapshot(data), comparisonBaseline);
             if (change) {
                 comparison.innerHTML = `<h2>What changed for this job</h2><p>Keyword coverage ${change.delta > 0 ? 'increased by ' : change.delta < 0 ? 'decreased by ' : 'changed by '}${Math.abs(change.delta).toFixed(1)} percentage points.</p>
                     <details><summary>Review keyword changes</summary><p>Newly found: ${escapeHtml(change.added.map(kw).join(', ') || 'none')}.</p><p>No longer found: ${escapeHtml(change.removed.map(kw).join(', ') || 'none')}.</p></details>
                     <p>This measures keyword evidence, not your chances of being hired.</p>`;
+                // Best moment to ask: the user has just seen the tool help them.
+                if (change.delta > 0) {
+                    document.getElementById('sharePrompt').hidden = false;
+                    trackOncePerScan('share_prompt_shown');
+                }
             } else {
                 comparison.textContent = 'This scan uses a different job description, scoring version, or has no numeric estimate, so a score comparison would not be meaningful.';
             }
@@ -1405,6 +1321,9 @@ Nice to Have
 
         // Sub-score bars (Formatting + Recruiter Tips)
         renderSubScoreBars(data);
+
+        // Job description view first: the keyword lists link into it
+        renderJobView(data);
 
         // Missing Keywords (full)
         renderKeywords('missingKeywords', data.missing_keywords, 'missing');
@@ -1805,7 +1724,9 @@ Nice to Have
             section.innerHTML = `
                 <div class="keywords-section-title">${labels[category] || category}</div>
                 <div class="keyword-tags">
-                    ${words.map(w => `<span class="keyword-tag ${type}">${escapeHtml(kw(w))}</span>`).join('')}
+                    ${words.map(w => category !== 'action_verbs' && jobTermIndex.positions[w]
+                        ? `<button type="button" class="keyword-tag keyword-jump ${type}" data-jd-keyword="${escapeHtml(w)}" aria-label="${escapeHtml(kw(w))}: show in job description">${escapeHtml(kw(w))}</button>`
+                        : `<span class="keyword-tag ${type}">${escapeHtml(kw(w))}</span>`).join('')}
                 </div>
             `;
             container.appendChild(section);
@@ -1819,6 +1740,77 @@ Nice to Have
             }</p>`;
         }
     }
+
+    // ============================================================
+    // VIEW IN JOB DESCRIPTION
+    // ============================================================
+    function renderJobView(data) {
+        const card = document.getElementById('jobViewCard');
+        const text = document.getElementById('jobViewText');
+        if (!card || !text) return;
+        jobTermIndex = ResumeRadarScan.jobTermIndex(lastJobView);
+        const marked = jobTermIndex.matched + jobTermIndex.missing;
+        card.hidden = !marked || !Number.isFinite(data.match_score);
+        text.textContent = '';
+        if (card.hidden) { jobTermIndex = ResumeRadarScan.jobTermIndex([]); return; }
+        const notes = {matched: ' (found in your CV)', missing: ' (not found in your CV)'};
+        // Browsers submit line breaks as CRLF; show them as single breaks.
+        const clean = (value) => String(value).replace(/\r\n?/g, '\n');
+        const markFor = (piece, id) => {
+            const mark = document.createElement('mark');
+            mark.className = `jd-term ${piece.status}`;
+            mark.id = id;
+            mark.tabIndex = -1;
+            return mark;
+        };
+        const noteFor = (status) => {
+            const note = document.createElement('span');
+            note.className = 'jd-term-note';
+            note.textContent = notes[status];
+            return note;
+        };
+        lastJobView.forEach((segment, index) => {
+            if (!notes[segment.status]) { text.append(clean(segment.text)); return; }
+            const mark = markFor(segment, `jd-term-${index}`);
+            if (Array.isArray(segment.parts)) {
+                segment.parts.forEach((part, partIndex) => {
+                    if (!notes[part.status]) { mark.append(clean(part.text)); return; }
+                    const inner = markFor(part, `jd-term-${index}-${partIndex}`);
+                    inner.append(clean(part.text), noteFor(part.status));
+                    mark.appendChild(inner);
+                });
+            } else {
+                mark.append(clean(segment.text));
+            }
+            mark.appendChild(noteFor(segment.status));
+            text.appendChild(mark);
+        });
+        const count = (n) => `${n} ${n === 1 ? 'term' : 'terms'}`;
+        document.getElementById('jobViewMatchedCount').textContent = count(jobTermIndex.matched);
+        document.getElementById('jobViewMissingCount').textContent = count(jobTermIndex.missing);
+        document.getElementById('jobViewDetails').open = false;
+    }
+
+    // A keyword in the lists jumps to where the job mentions it; selecting it
+    // again moves to the next mention.
+    const jobJumpCursor = {};
+    document.getElementById('deepResults').addEventListener('click', (event) => {
+        const tag = event.target.closest('.keyword-jump');
+        if (!tag) return;
+        const keyword = tag.dataset.jdKeyword;
+        const positions = jobTermIndex.positions[keyword];
+        if (!positions) return;
+        const visit = (jobJumpCursor[keyword] || 0) % positions.length;
+        jobJumpCursor[keyword] = visit + 1;
+        const mark = document.getElementById(positions[visit]);
+        if (!mark) return;
+        document.getElementById('jobViewDetails').open = true;
+        document.querySelectorAll('.jd-term.active').forEach(el => el.classList.remove('active'));
+        mark.classList.add('active');
+        mark.focus({preventScroll: true});
+        const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        mark.scrollIntoView({behavior: calm ? 'instant' : 'smooth', block: 'center'});
+    });
 
     function renderAISuggestions(suggestions) {
         const container = document.getElementById('aiSuggestions');
