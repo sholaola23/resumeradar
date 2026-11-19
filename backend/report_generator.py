@@ -7,6 +7,8 @@ from fpdf import FPDF
 from datetime import datetime
 import io
 
+from backend.site_copy import STRAPLINE, PRIVACY_LINE
+
 
 def _safe(text):
     """Replace Unicode characters that core PDF fonts can't handle."""
@@ -51,7 +53,7 @@ class ResumeRadarPDF(FPDF):
         self.cell(0, 10, 'ResumeRadar', new_x='LMARGIN', new_y='NEXT')
         self.set_font('Helvetica', '', 10)
         self.set_text_color(107, 114, 128)  # Gray
-        self.cell(0, 5, 'Beat the scan. Land the interview.', new_x='LMARGIN', new_y='NEXT')
+        self.cell(0, 5, STRAPLINE, new_x='LMARGIN', new_y='NEXT')
         self.ln(4)
         # Divider line
         self.set_draw_color(229, 231, 235)
@@ -155,7 +157,7 @@ def generate_pdf_report(scan_data):
     pdf.ln(6)
 
     # ==================================
-    # ATS MATCH SCORE
+    # KEYWORD MATCH ESTIMATE
     # ==================================
     score = scan_data.get('match_score', 0)
 
@@ -252,7 +254,7 @@ def generate_pdf_report(scan_data):
         pdf.section_title('Missing Keywords', '')
         pdf.set_font('Helvetica', '', 9)
         pdf.set_text_color(107, 114, 128)
-        pdf.multi_cell(0, 5, 'These keywords appear in the job description but NOT in your resume. ATS systems are scanning for them.')
+        pdf.multi_cell(0, 5, 'These keywords appear in the job description but not in your resume. Some may be optional or alternatives to tools you already use.')
         pdf.ln(4)
 
         for cat, words in missing_entries.items():
@@ -438,7 +440,7 @@ def generate_pdf_report(scan_data):
     pdf.ln(2)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(156, 163, 175)
-    pdf.cell(0, 5, 'Your resume is analyzed in real time and is never sold or shared. Your data stays yours.', new_x='LMARGIN', new_y='NEXT')
+    pdf.multi_cell(0, 5, PRIVACY_LINE, new_x='LMARGIN', new_y='NEXT')
 
     # Output as bytes
     return pdf.output()

@@ -90,12 +90,18 @@
             <span class="logo-text">ResumeRadar</span>
         </div>
         <div class="error-code">404</div>
+        {% if builder_closed %}
+        <h1 class="error-title">The CV builder has closed</h1>
+        <p class="error-message">
+            The free CV check is still here.
+        </p>
+        {% else %}
         <h1 class="error-title">Page not found</h1>
         <p class="error-message">
-            This page doesn't exist — but your dream job does.
-            Head back to the scanner and let's optimize your resume.
+            This page doesn't exist. The free CV check is one click away.
         </p>
-        <a href="/" class="error-btn">📡 Back to Scanner</a>
+        {% endif %}
+        <a href="/" class="error-btn">📡 Go to the free CV check</a>
     </div>
 </body>
 </html>
