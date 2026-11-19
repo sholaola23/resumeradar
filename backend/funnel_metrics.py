@@ -116,7 +116,8 @@ def record(event_name, journey_id=None):
         pipe.hincrby(key, event_name, 1)
         pipe.expire(key, _FUNNEL_TTL)
         pipe.execute()
-        normalized = normalize_journey_id(journey_id)
+        # Referral events stay daily totals only: never tie them to a journey.
+        normalized = None if event_name in _REFERRAL_EVENTS else normalize_journey_id(journey_id)
         if normalized:
             journey_key = _JOURNEY_PREFIX + normalized
             now = datetime.now(timezone.utc).isoformat()

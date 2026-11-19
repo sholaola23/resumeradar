@@ -2,7 +2,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -61,6 +61,23 @@ class ReferralTest(unittest.TestCase):
             self.assertEqual(self.client.post('/api/event', json={'event': 'ref_visit_qr'}, headers=headers).status_code, 204)
             self.assertEqual(self.client.post('/api/event', json={'event': 'ref_visit_evil'}, headers=headers).status_code, 204)
         record.assert_called_once_with('ref_visit_qr', None)
+
+    def test_referral_events_never_write_a_journey(self):
+        journey = 'a' * 32
+        pipe = MagicMock()
+        redis = MagicMock()
+        redis.pipeline.return_value = pipe
+        with patch.object(funnel_metrics, '_redis', redis):
+            for event in sorted(REFERRAL_EVENTS):
+                funnel_metrics.record(event, journey)
+            touched = [c.args[0] for c in pipe.hincrby.call_args_list]
+            self.assertTrue(touched)
+            self.assertTrue(all(key.startswith('resumeradar:funnel:') for key in touched), touched)
+            pipe.hset.assert_not_called()
+            pipe.hsetnx.assert_not_called()
+            # Non-referral events still keep their journey (existing behaviour).
+            funnel_metrics.record('scan_started', journey)
+            self.assertIn(funnel_metrics._JOURNEY_PREFIX + journey, [c.args[0] for c in pipe.hincrby.call_args_list])
 
     def test_python_and_browser_agree_on_ref_sources(self):
         for source in funnel_metrics.REF_SOURCES:
