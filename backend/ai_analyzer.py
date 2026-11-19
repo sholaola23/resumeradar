@@ -250,8 +250,9 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
             return suggestions
 
         except (json.JSONDecodeError, ValueError) as parse_error:
-            print(f"JSON parse error: {parse_error}")
-            print(f"Raw response (first 300 chars): {response_text[:300]}")
+            # Log only the error type and length: the reply is written from
+            # the user's CV, so its text must never reach the logs.
+            print(f"AI reply could not be parsed ({type(parse_error).__name__}, {len(response_text)} chars)")
 
             # Last resort: try to extract just the summary from raw text
             summary = response_text
