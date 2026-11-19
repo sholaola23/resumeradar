@@ -80,6 +80,22 @@ DAILY_ONLY_EVENTS = frozenset({
     "feedback_comment",
 })
 
+# Referral loop: aggregate daily counts only, no identity of sharer or friend.
+# The ?ref= sources mirror REF_SOURCES in static/js/scan-utils.js.
+REF_SOURCES = ("whatsapp", "linkedin", "copy", "native", "qr", "group", "job")
+_REFERRAL_EVENTS = frozenset({
+    "share_prompt_shown",
+    "share_clicked",
+    "job_link_created",
+    "job_link_opened",
+    "referred_scan_completed",
+    *(f"ref_visit_{source}" for source in REF_SOURCES),
+})
+VALID_EVENTS = VALID_EVENTS | _REFERRAL_EVENTS
+CLIENT_EVENTS = CLIENT_EVENTS | _REFERRAL_EVENTS
+# Referral events stay daily totals only too: never tie them to a journey.
+DAILY_ONLY_EVENTS = DAILY_ONLY_EVENTS | _REFERRAL_EVENTS
+
 _redis = None
 
 

@@ -424,6 +424,13 @@ def role_hub():
     return render_template('role_hub.html', roles=roles)
 
 
+@app.route('/share')
+@limiter.exempt
+def share_page():
+    """Ready-made text and a QR code for sharing the free scan with a group."""
+    return render_template('share.html')
+
+
 @app.route('/favicon.ico')
 @limiter.exempt
 def favicon():

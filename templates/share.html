@@ -1,0 +1,76 @@
+{% from "_share_buttons.html" import share_buttons %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share ResumeRadar with your group | ResumeRadar</title>
+    <meta name="description" content="A ready-made message and QR code for sharing ResumeRadar, the free CV and job description checker, with a class, community or group chat.">
+    <link rel="canonical" href="https://resumeradar.sholastechnotes.com/share">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=13">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="header-inner">
+                <div class="logo">
+                    <span class="logo-icon">📡</span>
+                    <span class="logo-text">ResumeRadar</span>
+                </div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link">Scan Resume</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="share-page">
+        <div class="container">
+            <h1>Share ResumeRadar with your group</h1>
+            <p class="share-page-intro">Running a class, a community or a job-hunting group chat? Here is everything you need to pass it on. ResumeRadar is free and nobody needs an account.</p>
+
+            <section class="result-card" aria-labelledby="shareSendHeading">
+                <h2 id="shareSendHeading">Send the link</h2>
+                {{ share_buttons(ref='group') }}
+                <p class="share-status" data-share-status role="status"></p>
+            </section>
+
+            <section class="result-card" aria-labelledby="shareTextHeading">
+                <h2 id="shareTextHeading">Ready-made messages</h2>
+                <p class="card-subtitle">Copy one and edit it to sound like you.</p>
+                <h3>Short, for a group chat</h3>
+                <p class="share-text" id="shareTextShort">For anyone job hunting: ResumeRadar is a free tool that compares your CV with a job description and shows which keywords are missing, with suggestions for your wording. No sign-up needed. https://resumeradar.sholastechnotes.com/?ref=group</p>
+                <button type="button" class="share-btn share-copy" data-copy-target="shareTextShort">Copy short message</button>
+                <h3>Longer, for a class or newsletter</h3>
+                <p class="share-text" id="shareTextLong">If you are applying for jobs, check your CV against the job description before you send it. ResumeRadar is free and needs no account. Upload or paste your CV, paste the job description, and it shows the keywords you have covered, the ones that are missing and ideas for rewording. The score is an estimate of how well the keywords match, not a prediction of what an employer will decide. https://resumeradar.sholastechnotes.com/?ref=group</p>
+                <button type="button" class="share-btn share-copy" data-copy-target="shareTextLong">Copy longer message</button>
+            </section>
+
+            <section class="result-card" aria-labelledby="shareQrHeading">
+                <h2 id="shareQrHeading">QR code for a slide or poster</h2>
+                <p class="card-subtitle">Scanning it opens resumeradar.sholastechnotes.com.</p>
+                <img class="share-qr" src="/static/images/share-qr.svg" width="220" height="220" alt="QR code that opens resumeradar.sholastechnotes.com">
+                <p><a class="share-btn share-copy" href="/static/images/share-qr.png" download="resumeradar-qr.png">Download QR code</a></p>
+            </section>
+
+            <section class="share-page-note" aria-labelledby="shareCountHeading">
+                <h2 id="shareCountHeading">What these links count</h2>
+                <p>Each link ends in a short tag such as <code>?ref=group</code>. It adds one to a daily total for that kind of link, so we can see whether sharing helps. ResumeRadar does not record who shared the link or who opened it.</p>
+                <p><a href="/">Check your own CV</a></p>
+            </section>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
+        </div>
+    </footer>
+    <script src="/static/js/scan-utils.js?v=3"></script>
+    <script src="/static/js/share.js?v=1"></script>
+</body>
+</html>
