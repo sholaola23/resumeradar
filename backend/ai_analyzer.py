@@ -9,6 +9,7 @@ import json
 from anthropic import Anthropic
 
 from backend import ai_cache
+from backend.keyword_engine import display_keyword
 from backend import ai_budget
 from backend import ai_metrics
 
@@ -28,6 +29,10 @@ FREE_ECONOMY_THRESHOLD = 0.60
 # so keep thinking off for deterministic cost and latency. Passed via
 # extra_body because the pinned SDK (0.43) predates the thinking param.
 NO_THINKING = {"thinking": {"type": "disabled"}}
+
+# Cache name for scan suggestions. Change the suffix whenever the scan prompt
+# changes, so answers written for the old prompt are not reused.
+SCAN_CACHE_TOOL = "scan_suggestions:v1"
 
 
 def make_client(api_key):
@@ -87,6 +92,13 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
     if not api_key or api_key == "your-anthropic-api-key-here":
         return _get_fallback_suggestions(keyword_results)
 
+    # An identical CV and job description within the hour reuses the earlier
+    # answer (same 1-hour cache as the writing tools). This is what keeps the
+    # one-click example scan from costing an AI call on every click.
+    cached = ai_cache.cache_get(SCAN_CACHE_TOOL, resume_text, job_description)
+    if cached is not None:
+        return cached
+
     # Free tier degrades in tiers: past the hard cap, no AI spend at all
     # (rule-based suggestions); past FREE_ECONOMY_THRESHOLD of the daily
     # cost budget, drop from Sonnet to the economy model.
@@ -140,6 +152,7 @@ SCORE RULE: {score_rule} This is not an employer score or a prediction of suitab
 PRIORITIZED REQUIREMENTS: {json.dumps(priorities[:8])}
 Use these source-grounded priorities instead of alphabetically choosing tools. Respect required versus preferred criteria and alternative tools. Do not recommend a missing alternative when an accepted tool is already demonstrated.
 EXCLUDED TERMS: {json.dumps(excluded_terms)}. These are satisfied alternatives or lack actionable requirement evidence. Do not describe them as required gaps anywhere, including the summary, quick wins, or keyword suggestions.
+WORDING: Call the document a "CV", not a "resume", and use UK spelling. Write tool and product names with their usual capitalisation (CDN, CloudFront).
 TRUTHFULNESS: Never add skills, metrics, or years of experience. Ask the user to supply real evidence; any suggested claim must be conditional on their actual experience. Do not suggest "seniority framing" to conceal an experience shortfall.
 
 IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:
@@ -247,6 +260,7 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
 
             suggestions = json.loads(clean_text)
             suggestions["ai_powered"] = True
+            ai_cache.cache_set(SCAN_CACHE_TOOL, suggestions, resume_text, job_description)
             return suggestions
 
         except (json.JSONDecodeError, ValueError) as parse_error:
@@ -558,9 +572,9 @@ def _get_fallback_suggestions(keyword_results):
     }
 
     score = keyword_results.get("overall_score", 0)
-    missing_tech = keyword_results.get("missing_keywords", {}).get("technical_skills", [])
-    missing_soft = keyword_results.get("missing_keywords", {}).get("soft_skills", [])
-    missing_certs = keyword_results.get("missing_keywords", {}).get("certifications", [])
+    missing_tech = [display_keyword(k) for k in keyword_results.get("missing_keywords", {}).get("technical_skills", [])]
+    missing_soft = [display_keyword(k) for k in keyword_results.get("missing_keywords", {}).get("soft_skills", [])]
+    missing_certs = [display_keyword(k) for k in keyword_results.get("missing_keywords", {}).get("certifications", [])]
 
     # Describe coverage, not suitability or interview prospects.
     if score is None:
@@ -584,13 +598,13 @@ def _get_fallback_suggestions(keyword_results):
         quick_wins.append(f"If supported by your experience, give examples of: {', '.join(missing_soft[:3])}")
     if missing_certs:
         quick_wins.append(f"If you hold any of these certifications, add them prominently: {', '.join(missing_certs[:3])}")
-    quick_wins.append("Ensure your resume summary/objective mirrors the language of the job description.")
+    quick_wins.append("Ensure your CV summary mirrors the language of the job description.")
     quick_wins.append("Start each experience bullet point with a strong action verb (Led, Built, Improved, Designed).")
 
     priorities = keyword_results.get('priority_recommendations')
     if priorities is not None:
         suggestions['keyword_suggestions'] = [
-            {'keyword': item['keyword'], 'where_to_add': 'Relevant experience or qualifications', 'how_to_add': item['suggestion']}
+            {'keyword': item.get('display', item['keyword']), 'where_to_add': 'Relevant experience or qualifications', 'how_to_add': item['suggestion']}
             for item in priorities[:5]
         ]
         quick_wins = [item['suggestion'] for item in priorities[:3]] + [
@@ -601,7 +615,7 @@ def _get_fallback_suggestions(keyword_results):
 
     # Generate basic cover letter points from available data
     cl_points = []
-    matched_tech = keyword_results.get("matched_keywords", {}).get("technical_skills", [])
+    matched_tech = [display_keyword(k) for k in keyword_results.get("matched_keywords", {}).get("technical_skills", [])]
     if matched_tech:
         top_skills = ', '.join(matched_tech[:3])
         cl_points.append(f"Highlight your experience with {top_skills}, which directly aligns with the role's technical requirements.")
