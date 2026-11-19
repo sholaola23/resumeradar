@@ -169,6 +169,14 @@ class MoreDegreeWords(unittest.TestCase):
     def test_state_codes_are_not_degrees(self):
         self.assertNotIn('engineering', jd_education('Engineering office in Boston, MA with hybrid working.'))
 
+    def test_or_after_a_short_name_needs_another_degree(self):
+        self.assertNotIn('master', jd_education('Located in Boston, MA or remote.'))
+        self.assertNotIn('bachelor', jd_education('Work closely with the BA or PM.'))
+        self.assertNotIn('master', jd_education('Ms or Mr Smith.'))
+        self.assertNotIn('master', cv_education('Boston, MA / Statistics consultant'))
+        self.assertIn('bachelor', jd_education('BA or BSc in Economics.'))
+        self.assertIn('master', jd_education('BS or MS degree in Statistics.'))
+
     def test_milliseconds_are_not_a_degree(self):
         self.assertNotIn('engineering', jd_education('Latency under 50 ms in our engineering stack.'))
 

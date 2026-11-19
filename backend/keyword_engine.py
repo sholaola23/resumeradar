@@ -119,7 +119,10 @@ EDUCATION_FIELDS = {
 _FIELD_NAMES = "|".join(re.escape(field) for field in sorted(EDUCATION_FIELDS))
 # BA, BS, MA and MS are degrees only before "in", "degree", "hons", "or" or a
 # subject ("BS Computer Science"), so "Boston, MA" and "50 ms" are not.
-_SHORT_DEGREE_CONTEXT = (r"(?=\s+(?:in|degree|hons|or)\b|\s*\(hons\)|,?\s+(?:" + _FIELD_NAMES + r")\b)")
+# "or" counts only when another degree name follows ("BA or BSc", "MA or MS in"),
+# not in "Boston, MA or remote" or "the BA or PM".
+_SHORT_DEGREE_CONTEXT = (r"(?=\s+(?:in|degree|hons)\b|\s*\(hons\)|,?\s+(?:" + _FIELD_NAMES + r")\b|"
+                         r"\s+or\s+(?:[bm]\.?(?:sc|eng|tech|[as])\.?|ph\.?d|mba|bachelor|master)\b)")
 # Degree names that are not keywords of their own count as their level, so a
 # BEng meets "bachelor's degree" and an MS meets "master's".
 _BACHELOR_DEGREE = re.compile(
