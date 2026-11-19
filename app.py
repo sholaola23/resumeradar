@@ -274,7 +274,8 @@ def _cv_builder_disabled():
     if path == '/api/build/webhook/resend':
         return None
     if (path == '/build' or path.startswith('/build/') or path.startswith('/api/build/')
-            or path in ('/static/js/builder.js', '/static/css/builder.css')):
+            or (path.startswith('/static/')
+                and os.path.basename(path) in ('builder.js', 'builder.css'))):
         abort(404)
 
 @app.route('/')

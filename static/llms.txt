@@ -25,7 +25,7 @@ backend developer, scrum master, and machine learning engineer.
 https://resumeradar.sholastechnotes.com
 
 ## Privacy
-Resumes are analyzed in real time and are never added to a database, sold, or shared. Uploaded files are deleted immediately after parsing. Temporary data auto-expires: AI results are cached for up to 1 hour. Emails are stored only as HMAC hashes; email delivery is handled by Resend.
+Resumes are analyzed in real time and are never added to a database, sold, or shared. Uploaded files are deleted immediately after parsing. Temporary data auto-expires: AI results are cached for up to 1 hour. Emails are stored only as HMAC hashes; email delivery is handled by Resend; newsletter sign-ups go to Beehiiv.
 
 ## Built by
 ResumeRadar team

@@ -22,6 +22,9 @@ BLOCKED = [
     ('GET', '/api/build/check-payment/abc'),
     ('GET', '/static/js/builder.js'),
     ('GET', '/static/css/builder.css'),
+    ('GET', '/static/js//builder.js'),
+    ('GET', '/static/./js/builder.js'),
+    ('GET', '/static/js/../js/builder.js'),
 ]
 
 
