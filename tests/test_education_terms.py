@@ -117,6 +117,70 @@ class RealQualificationsStillCount(unittest.TestCase):
         self.assertIn('degree', jd_education('Relevant degrees considered.'))
 
 
+class SubjectAlternatives(unittest.TestCase):
+    def score(self, cv, jd):
+        return engine.calculate_match(engine.extract_keywords_from_text(cv),
+                                      engine.extract_keywords_from_text(jd, strict=True))
+
+    def test_one_subject_from_an_or_list_is_enough(self):
+        cv = 'EDUCATION\nBSc Computer Science, University of Leeds'
+        for jd in ("Bachelor's degree in Computer Science or Engineering.",
+                   'BS in Computer Science, Engineering, or a related field.',
+                   'Degree in Computer Science/Information Technology.'):
+            with self.subTest(jd=jd):
+                result = self.score(cv, jd)
+                self.assertIn('computer science', result['matched_keywords']['education'])
+                self.assertEqual(result['missing_keywords']['education'], [])
+
+    def test_or_list_with_no_subject_lists_every_option(self):
+        result = self.score('EDUCATION\nBA History, University of York',
+                            "Bachelor's degree in Computer Science or Engineering.")
+        self.assertTrue({'computer science', 'engineering'} <= set(result['missing_keywords']['education']))
+
+    def test_and_list_needs_both(self):
+        result = self.score('EDUCATION\nBSc Mathematics, University of Leeds',
+                            'Degree in Mathematics and Statistics.')
+        self.assertIn('statistics', result['missing_keywords']['education'])
+
+    def test_separate_requirements_are_not_alternatives(self):
+        jd = "BSc in Computer Science required.\nMaster's in Statistics preferred."
+        groups = engine.extract_keywords_from_text(jd, strict=True)['education_alternatives']
+        self.assertEqual(groups, [])
+
+
+class MoreDegreeWords(unittest.TestCase):
+    def test_short_degree_names_are_cues(self):
+        for jd in ('BS in Computer Science.', 'BA in Mathematics.', 'B.Tech in Engineering.',
+                   'BTech or MTech in Engineering.', 'HND in Engineering.', 'MS in Statistics.',
+                   'M.Tech. in Engineering.', 'BEng (Hons) Engineering.'):
+            with self.subTest(jd=jd):
+                self.assertTrue(jd_education(jd) & engine.EDUCATION_FIELDS, jd_education(jd))
+
+    def test_milliseconds_are_not_a_degree(self):
+        self.assertNotIn('engineering', jd_education('Latency under 50 ms in our engineering stack.'))
+
+
+class JobView(unittest.TestCase):
+    def test_job_view_marks_only_qualification_mentions(self):
+        jd = ("Engineering Manager\nLead our engineering team. Python, AWS.\n"
+              "Bachelor's degree in Engineering or a related field.")
+        cv = 'Software Engineer\nPython, AWS.'
+        result = engine.calculate_match(engine.extract_keywords_from_text(cv),
+                                        engine.extract_keywords_from_text(jd, strict=True))
+        self.assertIn('engineering', result['missing_keywords']['education'])
+        marks = [seg for seg in engine.locate_job_terms(jd, result) if seg.get('keyword') == 'engineering']
+        self.assertEqual(len(marks), 1)
+        self.assertEqual(marks[0]['text'], 'Engineering')
+        self.assertGreater(jd.index(marks[0]['text'], jd.index('degree')), 0)
+
+    def test_job_view_does_not_mark_scrum_master(self):
+        jd = "Scrum Master\nRun Scrum with Jira. Master's degree preferred."
+        result = engine.calculate_match(engine.extract_keywords_from_text('Scrum. Jira.'),
+                                        engine.extract_keywords_from_text(jd, strict=True))
+        marks = [seg['text'] for seg in engine.locate_job_terms(jd, result) if seg.get('keyword') == 'master']
+        self.assertEqual(marks, ["Master's"])
+
+
 class CvSide(unittest.TestCase):
     def test_engineer_job_title_is_not_an_engineering_degree(self):
         self.assertNotIn('engineering', cv_education('Software Engineer | Acme | 2020 - Present'))

@@ -129,10 +129,17 @@ _DOCTORATE = re.compile(r"\bdoctora(?:te|l)s?\b", re.IGNORECASE)
 
 # Words that show a sentence is about a qualification.
 _DEGREE_CUE = re.compile(
-    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|bsc|msc|beng|meng|(?:under|post)?graduates?|"
+    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|[bm]sc|[bm]\.?eng|[bm]\.?tech|ba|bs|ma|(?<!\d)(?<!\d\s)ms(?=\s+(?:in|degree)\b)|"
+    r"hnd|hnc|llb|bcom|(?:under|post)?graduates?|"
     r"diplomas?|university|college|studied|major(?:ing)?\s+in|qualified\s+in)\b|"
-    r"\b[bm]\.(?:s|a|sc|eng)\.",
+    r"\b[bm]\.(?:s|a|sc|eng|tech)\.",
     re.IGNORECASE)
+# "Computer Science, Engineering or a related field" is one requirement: the
+# fields are joined only by commas, "or", "and/or" or "/", with an "or" or
+# "/" somewhere in the list, or the list ends with "or a related field".
+_FIELD_JOIN = re.compile(r"\s*(?:,\s*)?(?:(?:and\s*/\s*)?or\s+|/\s*)?", re.IGNORECASE)
+_RELATED_FIELD = re.compile(r"\s*,?\s*or\s+(?:an?\s+|any\s+)?(?:other\s+)?(?:related|similar|equivalent|relevant)\b",
+                            re.IGNORECASE)
 # On a CV the subject often sits a line or two from the degree or heading.
 _CV_EDUCATION_CUE = re.compile(r"\b(?:education|academic|school|institute)\b", re.IGNORECASE)
 _CV_EDUCATION_LINES = 3
@@ -140,7 +147,7 @@ _CV_EDUCATION_LINES = 3
 # Sentence units for job descriptions. Abbreviations such as "B.S." and "e.g."
 # do not end a sentence, so "B.S. in Computer Science" stays together.
 _JD_SENTENCE_SPLIT = re.compile(
-    r'(?<=[.!?])(?<!\.[A-Za-z]\.)(?<!\.[A-Za-z]{2}\.)(?<!\.[A-Za-z]{3}\.)\s+|[;\n]+')
+    r'(?<=[.!?])(?<!\.[A-Za-z]\.)(?<!\.[A-Za-z]{2}\.)(?<!\.[A-Za-z]{3}\.)(?<!\.[A-Za-z]{4}\.)\s+|[;\n]+')
 
 # Education terms that are equivalent for matching purposes.
 # If a JD says "bachelor" and a resume says "bsc", that's a match.
@@ -255,6 +262,8 @@ def extract_keywords_from_text(text, *, strict=False):
     for edu in EDUCATION_KEYWORDS:
         if _education_in_text(edu, text_lower, strict=strict):
             found["education"].add(edu)
+    if strict:
+        found["education_alternatives"] = _field_alternatives(text_lower)
 
     for verb in ACTION_VERBS:
         if _keyword_in_text(verb, text_lower):
@@ -305,8 +314,7 @@ def _education_in_text(term, text, *, strict=False):
     if term not in EDUCATION_FIELDS:
         return bool(pattern.search(text))
     if strict:
-        return any(pattern.search(sentence) and _has_degree_cue(sentence)
-                   for sentence in _JD_SENTENCE_SPLIT.split(text))
+        return bool(_job_education_spans(term, text))
     lines = text.split('\n')
     for index, line in enumerate(lines):
         if pattern.search(line):
@@ -314,6 +322,52 @@ def _education_in_text(term, text, *, strict=False):
             if _has_degree_cue(nearby) or _CV_EDUCATION_CUE.search(nearby):
                 return True
     return False
+
+
+def _job_education_spans(term, text):
+    """Where an education term counts in a job description, as (start, end).
+
+    A field of study counts only in a sentence that also has a degree word.
+    Shared by extraction and locate_job_terms, so the job view marks exactly
+    the mentions that put the term in the keyword lists.
+    """
+    pattern = _education_pattern(term)
+    if term not in EDUCATION_FIELDS:
+        return [match.span() for match in pattern.finditer(text)]
+    spans, start = [], 0
+    for separator in list(_JD_SENTENCE_SPLIT.finditer(text)) + [None]:
+        end = separator.start() if separator else len(text)
+        sentence = text[start:end]
+        if _has_degree_cue(sentence):
+            spans.extend((start + m.start(), start + m.end()) for m in pattern.finditer(sentence))
+        if separator:
+            start = separator.end()
+    return spans
+
+
+def _field_alternatives(text):
+    """Groups of fields a job description offers as a choice, as frozensets."""
+    spans = sorted((start, end, field) for field in EDUCATION_FIELDS
+                   for start, end in _job_education_spans(field, text))
+    groups, run, has_or = [], [], False
+
+    def close():
+        fields = {field for _, _, field in run}
+        if len(fields) > 1 and (has_or or _RELATED_FIELD.match(text, run[-1][1])):
+            groups.append(frozenset(fields))
+
+    for span in spans:
+        joiner = text[run[-1][1]:span[0]] if run else ''
+        if run and span[0] >= run[-1][1] and _FIELD_JOIN.fullmatch(joiner):
+            has_or = has_or or bool(re.search(r'\bor\b|/', joiner))
+            run.append(span)
+            continue
+        if run:
+            close()
+        run, has_or = [span], False
+    if run:
+        close()
+    return groups
 
 
 def _education_pattern(term):
@@ -378,6 +432,12 @@ def calculate_match(resume_keywords, job_keywords):
         if category == "education":
             original_job_edu = set(job_set)
             original_resume_edu = set(resume_set)
+            # One field from an "X or Y" list meets the requirement, so the
+            # other fields in that list are no longer asked for.
+            for group in job_keywords.get("education_alternatives", []):
+                if group & original_resume_edu:
+                    original_job_edu -= group - original_resume_edu
+            job_set = set(original_job_edu)
             job_set = _expand_education(job_set)
             resume_set = _expand_education(resume_set)
 
@@ -486,8 +546,8 @@ def calculate_match(resume_keywords, job_keywords):
     results["total_matched"] = total_matched
     results["total_missing"] = total_job_keywords - total_matched
 
-    substantive_count = sum(len(terms) for category, terms in job_keywords.items()
-                            if category != "action_verbs")
+    substantive_count = sum(len(job_keywords.get(category, ())) for category in
+                            ("technical_skills", "soft_skills", "certifications", "education"))
     results["score_status"] = "estimated"
     results["score_explanation"] = (
         "Custom weighted keyword-overlap estimate, not an employer ATS score or hiring prediction. "
@@ -619,6 +679,10 @@ def locate_job_terms(job_description, match_results):
     scanned = _strip_jd_boilerplate(job_description)
     spans = []
     for (category, keyword), label in status.items():
+        if category == "education":
+            spans.extend((start, end, keyword, category, label)
+                         for start, end in _job_education_spans(keyword, scanned))
+            continue
         if category == "technical_skills" and keyword in _AMBIGUOUS_TECH:
             patterns = [_AMBIGUOUS_TECH[keyword]]
         else:
