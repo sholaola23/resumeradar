@@ -211,6 +211,32 @@ class CvSide(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertTrue(engine._has_degree_cue(line.lower()))
 
+    def test_qa_cv_with_bs_below_ms_entry_meets_bs_requirement(self):
+        cv = ('EDUCATION\nMS Statistics, Georgia Tech\n- Thesis on forecasting\n- Teaching assistant\n'
+              "- Dean's list\nBS Computer Science, Georgia Tech, 2018\nPython, SQL, AWS")
+        result = engine.calculate_match(engine.extract_keywords_from_text(cv), engine.extract_keywords_from_text(
+            'BS in Computer Science required. Python, SQL, AWS.', strict=True))
+        self.assertEqual(result['missing_keywords']['education'], [])
+        self.assertTrue({'bachelor', 'computer science'} <= cv_education('BS, Computer Science - Georgia Tech'))
+
+    def test_other_degree_names_meet_their_level(self):
+        jd = "Bachelor's in Computer Science, Engineering, or related field."
+        for cv in ('EDUCATION\nBEng Mechanical Engineering, Imperial College',
+                   'EDUCATION\nB.Tech Computer Science, IIT Delhi'):
+            with self.subTest(cv=cv):
+                result = engine.calculate_match(engine.extract_keywords_from_text(cv),
+                                                engine.extract_keywords_from_text(jd, strict=True))
+                self.assertNotIn('bachelor', result['missing_keywords']['education'])
+        for text in ('LLB, University of Leeds', 'BCom Accounting, University of Lagos'):
+            with self.subTest(text=text):
+                self.assertIn('bachelor', cv_education(text))
+        for text in ('MEng Civil Engineering', 'M.Tech in Engineering', 'MA in Statistics'):
+            with self.subTest(text=text):
+                self.assertIn('master', cv_education(text))
+
+    def test_ma_or_ms_is_a_master_requirement(self):
+        self.assertIn('master', jd_education('MA or MS in Statistics.'))
+
     def test_engineering_job_title_on_cv_is_not_a_degree(self):
         self.assertNotIn('engineering', cv_education('Engineering Manager at Acme\nLed a team of 8.'))
 

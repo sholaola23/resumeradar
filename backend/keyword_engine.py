@@ -116,25 +116,30 @@ EDUCATION_FIELDS = {
     "mathematics", "statistics", "data science", "business administration",
 }
 
+_FIELD_NAMES = "|".join(re.escape(field) for field in sorted(EDUCATION_FIELDS))
+# BA, BS, MA and MS are degrees only before "in", "degree", "hons", "or" or a
+# subject ("BS Computer Science"), so "Boston, MA" and "50 ms" are not.
+_SHORT_DEGREE_CONTEXT = (r"(?=\s+(?:in|degree|hons|or)\b|\s*\(hons\)|,?\s+(?:" + _FIELD_NAMES + r")\b)")
+# Degree names that are not keywords of their own count as their level, so a
+# BEng meets "bachelor's degree" and an MS meets "master's".
+_BACHELOR_DEGREE = re.compile(
+    r"\bbachelor(?=['’]?s\b|\b)|(?<!\w)(?:b\.?eng|b\.?tech|b\.?com|ll\.?b)\b|\bb[as]" + _SHORT_DEGREE_CONTEXT,
+    re.IGNORECASE)
 # "master" is the degree only as "master's", "masters", "master of <subject>",
 # "master in" or "master degree", never in "Scrum Master(s)", "master data"
 # or "mastering".
 _MASTER_DEGREE = re.compile(
     r"(?<!scrum\s)\bmaster(?:['’]?s\b|\s+in\b|\s+degree\b|\s+of\s+(?:science|arts|engineering|"
-    r"business|philosophy|research|laws|public|education|fine|computer|data|information)\b)",
+    r"business|philosophy|research|laws|public|education|fine|computer|data|information)\b)|"
+    r"(?<!\w)(?:m\.?eng|m\.?tech)\b|(?<!\d)(?<!\d\s)\bm[as]" + _SHORT_DEGREE_CONTEXT,
     re.IGNORECASE)
 # "degree" is not "a high degree of autonomy" or "360-degree feedback".
 _DEGREE_WORD = re.compile(r"(?<![\w-])degrees?\b(?!\s+of\b)", re.IGNORECASE)
 _DOCTORATE = re.compile(r"\bdoctora(?:te|l)s?\b", re.IGNORECASE)
 
 # Words that show a sentence is about a qualification.
-_FIELD_NAMES = "|".join(re.escape(field) for field in sorted(EDUCATION_FIELDS))
 _DEGREE_CUE = re.compile(
-    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|[bm]sc|[bm]\.?eng|[bm]\.?tech|"
-    r"(?:ba|bs|ma)(?=\s+(?:in|degree|hons|or)\b|\s*\(hons\))|(?<!\d)(?<!\d\s)ms(?=\s+(?:in|degree)\b)|"
-    # "BS Computer Science" or "MS, Statistics": the short name followed by a subject.
-    r"(?:ba|bs|ma|ms),?\s+(?=(?:" + _FIELD_NAMES + r")\b)|"
-    r"hnd|hnc|llb|bcom|(?:under|post)?graduates?|"
+    r"\b(?:mba|ph\.?d|[bm]sc|hnd|hnc|(?:under|post)?graduates?|"
     r"diplomas?|university|college|studied|major(?:ing)?\s+in|qualified\s+in)\b|"
     r"\b[bm]\.(?:s|a|sc|eng|tech)\.",
     re.IGNORECASE)
@@ -157,8 +162,8 @@ _JD_SENTENCE_SPLIT = re.compile(
 # Education terms that are equivalent for matching purposes.
 # If a JD says "bachelor" and a resume says "bsc", that's a match.
 EDUCATION_EQUIVALENCES = [
-    {"bachelor", "bsc", "b.s.", "b.a.", "ba", "bs", "degree"},
-    {"master", "msc", "m.s.", "m.a.", "ma", "ms", "degree"},
+    {"bachelor", "bsc", "b.s.", "b.a.", "ba", "bs", "beng", "btech", "bcom", "llb", "degree"},
+    {"master", "msc", "m.s.", "m.a.", "ma", "ms", "meng", "mtech", "degree"},
     {"phd", "doctorate", "ph.d.", "degree"},
     {"mba", "degree"},
 ]
@@ -376,15 +381,16 @@ def _field_alternatives(text):
 
 
 def _education_pattern(term):
-    special = {"master": _MASTER_DEGREE, "degree": _DEGREE_WORD, "doctorate": _DOCTORATE}
+    special = {"bachelor": _BACHELOR_DEGREE, "master": _MASTER_DEGREE, "degree": _DEGREE_WORD,
+               "doctorate": _DOCTORATE}
     if term in special:
         return special[term]
     return re.compile(r'(?<!\w)' + re.escape(term) + r's?(?!\w)', re.IGNORECASE)
 
 
 def _has_degree_cue(text):
-    return bool(_DEGREE_CUE.search(text) or _MASTER_DEGREE.search(text) or _DEGREE_WORD.search(text)
-                or _DOCTORATE.search(text))
+    return any(pattern.search(text) for pattern in
+               (_DEGREE_CUE, _BACHELOR_DEGREE, _MASTER_DEGREE, _DEGREE_WORD, _DOCTORATE))
 
 
 def _expand_education(keywords):
