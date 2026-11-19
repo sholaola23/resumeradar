@@ -107,26 +107,40 @@ EDUCATION_KEYWORDS = {
     "bsc", "msc", "b.s.", "m.s.", "b.a.", "m.a.",
 }
 
-# Fields of study. In a job description these only name a qualification when
-# a degree word sits next to them ("BSc in Engineering"). On their own they are
-# usually job titles, team names or skills: "Engineering Manager", "our data
-# science team", "strong statistics".
+# Fields of study. These only name a qualification when a degree word sits
+# next to them ("BSc in Engineering"). On their own they are usually job
+# titles, team names or skills: "Engineering Manager", "our data science
+# team", "strong statistics".
 EDUCATION_FIELDS = {
     "computer science", "information technology", "engineering",
     "mathematics", "statistics", "data science", "business administration",
 }
 
-# Words that show a line is about a qualification.
-_DEGREE_CUE = re.compile(
-    r"\b(?:bachelor|masters?\b|master['’]s|mba|ph\.?d|doctorate|degrees?|"
-    r"bsc|msc|beng|meng|b\.s\.|m\.s\.|b\.a\.|m\.a\.|(?:under|post)?graduate|"
-    r"qualifications?|qualified\s+in|diploma|university|studied|major(?:ing)?\s+in)",
+# "master" is the degree only as "master's", "masters", "master of <subject>",
+# "master in" or "master degree", never in "Scrum Master(s)", "master data"
+# or "mastering".
+_MASTER_DEGREE = re.compile(
+    r"(?<!scrum\s)\bmaster(?:['’]?s\b|\s+in\b|\s+degree\b|\s+of\s+(?:science|arts|engineering|"
+    r"business|philosophy|research|laws|public|education|fine|computer|data|information)\b)",
     re.IGNORECASE)
-_DEGREE_CUE_REACH = 150  # characters either side of the field, on the same line
+# "degree" is not "a high degree of autonomy" or "360-degree feedback".
+_DEGREE_WORD = re.compile(r"(?<![\w-])degrees?\b(?!\s+of\b)", re.IGNORECASE)
+_DOCTORATE = re.compile(r"\bdoctora(?:te|l)s?\b", re.IGNORECASE)
 
-# "master" is the degree only as "master's", "masters", "master of" or
-# "master degree", never in "Scrum Master", "master data" or "mastering".
-_MASTER_DEGREE = re.compile(r"\bmaster(?:['’]?s\b|\s+(?:of|in)\b|\s+degree)", re.IGNORECASE)
+# Words that show a sentence is about a qualification.
+_DEGREE_CUE = re.compile(
+    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|bsc|msc|beng|meng|(?:under|post)?graduates?|"
+    r"diplomas?|university|college|studied|major(?:ing)?\s+in|qualified\s+in)\b|"
+    r"\b[bm]\.(?:s|a|sc|eng)\.",
+    re.IGNORECASE)
+# On a CV the subject often sits a line or two from the degree or heading.
+_CV_EDUCATION_CUE = re.compile(r"\b(?:education|academic|school|institute)\b", re.IGNORECASE)
+_CV_EDUCATION_LINES = 3
+
+# Sentence units for job descriptions. Abbreviations such as "B.S." and "e.g."
+# do not end a sentence, so "B.S. in Computer Science" stays together.
+_JD_SENTENCE_SPLIT = re.compile(
+    r'(?<=[.!?])(?<!\.[A-Za-z]\.)(?<!\.[A-Za-z]{2}\.)(?<!\.[A-Za-z]{3}\.)\s+|[;\n]+')
 
 # Education terms that are equivalent for matching purposes.
 # If a JD says "bachelor" and a resume says "bsc", that's a match.
@@ -282,26 +296,34 @@ def _education_in_text(term, text, *, strict=False):
 
     Stemming turned "engineering" into "engineer", so every Engineer job title
     read as an engineering degree. Only the term itself or its plural counts.
-    In strict mode (job descriptions), a field of study also needs a degree
-    word on the same line, so "Engineering Manager" is not a qualification.
+    A field of study also needs a degree word nearby: in the same sentence of
+    a job description (strict), or within a few lines on a CV.
     """
-    if term == "master":
-        return bool(_MASTER_DEGREE.search(text))
-    pattern = re.compile(r'(?<!\w)' + re.escape(term) + r's?(?!\w)', re.IGNORECASE)
-    if not strict or term not in EDUCATION_FIELDS:
+    pattern = _education_pattern(term)
+    if term not in EDUCATION_FIELDS:
         return bool(pattern.search(text))
-    return any(_near_degree_cue(text, match.start(), match.end())
-               for match in pattern.finditer(text))
+    if strict:
+        return any(pattern.search(sentence) and _has_degree_cue(sentence)
+                   for sentence in _JD_SENTENCE_SPLIT.split(text))
+    lines = text.split('\n')
+    for index, line in enumerate(lines):
+        if pattern.search(line):
+            nearby = '\n'.join(lines[max(0, index - _CV_EDUCATION_LINES):index + _CV_EDUCATION_LINES + 1])
+            if _has_degree_cue(nearby) or _CV_EDUCATION_CUE.search(nearby):
+                return True
+    return False
 
 
-def _near_degree_cue(text, start, end):
-    """True when a degree word is on the same line, close to text[start:end]."""
-    line_start = text.rfind('\n', 0, start) + 1
-    line_end = text.find('\n', end)
-    if line_end == -1:
-        line_end = len(text)
-    window = text[max(line_start, start - _DEGREE_CUE_REACH):min(line_end, end + _DEGREE_CUE_REACH)]
-    return bool(_DEGREE_CUE.search(window))
+def _education_pattern(term):
+    special = {"master": _MASTER_DEGREE, "degree": _DEGREE_WORD, "doctorate": _DOCTORATE}
+    if term in special:
+        return special[term]
+    return re.compile(r'(?<!\w)' + re.escape(term) + r's?(?!\w)', re.IGNORECASE)
+
+
+def _has_degree_cue(text):
+    return bool(_DEGREE_CUE.search(text) or _MASTER_DEGREE.search(text) or _DEGREE_WORD.search(text)
+                or _DOCTORATE.search(text))
 
 
 def _expand_education(keywords):
@@ -505,7 +527,7 @@ def analyze_requirements(resume_text, job_description, match_results):
     are suppressed only when positive resume evidence satisfies that local list.
     """
     resume = extract_keywords_from_text(resume_text)
-    sentences = re.split(r'(?<=[.!?])\s+|[;\n]+', _strip_jd_boilerplate(job_description))
+    sentences = _JD_SENTENCE_SPLIT.split(_strip_jd_boilerplate(job_description))
     evidence = []
     section_priority = "unspecified"
     for sentence in sentences:

@@ -58,6 +58,25 @@ class JobTitlesAreNotQualifications(unittest.TestCase):
         self.assertIn('bachelor', edu)
 
 
+    def test_look_alike_words_are_not_degree_cues(self):
+        for jd in ('Engineering hub based in Bengaluru.',
+                   'Diplomatic with engineering stakeholders.',
+                   'Scrum Master supporting our engineering teams.',
+                   'You will have a high degree of autonomy across engineering.',
+                   '360-degree feedback culture in engineering.',
+                   'Qualifications: 5+ years in cloud engineering.'):
+            with self.subTest(jd=jd):
+                self.assertNotIn('engineering', jd_education(jd))
+
+    def test_scrum_master_phrasings(self):
+        for jd in ('Work as a Scrum Master in an agile team.', 'We are hiring Scrum Masters.'):
+            with self.subTest(jd=jd):
+                self.assertNotIn('master', jd_education(jd))
+
+    def test_degree_of_is_not_a_degree(self):
+        self.assertNotIn('degree', jd_education('A high degree of ownership. 360-degree reviews.'))
+
+
 class RealQualificationsStillCount(unittest.TestCase):
     def test_degree_lines_name_their_fields(self):
         cases = {
@@ -71,6 +90,22 @@ class RealQualificationsStillCount(unittest.TestCase):
         for jd, expected in cases.items():
             with self.subTest(jd=jd):
                 self.assertTrue(expected <= jd_education(jd), jd_education(jd))
+
+    def test_abbreviated_degrees_keep_their_subject(self):
+        self.assertTrue({'b.s.', 'computer science'} <= jd_education('B.S. in Computer Science required.'))
+        self.assertIn('engineering', jd_education('Degree in a STEM subject, e.g. Engineering.'))
+        self.assertIn('doctorate', jd_education('Doctoral degree in Statistics.'))
+
+    def test_every_missing_field_gets_advice(self):
+        # The score and the advice read the job description the same way.
+        jd = ("Backend Engineer\nBachelor's degree required; Engineering, Mathematics or Physics preferred.\n"
+              'B.S. in Computer Science, e.g. Statistics. Engineering Manager reports.')
+        cv = 'Software Engineer\nPython.'
+        result = engine.calculate_match(engine.extract_keywords_from_text(cv),
+                                        engine.extract_keywords_from_text(jd, strict=True))
+        advice = {item['keyword'] for item in engine.analyze_requirements(cv, jd, result)
+                  if item['category'] == 'education'}
+        self.assertEqual(set(result['missing_keywords']['education']), advice)
 
     def test_master_degree_forms(self):
         for text in ("Master's degree", 'Masters in Statistics', 'Master of Science', 'master degree'):
@@ -90,6 +125,9 @@ class CvSide(unittest.TestCase):
         # CVs often put the subject on its own line under EDUCATION.
         edu = cv_education('EDUCATION\nImperial College London\nMechanical Engineering, 2015 - 2019')
         self.assertIn('engineering', edu)
+
+    def test_engineering_job_title_on_cv_is_not_a_degree(self):
+        self.assertNotIn('engineering', cv_education('Engineering Manager at Acme\nLed a team of 8.'))
 
     def test_missing_engineering_degree_is_reported_honestly(self):
         jd = "Backend Engineer\nPython, AWS.\nBachelor's degree in Engineering."
