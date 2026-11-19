@@ -156,6 +156,9 @@ class MoreDegreeWords(unittest.TestCase):
             with self.subTest(jd=jd):
                 self.assertTrue(jd_education(jd) & engine.EDUCATION_FIELDS, jd_education(jd))
 
+    def test_state_codes_are_not_degrees(self):
+        self.assertNotIn('engineering', jd_education('Engineering office in Boston, MA with hybrid working.'))
+
     def test_milliseconds_are_not_a_degree(self):
         self.assertNotIn('engineering', jd_education('Latency under 50 ms in our engineering stack.'))
 

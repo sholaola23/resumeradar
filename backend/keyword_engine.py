@@ -129,7 +129,7 @@ _DOCTORATE = re.compile(r"\bdoctora(?:te|l)s?\b", re.IGNORECASE)
 
 # Words that show a sentence is about a qualification.
 _DEGREE_CUE = re.compile(
-    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|[bm]sc|[bm]\.?eng|[bm]\.?tech|ba|bs|ma|(?<!\d)(?<!\d\s)ms(?=\s+(?:in|degree)\b)|"
+    r"\b(?:bachelor(?:['’]?s)?|mba|ph\.?d|[bm]sc|[bm]\.?eng|[bm]\.?tech|(?:ba|bs|ma)(?=\s+(?:in|degree|hons|or)\b|\s*\(hons\))|(?<!\d)(?<!\d\s)ms(?=\s+(?:in|degree)\b)|"
     r"hnd|hnc|llb|bcom|(?:under|post)?graduates?|"
     r"diplomas?|university|college|studied|major(?:ing)?\s+in|qualified\s+in)\b|"
     r"\b[bm]\.(?:s|a|sc|eng|tech)\.",
