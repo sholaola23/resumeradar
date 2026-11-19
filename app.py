@@ -51,6 +51,7 @@ from backend import ai_metrics
 from backend import ai_ratelimit
 from backend import bundle_credits
 from backend import funnel_metrics
+from backend import feedback
 
 # Load environment variables (override=True ensures .env values take priority)
 load_dotenv(override=True)
@@ -155,6 +156,7 @@ ai_metrics.init(_redis_client)
 ai_ratelimit.init(_redis_client)
 bundle_credits.init(_redis_client)
 funnel_metrics.init(_redis_client)
+feedback.init(_redis_client)
 
 # In-memory fallback
 _fallback_count = int(os.getenv('SCAN_COUNT_BASE', '150'))
@@ -3197,6 +3199,53 @@ def track_client_event():
     except Exception:
         pass
     return '', 204
+
+
+@app.route('/api/feedback', methods=['POST'])
+@limiter.limit("10 per hour")
+def submit_feedback():
+    """Store an optional "Was this useful?" comment.
+
+    The Yes/No vote itself is a funnel counter sent through /api/event. This
+    route takes only the free-text comment. It stores the cleaned comment, the
+    date, the vote and the may-quote tick: no IP, journey ID, scan data or CV
+    text (see backend/feedback.py). The comment is never logged.
+    """
+    origin = request.headers.get('Origin', '') or request.headers.get('Referer', '')
+    if not _origin_allowed(origin):
+        return jsonify({"error": "Not allowed."}), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('useful'), bool):
+        return jsonify({"error": "Invalid feedback."}), 400
+    if not feedback.clean_comment(data.get('comment')):
+        return jsonify({"error": "Please write a comment first."}), 400
+    if not feedback.save_comment(data['useful'], data.get('comment'), data.get('may_quote') is True):
+        return jsonify({"error": "We could not save your comment. Please try again later."}), 503
+    funnel_metrics.record("feedback_comment")
+    return jsonify({"ok": True}), 200
+
+
+@app.route('/api/admin/feedback', methods=['GET'])
+@limiter.exempt
+def admin_feedback():
+    """Return stored feedback comments. Bearer token auth (AUDIT_ADMIN_TOKEN).
+
+    Usage: GET /api/admin/feedback?days=30
+    """
+    admin_token = os.getenv('AUDIT_ADMIN_TOKEN', '')
+    if not admin_token:
+        return jsonify({"error": "Not configured."}), 503
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer ') or not hmac_module.compare_digest(
+            auth_header[7:].encode(), admin_token.encode()):
+        return jsonify({"error": "Unauthorized."}), 401
+    try:
+        days = max(1, min(int(request.args.get('days', '30')), 90))
+    except (ValueError, TypeError):
+        days = 30
+    resp = jsonify({"days": days, "comments": feedback.get_recent(days)})
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp, 200
 
 
 @app.route('/api/admin/funnel', methods=['GET'])

@@ -3206,6 +3206,21 @@ textarea::placeholder {
 .improve-loop { border: 2px solid #2563eb; }
 .improve-loop p { margin: 12px 0 20px; line-height: 1.65; color: #475569; }
 .improve-loop button { margin: 4px 8px 4px 0; min-height: 44px; }
+
+/* ---- WAS THIS USEFUL? ---- */
+.feedback-vote { display: flex; gap: 12px; flex-wrap: wrap; }
+.feedback-btn { min-width: 96px; min-height: 44px; justify-content: center; }
+.feedback-status { margin: 0; color: var(--gray-700); font-weight: 600; }
+.feedback-status:empty { display: none; }
+.feedback-status.is-error { color: #b91c1c; }
+.feedback-form { margin-top: 16px; }
+.feedback-form > label:first-child { display: block; font-weight: 600; margin-bottom: 8px; color: var(--gray-800); }
+.feedback-form textarea { width: 100%; padding: 12px; border: 1px solid var(--gray-500); border-radius: var(--radius-sm); font: inherit; resize: vertical; }
+.feedback-form textarea:focus-visible, .feedback-consent input:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.feedback-privacy { font-size: 14px; color: var(--gray-600); margin: 8px 0 12px; }
+.feedback-consent { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; font-size: 15px; color: var(--gray-700); cursor: pointer; }
+.feedback-consent input { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; }
+.feedback-consent[hidden], .feedback-form[hidden], .feedback-vote[hidden] { display: none; }
 .build-cta-card { text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; }
 .build-cta-card .build-cta-btn { background: #fff; color: #1e40af; border: 1px solid #94a3b8; box-shadow: none; }
 .inline-gate-card { background: #f8fafc; border: 1px solid #e2e8f0; box-shadow: none; }

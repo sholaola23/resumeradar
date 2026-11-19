@@ -43,6 +43,9 @@ VALID_EVENTS = frozenset({
     "purchase_completed",
     "download_completed",
     "free_download_nigeria",
+    "feedback_yes",
+    "feedback_no",
+    "feedback_comment",
 })
 
 # Subset allowed from the public POST /api/event endpoint
@@ -65,6 +68,8 @@ CLIENT_EVENTS = frozenset({
     "sticky_cta_clicked",
     "cv_optimize_clicked",
     "cover_letter_started",
+    "feedback_yes",
+    "feedback_no",
 })
 
 _redis = None

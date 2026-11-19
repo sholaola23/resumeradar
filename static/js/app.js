@@ -1298,6 +1298,8 @@ Nice to Have
 
         renderDeepResults(data);
         if (!isSubscribed() && !gateSkipped()) showInlineGate();
+        // Lets feedback.js reset the "Was this useful?" card for each new report.
+        document.dispatchEvent(new CustomEvent('rr:results-rendered'));
         const comparison = document.getElementById('rescanComparison');
         comparison.hidden = !comparisonBaseline;
         if (comparisonBaseline) {

@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=11">
+    <link rel="stylesheet" href="/static/css/style.css?v=12">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -576,6 +576,26 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         <button type="button" class="report-btn" id="scanAgainBtn">Start a different job scan</button>
                     </div>
 
+                    <!-- Was this useful? One tap, then an optional comment. -->
+                    <div class="result-card feedback-card" id="feedbackCard">
+                        <h2 id="feedbackHeading">Was this report useful?</h2>
+                        <div class="feedback-vote" id="feedbackVote" role="group" aria-labelledby="feedbackHeading">
+                            <button type="button" class="report-btn feedback-btn" id="feedbackYes">Yes</button>
+                            <button type="button" class="report-btn feedback-btn" id="feedbackNo">No</button>
+                        </div>
+                        <p class="feedback-status" id="feedbackStatus" role="status"></p>
+                        <form class="feedback-form" id="feedbackForm" hidden novalidate>
+                            <label for="feedbackComment" id="feedbackCommentLabel">What helped most? (optional)</label>
+                            <textarea id="feedbackComment" rows="3" maxlength="500" aria-describedby="feedbackPrivacy"></textarea>
+                            <p class="feedback-privacy" id="feedbackPrivacy">Please leave out names, contact details and anything from your CV. We save only your comment and today's date, with nothing that links it to you or your scan, and delete it after 90 days.</p>
+                            <label class="feedback-consent" id="feedbackConsentRow">
+                                <input type="checkbox" id="feedbackConsent">
+                                <span>ResumeRadar may quote this comment on the site, without my name.</span>
+                            </label>
+                            <button type="submit" class="scan-again-btn" id="feedbackSend">Send comment</button>
+                        </form>
+                    </div>
+
 
                 </div><!-- /deepResults -->
             </div>
@@ -816,6 +836,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
     </div>
 
     <script src="/static/js/scan-utils.js?v=2"></script>
-    <script src="/static/js/app.js?v=11"></script>
+    <script src="/static/js/app.js?v=12"></script>
+    <script src="/static/js/feedback.js?v=1"></script>
 </body>
 </html>

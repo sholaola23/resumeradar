@@ -108,6 +108,20 @@ attempts and visible screens, not payment proof. Repeat visits are a local-devic
 signal and cannot identify users across devices. Old seven-day records cannot
 be backfilled; the longer window accumulates after deployment.
 
+### "Was this useful?" feedback
+
+Under each report a visitor can tap Yes or No. Each tap is one funnel counter
+(`feedback_yes`, `feedback_no`) in `/api/admin/funnel`. After the tap they can
+add an optional comment, which goes to `POST /api/feedback` and is read back at
+the authenticated `GET /api/admin/feedback?days=30`.
+
+A stored comment holds four fields only: the cleaned text (500 characters at
+most, with email addresses, links and phone numbers replaced by `[removed]`),
+the UTC date, the vote, and whether the visitor ticked "may quote". No IP,
+journey ID, score, email or CV text is stored with it, and it is never logged.
+Comments expire after 90 days, with at most 200 kept per day. Only comments
+with `may_quote: true` may be quoted on the site.
+
 ## Getting Started
 
 ```bash
