@@ -237,23 +237,25 @@ def _keyword_in_text(keyword, text, *, use_stemming=True):
                       technical skills where stems cause false positives
                       (e.g., "scala" stem "scal" matching "scalable").
     """
-    # Escape special regex characters in the keyword
-    escaped = re.escape(keyword)
-    # Use word boundaries for accurate matching
-    pattern = r'(?<!\w)' + escaped + r'(?!\w)'
-    if re.search(pattern, text, re.IGNORECASE):
-        return True
+    return any(re.search(pattern, text, re.IGNORECASE)
+               for pattern in _keyword_patterns(keyword, use_stemming=use_stemming))
 
+
+def _keyword_patterns(keyword, *, use_stemming=True):
+    """Regex patterns that count as evidence of a keyword, strongest first.
+
+    Shared by matching and by locate_job_terms so the highlighted job text
+    can never disagree with the keyword lists.
+    """
+    # Word boundaries that also work for names such as c++ and node.js
+    patterns = [r'(?<!\w)' + re.escape(keyword) + r'(?!\w)']
     if use_stemming:
-        # Check stem variations for common word forms
-        # e.g., "collaboration" should match "collaborate", "collaborated", "collaborating"
+        # Stem variations for common word forms, e.g. "collaboration"
+        # matches "collaborate", "collaborated", "collaborating"
         stem = keyword.rstrip('esiond').rstrip('at').rstrip('ing')
         if len(stem) >= 4:
-            stem_pattern = r'\b' + re.escape(stem) + r'\w*\b'
-            if re.search(stem_pattern, text, re.IGNORECASE):
-                return True
-
-    return False
+            patterns.append(r'\b' + re.escape(stem) + r'\w*\b')
+    return patterns
 
 
 def _expand_education(keywords):
@@ -522,6 +524,102 @@ def analyze_requirements(resume_text, job_description, match_results):
             })
     category_order = {'technical_skills': 0, 'certifications': 1, 'education': 2, 'soft_skills': 3}
     return sorted(recommendations, key=lambda item: (order[item['priority']], category_order.get(item['category'], 4), item['keyword']))
+
+
+def locate_job_terms(job_description, match_results):
+    """Split the job description into segments marking each recognised term.
+
+    Returns a list of {"text"} and {"text", "keyword", "category", "status"}
+    segments whose text joins back to the job description exactly. A marked
+    segment holding a shorter listed term also has "parts": the same text split
+    into plain and marked pieces, so the inner term keeps its own status.
+    Every listed term gets at least one mark carrying its own status. Status is
+    "matched" or "missing", taken from match_results, so this view is the same
+    evidence as the keyword lists. Text after the equal-opportunity boilerplate
+    marker is returned unmarked because extraction ignores it. Action verbs are
+    left out: they are scored from the CV, not the job description.
+    """
+    status = {}
+    for label, key in (("matched", "matched_keywords"), ("missing", "missing_keywords")):
+        for category, keywords in match_results.get(key, {}).items():
+            if category != "action_verbs":
+                for keyword in keywords:
+                    status[(category, keyword)] = label
+
+    scanned = _strip_jd_boilerplate(job_description)
+    spans = []
+    for (category, keyword), label in status.items():
+        if category == "technical_skills" and keyword in _AMBIGUOUS_TECH:
+            patterns = [_AMBIGUOUS_TECH[keyword]]
+        else:
+            patterns = [re.compile(pattern, re.IGNORECASE) for pattern in
+                        _keyword_patterns(keyword, use_stemming=category != "technical_skills")]
+        for pattern in patterns:
+            found = False
+            for match in pattern.finditer(scanned):
+                start, end = match.span()
+                # Some context patterns consume a leading separator, e.g. " R".
+                while start < end and scanned[start] in " \t\r\n,;(/":
+                    start += 1
+                if start < end:
+                    spans.append((start, end, keyword, category, label))
+                    found = True
+            if found:
+                break  # same order as _keyword_in_text: exact form, then stem
+
+    # Longest term wins where two overlap ("google cloud" over "cloud"). A
+    # term inside it ("aws" in "aws certified") gets its own mark within that
+    # one, so it keeps its own status.
+    spans.sort(key=lambda span: (span[0], span[0] - span[1]))
+    marks, cursor = [], 0
+    for start, end, keyword, category, label in spans:
+        if start >= cursor:
+            marks.append({"span": (start, end), "keyword": keyword, "category": category,
+                          "status": label, "inner": []})
+            cursor = end
+            continue
+        outer = marks[-1]
+        inner = outer["inner"]
+        if keyword == outer["keyword"] or any(item["keyword"] == keyword for item in inner):
+            continue
+        if end <= cursor and (not inner or start >= inner[-1]["span"][1]):
+            inner.append({"span": (start, end), "keyword": keyword, "category": category, "status": label})
+        elif end > cursor:
+            # Overlaps only partly ("cloud computing" after "Google Cloud"):
+            # mark the part not already marked, so it keeps its own status.
+            rest = cursor
+            while rest < end and scanned[rest].isspace():
+                rest += 1
+            marks.append({"span": (rest, end), "keyword": keyword, "category": category,
+                          "status": label, "inner": []})
+            cursor = end
+
+    def piece(mark):
+        start, end = mark["span"]
+        return {"text": job_description[start:end], "keyword": mark["keyword"],
+                "category": mark["category"], "status": mark["status"]}
+
+    segments, cursor = [], 0
+    for mark in marks:
+        start, end = mark["span"]
+        if start > cursor:
+            segments.append({"text": job_description[cursor:start]})
+        segment = piece(mark)
+        if mark["inner"]:
+            parts, at = [], start
+            for item in mark["inner"]:
+                if item["span"][0] > at:
+                    parts.append({"text": job_description[at:item["span"][0]]})
+                parts.append(piece(item))
+                at = item["span"][1]
+            if at < end:
+                parts.append({"text": job_description[at:end]})
+            segment["parts"] = parts
+        segments.append(segment)
+        cursor = end
+    if cursor < len(job_description):
+        segments.append({"text": job_description[cursor:]})
+    return segments
 
 
 def analyze_ats_formatting(resume_text):

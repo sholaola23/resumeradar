@@ -27,6 +27,28 @@ test('rescan comparison names evidence changes only for the same job and score v
   assert.equal(utils.compareScan?.({...after, score:null}, before), null);
 });
 
+test('job view index finds every mention, with a term inside a longer one keeping its own status', () => {
+  const segments = [
+    {text: 'We use '},
+    {text: 'GitHub Actions', keyword: 'github actions', category: 'technical_skills', status: 'missing',
+     parts: [{text: 'GitHub', keyword: 'github', category: 'technical_skills', status: 'matched'}, {text: ' Actions'}]},
+    {text: ' and '},
+    {text: 'Python', keyword: 'python', category: 'technical_skills', status: 'matched'},
+    {text: '. More '},
+    {text: 'python', keyword: 'python', category: 'technical_skills', status: 'matched'},
+  ];
+  const index = utils.jobTermIndex?.(segments);
+  assert.deepEqual(index.positions, {'github actions': ['jd-term-1'], github: ['jd-term-1-0'],
+    python: ['jd-term-3', 'jd-term-5']});
+  assert.equal(index.matched, 2);  // github and python
+  assert.equal(index.missing, 1);
+});
+test('job view index is empty for missing or malformed segments', () => {
+  for (const input of [undefined, null, [], [null, {text: 'plain'}, {text: 'x', keyword: 'x', status: 'other'}]]) {
+    assert.deepEqual(utils.jobTermIndex?.(input), {positions: {}, matched: 0, missing: 0});
+  }
+});
+
 test('share links carry only an allowlisted ref tag, never a score', () => {
   assert.equal(utils.shareUrl?.('https://x.test', 'whatsapp'), 'https://x.test/?ref=whatsapp');
   assert.equal(utils.shareUrl?.('https://x.test', '<script>'), 'https://x.test/?ref=copy');
