@@ -103,13 +103,18 @@ This list is kept on the default branch, so a pull request can't change the rule
 - Check: broken routes, syntax errors, failing tests, missing imports and JS errors from removed elements that the items above don't cover. You don't run anything; say what you read.
 - Source: standing practice.
 
+## Subagents: always wait for them
+
+Every subagent you start runs in the foreground: never set `run_in_background`, and never end your turn while one is still running. Your final answer is read the moment you stop, so a review that stops to wait for subagents is lost with no verdict. Wait for every subagent's result, then write the comment.
+- Source: ResumeRadar PR #1, 19 Nov 2026. The review started two background subagents and ended with "The two review subagents are still running.", so no verdict was posted (Bachel's identical step failed the same way on PRs #61, #64 and #69).
+
 ## Step 1: find
 
-List the items whose trigger matches, with the line in the diff that triggered each. When the diff touches `app.py`, `backend/` or `static/js/app.js`, run the matched items as parallel subagents grouped as payments, privacy, cost, wording, checks. Give each the PR title and body, its items copied word for word, and these two facts word for word: "The change's code is under `pr-head/`; read and grep files there, never the same paths at the top level, which hold the default branch. The diff is in `.review/diff.patch`." Each returns candidate findings with `pr-head/` file:line evidence. Otherwise work through the items yourself.
+List the items whose trigger matches, with the line in the diff that triggered each. When the diff touches `app.py`, `backend/` or `static/js/app.js`, run the matched items as parallel subagents grouped as payments, privacy, cost, wording, checks. Give each the PR title and body, its items copied word for word, and these two facts word for word: "The change's code is under `pr-head/`; read and grep files there, never the same paths at the top level, which hold the default branch. The diff is in `.review/diff.patch`." Each returns candidate findings with `pr-head/` file:line evidence; wait for all of them before Step 2. Otherwise work through the items yourself.
 
 ## Step 2: verify
 
-For each candidate finding, start a fresh subagent with only the PR title, the finding, the code paths and the same two facts. It must confirm the finding from the code with a file and line, or reject it. Keep only confirmed findings. Drop findings that are only style, naming or tidying.
+For each candidate finding, start a fresh foreground subagent with only the PR title, the finding, the code paths and the same two facts. It must confirm the finding from the code with a file and line, or reject it. Keep only confirmed findings. Drop findings that are only style, naming or tidying.
 
 ## Step 3: rank and write
 
