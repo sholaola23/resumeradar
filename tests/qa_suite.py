@@ -131,7 +131,7 @@ def run_tests():
             ('results', 'Results section'),
             ('copyReportBtn', 'Copy report button'),
             ('downloadReportBtn', 'Download PDF button'),
-            ('shareLinkedIn', 'Share LinkedIn button'),
+            ('shareCard', 'Share card'),
             ('errorMessage', 'Error message div'),
         ]
         for elem_id, label in key_elements:

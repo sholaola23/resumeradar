@@ -1682,6 +1682,37 @@ textarea::placeholder {
     color: white;
 }
 
+/* ---- REFERRAL: share prompt, job link, /share page ---- */
+.share-btn { min-height: 44px; text-decoration: none; }
+.share-btn[hidden] { display: none; }
+.share-native { border-color: var(--primary); background: var(--primary); color: white; }
+.share-native:hover { background: var(--primary-dark); }
+.share-whatsapp { border-color: #0f7a43; color: #0f7a43; }
+.share-whatsapp:hover { background: #0f7a43; color: white; }
+.share-card .card-subtitle { margin-top: 8px; color: var(--gray-600); }
+.share-prompt { margin-bottom: 20px; padding: 20px; border: 2px solid var(--primary); border-radius: var(--radius); background: white; text-align: center; }
+.share-prompt h2 { font-size: 1.15rem; color: var(--gray-900); }
+.share-prompt p { margin: 8px 0 16px; color: var(--gray-600); line-height: 1.6; }
+.share-job { margin-top: 24px; padding-top: 20px; border-top: 1px solid #bae6fd; }
+.share-job h3 { font-size: 1rem; color: var(--gray-900); }
+.share-job p { max-width: 560px; margin: 8px auto 16px; font-size: 14px; line-height: 1.6; color: var(--gray-600); }
+.share-status:empty { margin: 0; }
+.share-page ~ .footer .footer-mission { margin-bottom: 0; color: var(--gray-300); }
+.share-status { margin: 12px 0 0; font-size: 14px; font-weight: 600; color: #065f46; overflow-wrap: anywhere; }
+.share-group-link { margin-top: 8px; font-size: 14px; }
+.share-group-link a, .share-page-note a { display: inline-block; padding: 12px 0; color: var(--primary-dark); font-weight: 600; }
+.share-page { padding: 40px 0 56px; }
+.share-page h1 { font-size: 2rem; line-height: 1.2; color: var(--gray-900); }
+.share-page-intro { max-width: 640px; margin: 12px 0 28px; font-size: 1.05rem; line-height: 1.6; color: var(--gray-600); }
+.share-page .result-card h2 { margin-bottom: 16px; }
+.share-page .result-card h3 { margin: 20px 0 8px; font-size: 1rem; color: var(--gray-800); }
+.share-page .share-buttons { justify-content: flex-start; }
+.share-text { margin-bottom: 12px; padding: 16px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); background: var(--gray-50); line-height: 1.6; color: var(--gray-800); overflow-wrap: anywhere; }
+.share-qr { display: block; width: 220px; max-width: 100%; height: auto; margin-bottom: 16px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm); }
+.share-page-note { max-width: 640px; line-height: 1.6; color: var(--gray-600); }
+.share-page-note h2 { font-size: 1rem; color: var(--gray-800); }
+.share-page-note p { margin-top: 8px; }
+
 /* ---- ROLE KEYWORD TAGS (programmatic SEO pages) ---- */
 .role-keywords {
     margin-top: 1rem;

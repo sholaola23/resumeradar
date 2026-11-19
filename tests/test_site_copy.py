@@ -124,7 +124,7 @@ class SiteCopyTest(unittest.TestCase):
         self.assertRegex(home, r'<button type="button" class="file-upload-area" id="dropZone"')
         self.assertNotIn('<div class="card-header-toggle"', home)
         toggles = re.findall(r'<button type="button" class="card-header-toggle"[^>]*>', home)
-        self.assertEqual(len(toggles), 5)
+        self.assertEqual(len(toggles), 4)  # the share card is open by default since PR #7
         for tag in toggles:
             target = re.search(r'data-target="(\w+)"', tag).group(1)
             self.assertIn(f'aria-controls="{target}"', tag)

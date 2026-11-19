@@ -639,81 +639,6 @@ Nice to Have
     }
 
     // ============================================================
-    // SHARE BUTTONS (UTM-tracked)
-    // ============================================================
-    const shareLinkedIn = document.getElementById('shareLinkedIn');
-    const shareWhatsApp = document.getElementById('shareWhatsApp');
-    const shareCopyLink = document.getElementById('shareCopyLink');
-    const baseSiteUrl = 'https://resumeradar.sholastechnotes.com';
-
-    /**
-     * Build a share URL with UTM parameters for tracking in Beehiiv.
-     * @param {string} source - e.g. 'linkedin', 'twitter', 'whatsapp', 'copy'
-     * @param {string} campaign - e.g. 'user_share', 'post_subscribe'
-     */
-    function getShareUrl(source, campaign) {
-        campaign = campaign || 'user_share';
-        const score = lastScanData ? lastScanData.match_score : 0;
-        const tier = !Number.isFinite(score) ? 'unknown' : score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
-        const params = new URLSearchParams({
-            utm_source: source,
-            utm_medium: 'social',
-            utm_campaign: campaign,
-            score_tier: tier,
-        });
-        return `${baseSiteUrl}?${params.toString()}`;
-    }
-
-    /**
-     * Get score-tiered share text — works for job seekers AND curious users.
-     * @param {string} platform - 'linkedin', 'whatsapp', or other
-     */
-    function getShareText(platform) {
-        const score = lastScanData && lastScanData.match_score;
-        return Number.isFinite(score)
-            ? `My CV has a ${ResumeRadarScan.scoreText(score)} job-description match estimate on ResumeRadar. Useful for reviewing keywords and writing — not a prediction of hiring outcomes.`
-            : 'ResumeRadar helps compare your CV with a job description and improve your writing. Free scan, no account needed.';
-    }
-
-    if (shareLinkedIn) {
-        shareLinkedIn.addEventListener('click', () => {
-            const shareUrl = getShareUrl('linkedin');
-            const text = getShareText('linkedin');
-            const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(text)}`;
-            window.open(url, '_blank', 'width=600,height=500');
-        });
-    }
-
-    if (shareWhatsApp) {
-        shareWhatsApp.addEventListener('click', () => {
-            const shareUrl = getShareUrl('whatsapp');
-            const text = getShareText('whatsapp') + '\n\n' + shareUrl;
-            const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank', 'width=600,height=500');
-        });
-    }
-
-    if (shareCopyLink) {
-        shareCopyLink.addEventListener('click', async () => {
-            const shareUrl = getShareUrl('copy');
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                showToast('Link copied! Share it with someone who could use it.');
-            } catch (e) {
-                const textarea = document.createElement('textarea');
-                textarea.value = shareUrl;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                showToast('Link copied! Share it with someone who could use it.');
-            }
-        });
-    }
-
-    // ============================================================
     // REPORT GENERATION
     // ============================================================
 
@@ -1115,6 +1040,9 @@ Nice to Have
         // Show results section
         resultsSection.style.display = 'block';
         trackOncePerScan('partial_results_viewed');
+        try {
+            if (sessionStorage.getItem('resumeradar_ref')) trackOncePerScan('referred_scan_completed');
+        } catch (e) { /* optional aggregate count */ }
 
         // ===== FREE TIER =====
         // 1. Score
@@ -1130,12 +1058,18 @@ Nice to Have
         if (!isSubscribed() && !gateSkipped()) showInlineGate();
         const comparison = document.getElementById('rescanComparison');
         comparison.hidden = !comparisonBaseline;
+        document.getElementById('sharePrompt').hidden = true;
         if (comparisonBaseline) {
             const change = ResumeRadarScan.compareScan(scanSnapshot(data), comparisonBaseline);
             if (change) {
                 comparison.innerHTML = `<h2>What changed for this job</h2><p>Keyword coverage ${change.delta > 0 ? 'increased by ' : change.delta < 0 ? 'decreased by ' : 'changed by '}${Math.abs(change.delta).toFixed(1)} percentage points.</p>
                     <details><summary>Review keyword changes</summary><p>Newly found: ${escapeHtml(change.added.join(', ') || 'none')}.</p><p>No longer found: ${escapeHtml(change.removed.join(', ') || 'none')}.</p></details>
                     <p>This measures keyword evidence, not your chances of being hired.</p>`;
+                // Best moment to ask: the user has just seen the tool help them.
+                if (change.delta > 0) {
+                    document.getElementById('sharePrompt').hidden = false;
+                    trackOncePerScan('share_prompt_shown');
+                }
             } else {
                 comparison.textContent = 'This scan uses a different job description, scoring version, or has no numeric estimate, so a score comparison would not be meaningful.';
             }

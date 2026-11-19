@@ -436,6 +436,13 @@ def privacy():
     return render_template('privacy.html')
 
 
+@app.route('/share')
+@limiter.exempt
+def share_page():
+    """Ready-made text and a QR code for sharing the free scan with a group."""
+    return render_template('share.html')
+
+
 @app.route('/favicon.ico')
 @limiter.exempt
 def favicon():
