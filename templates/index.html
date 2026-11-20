@@ -44,13 +44,13 @@
 
     <!-- Favicon -->
     <link rel="icon" href="/static/favicon.ico" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22none%22 stroke=%22%230E5C4A%22 stroke-width=%228%22/><circle cx=%2250%22 cy=%2250%22 r=%227%22 fill=%22%230E5C4A%22/></svg>">
     <link rel="apple-touch-icon" href="/static/images/apple-touch-icon.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=15">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=16">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -186,7 +186,7 @@
         <div class="container">
             <div class="header-inner">
                 <a class="logo" href="/" aria-label="ResumeRadar home">
-                    <span class="logo-icon" aria-hidden="true">📡</span>
+                    <span class="logo-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" focusable="false"><circle cx="13" cy="13" r="11"/><path d="M13 7a6 6 0 0 1 6 6"/><circle cx="13" cy="13" r="1.6" fill="currentColor"/></svg></span>
                     <span class="logo-text">ResumeRadar</span>
                 </a>
                 <nav class="nav-links" aria-label="Main">
@@ -225,7 +225,6 @@
     <div class="social-proof" id="socialProof" style="display: none;">
         <div class="container">
             <p class="proof-text">
-                <span class="proof-icon">🔥</span>
                 <span><strong id="scanCount">0</strong></span>
                 <span class="velocity-badge" id="scanVelocity" style="display: none;"></span>
             </p>
@@ -276,13 +275,13 @@
                         <li>Writing your suggestions</li>
                     </ol>
                     <p class="scan-progress-note" id="scanProgressNote">Usually about 20 seconds.</p>
-                    <p class="scan-progress-privacy">🔒 Your uploaded file is deleted after parsing.</p>
+                    <p class="scan-progress-privacy">Your uploaded file is deleted after parsing.</p>
                 </div>
                 <p class="rescan-hint" id="jobLinkNotice" role="status" hidden>A friend sent you this job description. Add your CV to see how it compares. Your CV is never part of a shared link.</p>
                 <div class="form-grid">
                     <!-- LEFT: Resume Input -->
                     <div class="form-panel">
-                        <h2>📄 Your CV</h2>
+                        <h2>Your CV</h2>
                         <div class="input-tabs">
                             <button type="button" class="tab-btn active" data-tab="upload">Upload file</button>
                             <button type="button" class="tab-btn" data-tab="paste">Paste text</button>
@@ -291,7 +290,7 @@
                         <!-- Upload Tab -->
                         <div class="tab-content active" id="tab-upload">
                             <button type="button" class="file-upload-area" id="dropZone" aria-describedby="uploadFormats">
-                                <span class="upload-icon" aria-hidden="true">📎</span>
+                                <span class="upload-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M14 19V6M9 11l5-5 5 5M5 20v2.5h18V20"/></svg></span>
                                 <span class="upload-text"><span class="pointer-fine">Drag and drop your CV here</span><span class="pointer-coarse">Tap to choose your CV</span></span>
                                 <span class="upload-subtext pointer-fine">or click to browse</span>
                                 <span class="upload-formats" id="uploadFormats">PDF or DOCX • Max 5MB</span>
@@ -319,7 +318,7 @@ Include everything: contact info, summary, experience, education, skills, certif
 
                     <!-- RIGHT: Job Description -->
                     <div class="form-panel">
-                        <h2>📋 Job description</h2>
+                        <h2>Job description</h2>
                         <textarea
                             id="jobDescription"
                             name="job_description"
@@ -335,7 +334,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- SCAN BUTTON -->
                 <div class="scan-button-wrapper">
                     <button type="submit" class="scan-btn" id="scanBtn">
-                        <span class="scan-btn-text">📡 Scan my CV</span>
+                        <span class="scan-btn-text">Scan my CV</span>
                     </button>
                     <p class="demo-link-wrapper">
                         No CV to hand? <button type="button" class="demo-link" id="demoScanBtn">See an example report →</button>
@@ -413,7 +412,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                 <!-- Top 3 Missing Keywords (rendered by JS) -->
                 <div class="result-card top-missing-card" id="topMissingKeywords" style="display: none;">
-                    <h2>🎯 Priorities for this job</h2>
+                    <h2>Priorities for this job</h2>
                     <p class="card-subtitle">Review these requirements first. A missing term can mean missing evidence, not missing experience. Only add claims you can support.</p>
                     <div class="top-missing-list" id="topMissingList"></div>
                 </div>
@@ -459,20 +458,20 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="result-card" id="saveCard">
                         <h2 class="card-toggle-heading">
                             <button type="button" class="card-header-toggle" data-target="reportActionsContent" data-section="report_actions" aria-expanded="true" aria-controls="reportActionsContent">
-                                <span>📄 Save or share your report</span>
+                                <span>Save or share your report</span>
                                 <span class="toggle-icon" aria-hidden="true">−</span>
                             </button>
                         </h2>
                         <div id="reportActionsContent">
                             <div class="report-actions">
                                 <button type="button" class="report-btn" id="copyReportBtn">
-                                    <span class="report-btn-icon">📋</span> Copy report
+                                    Copy report
                                 </button>
                                 <button type="button" class="report-btn" id="downloadReportBtn">
-                                    <span class="report-btn-icon">📥</span> Download report
+                                    Download report
                                 </button>
                                 <button type="button" class="report-btn" id="emailReportBtn">
-                                    <span class="report-btn-icon">📧</span> Email report
+                                    Email report
                                 </button>
                             </div>
                         </div>
@@ -482,7 +481,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="result-card ai-card" id="aiCard">
                         <h2 class="card-toggle-heading">
                             <button type="button" class="card-header-toggle" data-target="aiContent" data-section="ai" aria-expanded="true" aria-controls="aiContent">
-                                <span>🤖 Smart suggestions</span>
+                                <span>Smart suggestions</span>
                                 <span class="toggle-icon" aria-hidden="true">−</span>
                             </button>
                         </h2>
@@ -496,7 +495,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="result-card">
                         <h2 class="card-toggle-heading">
                             <button type="button" class="card-header-toggle" data-target="categoryContent" data-section="categories" aria-expanded="false" aria-controls="categoryContent">
-                                <span>📊 Category breakdown</span>
+                                <span>Category breakdown</span>
                                 <span class="toggle-icon" aria-hidden="true">+</span>
                             </button>
                         </h2>
@@ -507,10 +506,9 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                     <!-- Missing Keywords -->
                     <div class="result-card keywords-card" id="keywordsCard">
-                        <h2>⚠️ Keywords not found in your CV</h2>
+                        <h2>Keywords not found in your CV</h2>
                         <p class="card-subtitle">These terms were found in the job description but not in your CV. Some may be optional or alternatives to tools you already use.</p>
                         <div class="missing-keywords-tip">
-                            <span class="tip-icon-inline">💡</span>
                             <span><strong>Experience you already have:</strong> add a truthful example showing where you used it. <strong>Experience you do not have:</strong> treat it as a learning gap, not wording to add. Check the job evidence above first: optional skills and accepted alternatives are not necessarily gaps.</span>
                         </div>
                         <div class="keywords-grid" id="missingKeywords"></div>
@@ -520,7 +518,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="result-card matched-card">
                         <h2 class="card-toggle-heading">
                             <button type="button" class="card-header-toggle" data-target="matchedContent" data-section="matched" aria-expanded="false" aria-controls="matchedContent">
-                                <span>✅ Matched keywords</span>
+                                <span>Matched keywords</span>
                                 <span class="toggle-icon" aria-hidden="true">+</span>
                             </button>
                         </h2>
@@ -534,7 +532,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <!-- Job description with matched and missing terms marked -->
                     <div class="result-card jd-view-card" id="jobViewCard" hidden>
                         <details id="jobViewDetails">
-                            <summary><h2>🔍 View in job description</h2></summary>
+                            <summary><h2>View in job description</h2></summary>
                             <p class="card-subtitle">Your job description with the recognised terms marked, so you can see how the employer uses each one. Select a keyword in the lists above to jump to it.</p>
                             <p class="jd-view-legend">
                                 <span><mark class="jd-term matched">Found in your CV</mark> <span id="jobViewMatchedCount"></span></span>
@@ -547,11 +545,11 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                     <!-- Cover Letter Key Points -->
                     <div class="result-card cover-letter-card" id="coverLetterCard" style="display: none;">
-                        <h2>✉️ Cover letter key points</h2>
+                        <h2>Cover letter key points</h2>
                         <p class="card-subtitle">Talking points for your cover letter — check each against your actual experience.</p>
                         <div class="cover-letter-points" id="coverLetterPoints"></div>
                         <div class="cover-letter-footer">
-                            <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">📋 Copy points</button>
+                            <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">Copy points</button>
                             <span class="cover-letter-note">Use examples you can confidently discuss in an interview.</span>
                         </div>
 
@@ -568,8 +566,8 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                                 <div class="cl-output-header">
                                     <span class="cl-output-title">Your first draft</span>
                                     <div class="cl-output-actions">
-                                        <button type="button" class="cl-action-btn" id="copyCoverLetterFull">📋 Copy</button>
-                                        <button type="button" class="cl-action-btn" id="downloadCoverLetterTxt">💾 Download .txt</button>
+                                        <button type="button" class="cl-action-btn" id="copyCoverLetterFull">Copy</button>
+                                        <button type="button" class="cl-action-btn" id="downloadCoverLetterTxt">Download .txt</button>
                                     </div>
                                 </div>
                                 <div class="cl-output-body" id="coverLetterBody" contenteditable="true"></div>
@@ -587,7 +585,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="result-card ats-card">
                         <h2 class="card-toggle-heading">
                             <button type="button" class="card-header-toggle" data-target="atsContent" data-section="ats" aria-expanded="false" aria-controls="atsContent">
-                                <span>📋 ATS formatting check</span>
+                                <span>ATS formatting check</span>
                                 <span class="toggle-icon" aria-hidden="true">+</span>
                             </button>
                         </h2>
@@ -598,7 +596,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                     <!-- Scan History -->
                     <div class="result-card history-card" id="scanHistoryCard" style="display: none;">
-                        <h2>📈 Your scan history</h2>
+                        <h2>Your scan history</h2>
                         <p class="card-subtitle">Compare revisions for the same job description. History stays on this device; the chart only shows scans of this job.</p>
                         <div class="history-chart" id="historyChart"></div>
                         <div class="history-list" id="historyList"></div>
@@ -660,7 +658,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
     <div class="modal-overlay" id="emailModal" style="display: none;">
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="emailModalTitle">
             <div class="modal-header">
-                <h3 id="emailModalTitle">📧 Email your report</h3>
+                <h3 id="emailModalTitle">Email your report</h3>
                 <button type="button" class="modal-close" id="closeModal" aria-label="Close">✕</button>
             </div>
             <div class="modal-body">
@@ -795,7 +793,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <a href="/privacy">Privacy</a>
                 <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Contact</a>
             </p>
-            <p class="footer-privacy">🔒 {{ privacy_line }}</p>
+            <p class="footer-privacy">{{ privacy_line }}</p>
         </div>
     </footer>
 
@@ -805,7 +803,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
     </div>
 
     <script src="/static/js/scan-utils.js?v=5"></script>
-    <script src="/static/js/app.js?v=15"></script>
+    <script src="/static/js/app.js?v=16"></script>
     <script src="/static/js/share.js?v=1"></script>
 </body>
 </html>

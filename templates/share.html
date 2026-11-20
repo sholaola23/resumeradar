@@ -10,15 +10,15 @@
     <link rel="icon" href="/static/favicon.ico" sizes="any">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=15">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=16">
 </head>
 <body>
     <header class="header">
         <div class="container">
             <div class="header-inner">
                 <div class="logo">
-                    <span class="logo-icon">📡</span>
+                    <span class="logo-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" focusable="false"><circle cx="13" cy="13" r="11"/><path d="M13 7a6 6 0 0 1 6 6"/><circle cx="13" cy="13" r="1.6" fill="currentColor"/></svg></span>
                     <span class="logo-text">ResumeRadar</span>
                 </div>
                 <nav class="nav-links">
@@ -68,7 +68,7 @@
     <footer class="footer">
         <div class="container">
             <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
-            <p class="footer-privacy">🔒 {{ privacy_line }} <a href="/privacy">Privacy</a></p>
+            <p class="footer-privacy">{{ privacy_line }} <a href="/privacy">Privacy</a></p>
         </div>
     </footer>
     <script src="/static/js/scan-utils.js?v=3"></script>

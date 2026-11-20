@@ -1281,9 +1281,9 @@ Nice to Have
         // Color based on score
         let color;
         if (!Number.isFinite(score)) color = '#64748b';
-        else if (score >= 75) color = '#059669';
-        else if (score >= 50) color = '#d97706';
-        else color = '#dc2626';
+        else if (score >= 75) color = '#0E5C4A';
+        else if (score >= 50) color = '#B45309';
+        else color = '#B91C1C';
         scoreFill.style.stroke = color;
 
         // Summary text
