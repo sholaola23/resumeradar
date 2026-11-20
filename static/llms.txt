@@ -1,13 +1,13 @@
 # ResumeRadar
 > Free ATS resume scanner — no signup required
 
-ResumeRadar is a free online tool that helps job seekers check their resume against a specific job description. Recruiters receive hundreds of applications per role, and ATS software plus AI screening rank every resume before a human reads it. ResumeRadar shows you how you rank: upload a resume (PDF/DOCX) and paste a job description to get an instant match score, missing keywords by category, ATS formatting checks, and AI-powered improvement suggestions.
+ResumeRadar is a free online tool that helps job seekers check their resume against a specific job description. Upload a resume (PDF/DOCX) and paste a job description to get a keyword match estimate, missing keywords by category, ATS formatting checks, and AI-powered improvement suggestions.
 
 ## Features
-- ATS match score with keyword analysis across 5 categories (technical skills, soft skills, certifications, education, action verbs)
+- Keyword match estimate with keyword analysis across 5 categories (technical skills, soft skills, certifications, education, action verbs)
 - Missing keyword detection against the actual job description
 - AI-powered resume suggestions, quick wins, and cover-letter talking points
-- Free AI micro-tools: cover letter generator, bullet enhancer, summary generator
+- Free cover letter generator
 - ATS formatting and recruiter-tips sub-scores
 
 ## Pricing
@@ -25,7 +25,10 @@ backend developer, scrum master, and machine learning engineer.
 https://resumeradar.sholastechnotes.com
 
 ## Privacy
-Resumes are analyzed in real time and are never added to a database, sold, or shared. Uploaded files are deleted immediately after parsing. AI providers process the text to generate suggestions. Temporary data auto-expires: AI results are cached for up to 1 hour. Emails are stored only as HMAC hashes; email delivery is handled by Resend; newsletter sign-ups go to Beehiiv.
+Your CV file is deleted as soon as it is read. Your CV text is sent to our AI provider to write your suggestions and is not saved by ResumeRadar. Results are cached for up to one hour, and nothing is sold. Details: https://resumeradar.sholastechnotes.com/privacy
+
+## What the score means
+The score is a keyword match estimate. It is not an employer's ATS score, an applicant ranking or a prediction of interviews or job offers.
 
 ## Built by
-ResumeRadar team
+Olushola Oladipupo (https://sholastechnotes.com)
