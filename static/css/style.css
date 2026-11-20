@@ -24,8 +24,9 @@
     --gray-100: #f3f4f6;
     --gray-200: #e5e7eb;
     --gray-300: #d1d5db;
-    --gray-400: #9ca3af;
-    --gray-500: #6b7280;
+    /* Both greys are used for text, so both meet 4.5:1 on white and on the pale greys. */
+    --gray-400: #6b7280;
+    --gray-500: #5b6474;
     --gray-600: #4b5563;
     --gray-700: #374151;
     --gray-800: #1f2937;
@@ -1746,7 +1747,7 @@ textarea::placeholder {
 
 .share-whatsapp {
     border-color: #25d366;
-    color: #25d366;
+    color: #0b6b5f;
 }
 
 .share-whatsapp:hover {
@@ -3271,6 +3272,71 @@ button:focus-visible, a:focus-visible { outline: 3px solid #2563eb; outline-offs
 .score-number.unscored { font-size:19px; }
 #scanForm { scroll-margin-top:24px; }
 
+/* ---- UX quick wins (B1 to B12) ---- */
+/* Header: the logo is a link home; Share sits beside the page links. */
+a.logo { text-decoration: none; }
+button.nav-link { background: none; border: 0; cursor: pointer; font-family: inherit; }
+.nav-link { min-height: 44px; display: inline-flex; align-items: center; }
+@media (max-width: 600px) {
+    /* "How it works" is hidden at this width, so its link is too. */
+    .nav-link[href="#how-it-works"] { display: none; }
+}
+.step-content h2 { font-size: 14px; font-weight: 700; color: var(--gray-800); margin-bottom: 2px; }
+
+/* Upload box: phones cannot drag and drop. */
+.pointer-coarse { display: none; }
+@media (hover: none) and (pointer: coarse) {
+    .pointer-fine { display: none; }
+    .pointer-coarse { display: inline; }
+}
+
+/* Example report link is a button (it starts a scan). */
+button.demo-link { background: none; border: 0; padding: 12px 4px; min-height: 44px; cursor: pointer; font: inherit; font-weight: 600; }
+
+/* Waiting state: the progress panel takes the place of the form. */
+.scan-form.is-scanning .form-grid,
+.scan-form.is-scanning .scan-button-wrapper,
+.scan-form.is-scanning .rescan-hint { display: none; }
+.scan-progress { max-width: 520px; margin: 0 auto; padding: 32px 24px; background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); box-shadow: var(--shadow); }
+.scan-progress h2 { font-size: 1.25rem; margin-bottom: 16px; }
+.scan-progress-steps { list-style: none; margin-bottom: 16px; }
+.scan-progress-steps li { position: relative; padding: 8px 0 8px 36px; color: var(--gray-500); }
+.scan-progress-steps li::before { content: ''; position: absolute; left: 4px; top: 11px; width: 18px; height: 18px; border: 2px solid var(--gray-300); border-radius: 50%; }
+.scan-progress-steps li.active { color: var(--gray-900); font-weight: 600; }
+.scan-progress-steps li.active::before { border-color: var(--primary); border-top-color: transparent; animation: spin 0.8s linear infinite; }
+.scan-progress-steps li.done { color: var(--gray-700); }
+.scan-progress-steps li.done::before { content: '✓'; border-color: var(--success); background: var(--success); color: #fff; font-size: 12px; font-weight: 700; line-height: 14px; text-align: center; }
+.scan-progress-note { font-weight: 600; color: var(--gray-700); }
+.scan-progress-privacy { margin-top: 8px; font-size: 14px; color: var(--gray-600); }
+@media (prefers-reduced-motion: reduce) {
+    .scan-progress-steps li.active::before { animation: none; border-top-color: var(--primary); }
+}
+
+/* Results: jump menu, score method, category note. */
+.results-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.results-jump a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--gray-300); border-radius: 999px; background: #fff; color: var(--gray-700); font-size: 14px; font-weight: 600; text-decoration: none; }
+.results-jump a:hover { border-color: var(--primary); color: var(--primary); }
+.results-section .result-card { scroll-margin-top: 16px; }
+.score-method { margin-top: 16px; font-size: 14px; color: #475569; line-height: 1.6; }
+.score-method summary { cursor: pointer; font-weight: 600; color: var(--primary-dark); padding: 10px 0; }
+.category-note { margin-top: 12px; font-size: 13px; color: var(--gray-600); }
+.history-chart-title, .history-list-title { font-size: 13px; font-weight: 600; color: var(--gray-600); margin-bottom: 8px; }
+.history-list-title { margin-top: 16px; }
+
+/* Footer: who built it, and where to go next. */
+.footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 8px; margin-bottom: 12px; }
+.footer-links a, .footer-built a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; }
+.footer-links a { color: #93c5fd; font-size: 14px; font-weight: 600; text-decoration: none; }
+.footer-links a:hover { text-decoration: underline; }
+.footer-roles-links a { display: inline-block; padding: 9px 4px; }
+
+/* Contrast: text colours that failed 4.5:1 (axe). */
+.footer, .footer-mission, .footer-privacy { color: #cbd5e1; }
+.keyword-tag.missing { color: #b91c1c; }
+.keyword-tag.matched { color: #065f46; }
+.cl-btn-free { opacity: 1; }
+.contact-item.found { color: #047857; }
+.results-jump a[hidden] { display: none; }
 /* View in job description */
 .jd-view-card summary { cursor:pointer; list-style-position:outside; margin-left:18px; min-height:44px; display:list-item; }
 .jd-view-card summary h2 { display:inline; margin:0; }
