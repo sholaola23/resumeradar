@@ -30,9 +30,11 @@ MAX_PDF_PAGES = 50
 #    the time budget is spent (covers forms drawn many times over).
 MAX_PDF_CONTENT_BYTES = 3 * 1024 * 1024
 MAX_PDF_TEXT_CHARS = 100_000   # raw text; app.py caps the cleaned text at 50k
-PDF_EXTRACT_SECONDS = 10
+PDF_EXTRACT_SECONDS = 3       # heaviest realistic CV QA built: 1.0s
 _PDF_TOO_MUCH = ("That file holds more text than a CV usually does. "
                  "Please upload just your CV or paste your CV text.")
+_PDF_TOO_COMPLEX = ("That PDF is more complex than we can process, often because of "
+                    "heavy graphics. Please save a simpler version or paste your CV text.")
 
 
 class _PdfBudgetExceeded(Exception):
@@ -124,20 +126,20 @@ def extract_text_from_pdf(file_path):
             return None, f"That PDF has {page_count} pages (limit {MAX_PDF_PAGES}). Please upload just your resume."
 
         if not _pdf_content_size_ok(reader):
-            return None, _PDF_TOO_MUCH
+            return None, _PDF_TOO_COMPLEX
 
         deadline = time.monotonic() + PDF_EXTRACT_SECONDS
         chars = 0
 
         def _check_time(*_args):
             if time.monotonic() > deadline:
-                raise _PdfBudgetExceeded()
+                raise _PdfBudgetExceeded(_PDF_TOO_COMPLEX)
 
         def _count_text(text, *_args):
             nonlocal chars
             chars += len(text)
             if chars > MAX_PDF_TEXT_CHARS:
-                raise _PdfBudgetExceeded()
+                raise _PdfBudgetExceeded(_PDF_TOO_MUCH)
 
         text_parts = []
         try:
@@ -148,8 +150,8 @@ def extract_text_from_pdf(file_path):
                 )
                 if page_text:
                     text_parts.append(page_text)
-        except _PdfBudgetExceeded:
-            return None, _PDF_TOO_MUCH
+        except _PdfBudgetExceeded as exc:
+            return None, str(exc)
 
         full_text = "\n".join(text_parts)
 

@@ -63,7 +63,7 @@ class PdfBudgetTests(unittest.TestCase):
         text, err = resume_parser.extract_text_from_pdf(path)
         self.assertLess(time.time() - start, 2)
         self.assertIsNone(text)
-        self.assertIn("more text than a CV", err)
+        self.assertIn("more complex than we can process", err)
 
     def test_text_budget_stops_extraction(self):
         # Content check lifted, so the running text count must catch it.
@@ -80,7 +80,7 @@ class PdfBudgetTests(unittest.TestCase):
         with patch.object(resume_parser, "PDF_EXTRACT_SECONDS", -1):
             text, err = resume_parser.extract_text_from_pdf(path)
         self.assertIsNone(text)
-        self.assertIn("more text than a CV", err)
+        self.assertIn("more complex than we can process", err)
 
     def test_normal_cv_text_unchanged(self):
         path = self._path(_normal_cv_pdf())
