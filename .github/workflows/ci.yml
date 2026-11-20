@@ -4,7 +4,8 @@ name: CI
 # 20 Nov 2026). Before this, pull requests showed no checks at all.
 #
 # Two jobs:
-# - Secret scan: gitleaks over the whole git history. A finding fails the job.
+# - Secret scan: gitleaks over the full history of the commit under test.
+#   A finding fails the job.
 #   Known findings that are confirmed dead live in .gitleaksignore.
 # - Tests: the QA suite, every Python unittest in tests/ and the node tests,
 #   the same commands as "How to verify" in the project instructions.
