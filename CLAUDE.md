@@ -66,6 +66,8 @@ There is no CI test job. The only workflow is the Claude review (below), so run 
 
 A comment starting `@claude-qa review` on a PR, from Shola's account (typed, or posted through the Claude GitHub app), runs `.github/workflows/resumeradar-claude-review.yml`. It calls the Claude API through `.github/scripts/claude_review.py` with read-only tools, against the checklist in `.claude/skills/resumeradar-final-review/SKILL.md` read from `master`, never from the PR. It signs in by workload identity federation, so no key is stored. It bills the "ResumeRadar GitHub reviews" workspace, which has a $30 monthly spend limit. Because the workflow and checklist are read from `master`, a change to either only takes effect after merge.
 
+Grok (`@grok-qa review`) posts its verdict under Shola's account through the Cursor app. PR activity subscriptions can miss those comments, so while a PR waits on any reviewer, read its issue comments, reviews and inline comments yourself about every 10 minutes (schedule each check with send_later) until it merges, and act on what you find.
+
 ## What failure looks like
 
 - `qa_suite.py` prints FAIL lines and no "ALL CLEAR"; unittest prints `FAILED (failures=N)`; node prints `fail` above 0.
