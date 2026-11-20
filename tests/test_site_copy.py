@@ -37,39 +37,83 @@ def read(*parts):
         return handle.read()
 
 
+USER_TEXT_NAMES = {'resume_text', 'job_description', 'cv_text', 'response_text', 'clean_text',
+                   'email', 'jd_text', 'bullet_text', 'job_context'}
+
+
 def _leaky_log_lines(scope):
-    """Lines where a print or logging call shows an exception or a response body.
+    """Lines where logging could carry user text, an exception message or a response body.
 
-    Inside an except block, the caught exception may only appear as
-    log_safe.describe(e) or type(e).__name__. Anywhere, a `.text` attribute
-    (an HTTP response body) may not be logged.
+    - A print, logging, logger or app.logger call, or a write to sys.stderr or
+      sys.stdout, may show a caught exception only as log_safe.describe(e) or
+      type(e).__name__. That also applies to any name copied from it, such
+      as msg = str(e).
+    - Such a call may never show a response body (.text) or a variable that
+      holds CV, job or email text, except as len(...).
+    - traceback.* calls, .exception(...) calls and exc_info= are never
+      allowed, because they write the exception message.
     """
-    def is_log_call(node):
-        f = node.func
-        return (isinstance(f, ast.Name) and f.id == 'print') or (
-            isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
-            and f.value.id in ('logging', 'logger', 'log'))
+    def chain(node):
+        parts = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.Name):
+            parts.append(node.id)
+        return list(reversed(parts))
 
-    def safe_use(parent, name):
-        if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute) and parent.func.attr == 'describe':
+    def is_log_call(call):
+        names = chain(call.func)
+        if names == ['print']:
             return True
-        return isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name) and parent.func.id == 'type'
+        if len(names) >= 2 and names[0] in ('logging', 'logger', 'log', 'app', 'current_app'):
+            return names[0] != 'app' or names[1] == 'logger'
+        return names[:2] in (['sys', 'stderr'], ['sys', 'stdout']) and names[-1] == 'write'
+
+    def always_leaky(call):
+        names = chain(call.func)
+        return (names[:1] == ['traceback'] or names[-1:] == ['exception']
+                or any(k.arg == 'exc_info' for k in call.keywords))
+
+    def safe_use(parent):
+        f = parent.func if isinstance(parent, ast.Call) else None
+        if chain(f) == ['log_safe', 'describe']:
+            return True
+        return isinstance(f, ast.Name) and f.id in ('type', 'len')
+
+    def parent_map(node):
+        return {child: n for n in ast.walk(node) for child in ast.iter_child_nodes(n)}
 
     lines = []
+    calls = [n for n in ast.walk(scope) if isinstance(n, ast.Call)]
+    for call in calls:
+        if always_leaky(call):
+            lines.append(call.lineno)
+        elif is_log_call(call):
+            parents = parent_map(call)
+            for n in ast.walk(call):
+                if isinstance(n, ast.Attribute) and n.attr == 'text':
+                    lines.append(call.lineno)
+                if isinstance(n, ast.Name) and n.id in USER_TEXT_NAMES and not safe_use(parents.get(n)):
+                    lines.append(call.lineno)
+
     for handler in ast.walk(scope):
         if not isinstance(handler, ast.ExceptHandler) or not handler.name:
             continue
-        for call in (n for stmt in handler.body for n in ast.walk(stmt)):
+        body = [n for stmt in handler.body for n in ast.walk(stmt)]
+        tainted = {handler.name}
+        for stmt in body:
+            if isinstance(stmt, ast.Assign):
+                uses = [n for n in ast.walk(stmt.value) if isinstance(n, ast.Name) and n.id in tainted]
+                if uses and not (isinstance(stmt.value, ast.Call) and safe_use(stmt.value)):
+                    tainted |= {t.id for t in stmt.targets if isinstance(t, ast.Name)}
+        for call in body:
             if not (isinstance(call, ast.Call) and is_log_call(call)):
                 continue
-            parents = {child: node for node in ast.walk(call) for child in ast.iter_child_nodes(node)}
-            for node in ast.walk(call):
-                if isinstance(node, ast.Name) and node.id == handler.name and not safe_use(parents.get(node), node.id):
+            parents = parent_map(call)
+            for n in ast.walk(call):
+                if isinstance(n, ast.Name) and n.id in tainted and not safe_use(parents.get(n)):
                     lines.append(call.lineno)
-    for call in ast.walk(scope):
-        if isinstance(call, ast.Call) and is_log_call(call):
-            if any(isinstance(n, ast.Attribute) and n.attr == 'text' for n in ast.walk(call)):
-                lines.append(call.lineno)
     return sorted(set(lines))
 
 
@@ -125,6 +169,14 @@ class SiteCopyTest(unittest.TestCase):
         scan = analyzer[analyzer.index('def get_ai_suggestions'):analyzer.index('\ndef ', analyzer.index('def get_ai_suggestions') + 1)]
         self.assertIn('ai_cache.cache_set(', scan)
         self.assertIn('cached for up to one hour', self.page('/privacy'))
+        # Every AI tool that writes to the cache is named on the privacy page.
+        page = self.page('/privacy')
+        for fn, words in [('def generate_cover_letter', 'cover letters'), ('def enhance_bullet_point', 'bullet rewrites'),
+                          ('def generate_resume_summary', 'summaries')]:
+            body = analyzer[analyzer.index(fn):analyzer.index('\ndef ', analyzer.index(fn) + 1)]
+            self.assertIn('ai_cache.cache_set(', body, fn)
+            self.assertIn(words, page, fn)
+        self.assertEqual(analyzer.count('ai_cache.cache_set('), 4)
 
     def test_no_log_line_carries_cv_or_job_text(self):
         # "Not saved by ResumeRadar" covers the server logs too.
@@ -153,9 +205,12 @@ class SiteCopyTest(unittest.TestCase):
 
         free_routes = {'scan_resume', 'generate_cover_letter_endpoint', 'enhance_bullet_endpoint',
                        'generate_summary_endpoint', 'download_report', 'email_report',
-                       'subscribe_newsletter'}
+                       'subscribe_newsletter',
+                       # CV builder routes: behind the 404 today, but they hold CV text.
+                       'build_generate', 'build_generate_from_scan', 'build_generate_from_upload',
+                       'build_download', '_send_cv_email'}
         offenders = []
-        for path in ('app.py', 'backend/ai_analyzer.py', 'backend/resume_parser.py'):
+        for path in ('app.py', 'backend/ai_analyzer.py', 'backend/resume_parser.py', 'backend/cv_builder.py'):
             tree = ast.parse(read(*path.split('/')))
             if path == 'app.py':
                 scopes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in free_routes]
