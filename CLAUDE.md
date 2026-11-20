@@ -7,7 +7,7 @@ Process (review levels, reviews, merging, feature map) follows shola-project-run
 ## Stack
 
 - Python 3.11 (`runtime.txt`), Flask, gunicorn (`Procfile`, `render.yaml`). Vanilla HTML, CSS and JS. Use pip and a venv, not bun or npm.
-- Redis for rate limits, the AI budget, the AI cache and funnel counts. Without `REDIS_URL` the app falls back to in-memory counters.
+- Redis for rate limits, the AI budget, the AI cache and funnel counts. Without `REDIS_URL`, Flask-Limiter and the scan count fall back to memory, but the AI budget and the per-IP daily limits let every call through, so production must always have Redis.
 - Anthropic Claude for suggestions (`backend/ai_analyzer.py`), Resend for emailed reports, Beehiiv for newsletter sign-ups. fpdf2 for the report PDF.
 - Env var names are in `.env.example`. Never put values in code, commits or chat.
 
@@ -29,7 +29,7 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a g
 
 ## Structure
 
-- `app.py`: every route (scan, AI tools, report download and email, subscribe, health, scan count, `/api/feedback`, `/privacy`, `/share`, role landing pages, sitemap, admin, and the switched-off builder and payment routes). `_client_ip` and `_visitor_key` decide who a rate limit counts: `CF-Connecting-IP` only when the request came from Cloudflare, and IPv6 by its /64.
+- `app.py`: every route (scan, AI tools, report download and email, subscribe, health, scan count, `/api/feedback`, `/privacy`, `/share`, role landing pages, sitemap, admin, and the switched-off builder and payment routes). ``_client_ip` and `_visitor_key` decide who a Flask-Limiter rate limit counts: `CF-Connecting-IP` only when the request came from Cloudflare, and IPv6 by its /64.
 - `backend/`: `resume_parser.py` (PDF, DOCX, text), `keyword_engine.py` (matching and the score), `ai_analyzer.py` (Claude calls), `ai_budget.py`, `ai_cache.py`, `ai_ratelimit.py`, `ai_metrics.py`, `report_generator.py` (PDF), `audit_log.py`, `funnel_metrics.py`, `role_content.py` (role pages), `site_copy.py` (the strapline and privacy line shared by the site, email and PDF), `log_safe.py` (error text that is safe to log), `feedback.py` (the optional "Was this useful?" comment). `cv_builder.py`, `cv_*_generator.py`, `bundle_credits.py`, `stripe_utils.py` and `paystack_utils.py` belong to the switched-off builder.
 - `templates/` (`privacy.html` is the privacy page), `static/js/` (`app.js`, `scan-utils.js`, `share.js`, `feedback.js`), `static/css/style.css`, `static/llms.txt`.
 - `tests/`: `qa_suite.py`, the `test_*.py` unittest files and `scan_utils.test.cjs`.
@@ -44,7 +44,7 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a g
 
 **Input size.** Uploads are capped at 5 MB (`MAX_CONTENT_LENGTH`), pasted job descriptions at 20,000 characters and CV text at 50,000 (`app.py`), and PDF parsing rejects files over 50 pages or 3 MB of page content and stops extracting after 100,000 characters or 3 seconds (`backend/resume_parser.py`). Don't loosen these: they stop one request tying up a worker.
 
-**AI spend.** Every Claude call goes through `backend/ai_budget.py` (daily cost and call caps, which fail closed) plus Flask-Limiter rate limits on each route and, for the free tools, the per-IP daily limits in `backend/ai_ratelimit.py` (cover letter 3, bullet 10, summary 5). `AI_DAILY_COST_LIMIT_USD` is 5.00 on Render. If it is unset the code falls back to 50.00, so never remove it from Render. Don't raise it, don't add a call that skips the budget or the limits, and don't change a model in `ai_analyzer.py` (`MODEL_FREE`, `MODEL_FREE_ECONOMY`, `MODEL_PAID`) without saying what it costs. A new model also needs its price in `_PRICING` in `ai_budget.py`, or it is costed at the default rate.
+**AI spend.** Every Claude call goes through `backend/ai_budget.py` (daily cost and call caps; they fail closed when Redis errors, and let calls through when no Redis is configured) plus Flask-Limiter rate limits on each route. The free tools also call the per-IP daily limits in `backend/ai_ratelimit.py` (cover letter 3, bullet 10, summary 5), but those are keyed on `request.remote_addr`, a rotating Cloudflare edge IP, so they have never fired in production. Switching them to `_client_ip()` is a staged rollout (see the comment in `app.py`); don't rely on them as a cost guard until then. `AI_DAILY_COST_LIMIT_USD` is 5.00 on Render. If it is unset the code falls back to 50.00, so never remove it from Render. Don't raise it, don't add a call that skips the budget or the limits, and don't change a model in `ai_analyzer.py` (`MODEL_FREE`, `MODEL_FREE_ECONOMY`, `MODEL_PAID`) without saying what it costs. A new model also needs its price in `_PRICING` in `ai_budget.py`, or it is costed at the default rate.
 
 **Secrets.** No keys in the repo. Env var names only.
 
@@ -74,7 +74,7 @@ Grok (`@grok-qa review`) posts its verdict from a separate bot account through t
 
 - The CI "Secret scan (gitleaks)" job fails: a secret is in the commit's history. Revoke it first; never add it to `.gitleaksignore` until it is confirmed dead.
 - `qa_suite.py` prints FAIL lines and no "ALL CLEAR"; unittest prints `FAILED (failures=N)`; node prints `fail` above 0.
-- `/build` or any `/api/build/*` route returns anything but 404: the builder guard is broken.
+- `/build` or any `/api/build/*` route other than `/api/build/webhook/resend` returns anything but 404: the builder guard is broken.
 - `/api/health` shows `"ai_enabled": false`: `ANTHROPIC_API_KEY` is not set (the check only looks for the key, not whether it works), and scans fall back to rule-based suggestions.
-- Users see "This tool is temporarily unavailable due to high demand" (`BUDGET_EXCEEDED_MESSAGE` in `backend/ai_budget.py`): the daily AI budget is spent. A 429 with "Daily limit reached (N per day). Try again tomorrow." means a per-IP tool limit is spent. Both are the guards working, not bugs to fix by raising limits.
+- Users see "This tool is temporarily unavailable due to high demand" (`BUDGET_EXCEEDED_MESSAGE` in `backend/ai_budget.py`): the daily AI budget is spent. A 429 with "Daily limit reached (N per day). Try again tomorrow." means a per-IP tool limit is spent (rare until the staged rollout above). Both are the guards working, not bugs to fix by raising limits.
 - A review comment says the review failed (sign-in, spend limit, timeout): report it to Shola, don't retry.
