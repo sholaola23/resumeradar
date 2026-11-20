@@ -149,7 +149,7 @@ ROLE_CONTENT = {
             "Observability & reliability": ["monitoring", "Prometheus", "Grafana", "incident response", "SRE practices"],
         },
         "tips": [
-            "Use DORA-shaped numbers: \"took deployments from weekly to daily\" or \"cut lead time from 3 days to 4 hours\": screeners match the terms, humans remember the delta.",
+            "Use DORA-shaped numbers: \"took deployments from weekly to daily\" or \"cut lead time from 3 days to 4 hours\". Screeners match the terms, humans remember the delta.",
             "Say \"infrastructure as code\" and name the tool: the phrase and the tool are searched separately.",
             "Include scripting languages (Python, Bash): they appear in most DevOps postings and are easy to omit accidentally.",
         ],
@@ -199,7 +199,7 @@ ROLE_CONTENT = {
             "Quality & structure": ["accessibility", "information architecture", "responsive design", "interaction design"],
         },
         "tips": [
-            "Quantify research and outcomes: \"12 usability sessions that cut checkout drop-off 15%\": the number makes the craft legible to non-designers.",
+            "Quantify research and outcomes: \"12 usability sessions that cut checkout drop-off 15%\". The number makes the craft legible to non-designers.",
             "Name Figma (and any design-system work) explicitly: both are heavily searched.",
             "Write \"accessibility\" and the standard (WCAG) if you practice it: it is a growing filter term.",
         ],
@@ -259,13 +259,13 @@ ROLE_CONTENT = {
             {"q": "Business analyst vs data analyst: which title fits my resume?",
              "a": "Lead with the work the target posting describes. If your days are requirements, workshops, and user stories, the BA vocabulary should dominate; if they are SQL, dashboards, and statistical analysis, you may match data analyst postings more closely. Scan against both and compare scores."},
             {"q": "How do I quantify business analyst work?",
-             "a": "Requirements documented, processes mapped, hours or cost the improved process saved, defects caught in UAT, project value delivered: \"mapped a 12-step onboarding process and cut handling time 30%\" is the pattern: the analysis tied to its outcome."},
+             "a": "Requirements documented, processes mapped, hours or cost the improved process saved, defects caught in UAT, project value delivered: \"mapped a 12-step onboarding process and cut handling time 30%\" is the pattern, with the analysis tied to its outcome."},
         ],
         "related": ["project-manager", "data-analyst", "product-manager"],
     },
     "solutions-architect": {
         "intro": [
-            "Architect postings are screened on breadth signals: multiple platforms, system design vocabulary, and the non-functional words: scalability, high availability, security. Screening software reads for the architecture register; resumes still written in pure implementation language (\"built\", \"coded\") without design language (\"designed\", \"architected\") fall short of the title's expectations.",
+            "Architect postings are screened on breadth signals: multiple platforms, system design vocabulary, and the non-functional words (scalability, high availability, security). Screening software reads for the architecture register; resumes still written in pure implementation language (\"built\", \"coded\") without design language (\"designed\", \"architected\") fall short of the title's expectations.",
             "Cloud certifications at the professional level are heavily searched for this role, and so are the words \"trade-offs\", \"migration\", and \"stakeholder\". Scan your resume against a real architect posting below to see which design-level terms are missing.",
         ],
         "categories": {
@@ -274,7 +274,7 @@ ROLE_CONTENT = {
             "Delivery & tooling": ["Terraform", "Kubernetes", "networking", "migration", "cost optimization"],
         },
         "tips": [
-            "Write at design altitude: \"architected a multi-region failover design serving 5M users at 99.95% uptime\": the register itself tells the reader what level you work at.",
+            "Write at design altitude: \"architected a multi-region failover design serving 5M users at 99.95% uptime\". The register itself tells the reader what level you work at.",
             "Name professional-level certifications in full: \"AWS Certified Solutions Architect – Professional\" is a searched string.",
             "Show the trade-off: \"chose event-driven over polling, cutting compute cost 35%\" demonstrates the actual job.",
         ],
@@ -299,7 +299,7 @@ ROLE_CONTENT = {
             "Working practices": ["Git", "REST APIs", "component libraries", "code review", "Agile"],
         },
         "tips": [
-            "Quantify the user-facing result: \"cut Largest Contentful Paint from 4.2s to 1.8s\" or \"raised Lighthouse score to 96\": performance numbers are frontend's most credible metrics.",
+            "Quantify the user-facing result: \"cut Largest Contentful Paint from 4.2s to 1.8s\" or \"raised Lighthouse score to 96\". Performance numbers are frontend's most credible metrics.",
             "Name the framework in each role's bullets, not only the skills list: in-context mentions show how you used it.",
             "Say \"accessibility\" and \"WCAG\" if you practice them: both are rising filter terms.",
         ],
@@ -334,7 +334,7 @@ ROLE_CONTENT = {
             {"q": "Does it hurt to know several languages but be expert in one?",
              "a": "No. Lead with your expert language in your summary and strongest bullets, and list the others honestly. Screening rewards the coverage; interviews reward the depth. What hurts you is naming none prominently and writing \"polyglot engineer\" instead."},
             {"q": "How do I show scale if my company was small?",
-             "a": "Scale is relative: use the real numbers you have: \"grew the API from 10 to 400 daily active integrations\", \"processed 3M records nightly on a two-person team\". Small-company resumes win on breadth: own the fact that you built, deployed, and operated the service end to end."},
+             "a": "Scale is relative. Use the real numbers you have: \"grew the API from 10 to 400 daily active integrations\", \"processed 3M records nightly on a two-person team\". Small-company resumes win on breadth: own the fact that you built, deployed, and operated the service end to end."},
         ],
         "related": ["software-engineer", "devops-engineer", "cloud-engineer"],
     },
@@ -349,7 +349,7 @@ ROLE_CONTENT = {
             "Coaching craft": ["coaching", "facilitation", "servant leadership", "cross-functional teams", "impediment removal"],
         },
         "tips": [
-            "Show the team's delta: \"raised sprint predictability from 60% to 90% commitment hit-rate over two quarters\": facilitation proven by outcomes.",
+            "Show the team's delta: \"raised sprint predictability from 60% to 90% commitment hit-rate over two quarters\", facilitation proven by outcomes.",
             "List certifications by acronym and full name (CSM, Certified ScrumMaster); both forms are searched.",
             "Name the scale: teams coached, team sizes, and whether you worked within SAFe or scaled setups.",
         ],
