@@ -925,12 +925,16 @@ Nice to Have
     // EMAIL REPORT (via mailto)
     // ============================================================
     let modalReturnFocus = null;
-    emailReportBtn.addEventListener('click', () => {
+    function openEmailModal() {
         modalReturnFocus = document.activeElement;
         emailModal.style.display = 'flex';
         emailInput.value = '';
         emailInput.focus();
-    });
+    }
+    emailReportBtn.addEventListener('click', openEmailModal);
+    // The same dialog, offered beside the score where people first see their result.
+    const scoreEmailBtn = document.getElementById('scoreEmailBtn');
+    if (scoreEmailBtn) scoreEmailBtn.addEventListener('click', openEmailModal);
 
     closeModalBtn.addEventListener('click', closeModal);
     cancelModalBtn.addEventListener('click', closeModal);
