@@ -1,0 +1,122 @@
+"""
+Signed scan results for the emailed and downloaded reports.
+
+/api/scan signs the fields the PDF and the report email use. /api/email-report
+and /api/download-report only build a report from data that carries a valid,
+unexpired signature, so nobody can make the server send or render text it did
+not produce itself.
+
+Nothing is stored: the signature travels with the result in the visitor's
+browser. The key is derived from FLASK_SECRET_KEY (AUDIT_HMAC_SECRET as a
+fallback), so it is the same in every gunicorn worker.
+"""
+
+import hashlib
+import hmac
+import json
+import os
+import secrets
+import time
+
+# Every field generate_pdf_report() and the email body read. Keep this in step
+# with backend/report_generator.py: an unsigned field never reaches a report.
+SIGNED_FIELDS = (
+    "match_score",
+    "score_explanation",
+    "total_matched",
+    "total_missing",
+    "total_job_keywords",
+    "category_scores",
+    "missing_keywords",
+    "matched_keywords",
+    "ai_suggestions",
+    "ats_formatting",
+)
+
+SIGNATURE_FIELD = "report_signature"
+MAX_AGE_SECONDS = 24 * 60 * 60
+_VERSION = "v1"
+
+_process_key = None
+
+
+def _key():
+    global _process_key
+    secret = os.getenv("FLASK_SECRET_KEY") or os.getenv("AUDIT_HMAC_SECRET")
+    if not secret:
+        # Local runs only. A per-process key breaks verification across
+        # gunicorn workers, so production must set FLASK_SECRET_KEY.
+        if _process_key is None:
+            _process_key = secrets.token_bytes(32)
+            print("WARNING: FLASK_SECRET_KEY is not set; report signatures only work in this process.")
+        return _process_key
+    # Separate key for this purpose, so a report signature can never be
+    # mistaken for a Flask session cookie or an audit hash.
+    return hmac.new(secret.encode("utf-8"), b"resumeradar-report-signing-v1", hashlib.sha256).digest()
+
+
+def _normalise(value):
+    """Make the payload survive a round trip through the browser's JSON.
+
+    JavaScript has one number type, so 50.0 comes back as 50. Treat whole
+    floats as ints on both sides so the bytes we sign match the bytes we check.
+    """
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else value
+    if isinstance(value, dict):
+        return {str(k): _normalise(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalise(v) for v in value]
+    return value
+
+
+def report_fields(scan_data):
+    """The signed subset of a scan result, and nothing else."""
+    return {field: scan_data.get(field) for field in SIGNED_FIELDS}
+
+
+def _mac(issued_at, scan_data):
+    payload = json.dumps(
+        _normalise(report_fields(scan_data)),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
+    message = f"{_VERSION}.{issued_at}.{payload}".encode("utf-8")
+    return hmac.new(_key(), message, hashlib.sha256).hexdigest()
+
+
+def sign(scan_data, now=None):
+    issued_at = int(now if now is not None else time.time())
+    return f"{_VERSION}.{issued_at}.{_mac(issued_at, scan_data)}"
+
+
+def verify(scan_data, now=None):
+    """Return the signed report fields if the signature is valid, else None."""
+    if not isinstance(scan_data, dict):
+        return None
+    signature = scan_data.get(SIGNATURE_FIELD)
+    if not isinstance(signature, str):
+        return None
+    parts = signature.split(".")
+    if len(parts) != 3 or parts[0] != _VERSION or not parts[1].isdigit():
+        return None
+    issued_at = int(parts[1])
+    current = int(now if now is not None else time.time())
+    if issued_at > current + 300 or current - issued_at > MAX_AGE_SECONDS:
+        return None
+    try:
+        expected = _mac(issued_at, scan_data)
+    except (TypeError, ValueError):
+        return None
+    if not hmac.compare_digest(expected, parts[2]):
+        return None
+    return report_fields(scan_data)
+
+
+def signature_id(scan_data):
+    """Short hash of the signature, for counting sends without storing it."""
+    signature = str(scan_data.get(SIGNATURE_FIELD, ""))
+    return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:32]

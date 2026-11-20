@@ -190,19 +190,13 @@ def run_tests():
             check("Full scan has ai_suggestions", d and 'ai_suggestions' in d)
 
             # ---- SECTION 8: PDF GENERATION ----
-            r = c.post('/api/download-report', json={
-                'match_score': 72,
-                'total_matched': 8,
-                'total_missing': 3,
-                'total_job_keywords': 11,
-                'category_scores': {},
-                'matched_keywords': {},
-                'missing_keywords': {},
-                'ats_formatting': {},
-                'ai_suggestions': {},
-            })
+            # Reports are only built from signed scan results (finding 4).
+            r = c.post('/api/download-report', json=d)
             check("PDF report generates", r.status_code == 200 and len(r.data) > 500,
                   f"Size: {len(r.data)} bytes")
+            unsigned = {k: v for k, v in (d or {}).items() if k != 'report_signature'}
+            r = c.post('/api/download-report', json=unsigned)
+            check("PDF report rejects unsigned data", r.status_code == 403)
 
     # ---- SECTION 9: CV BUILDER ----
     with app.test_client() as c:
