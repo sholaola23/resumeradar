@@ -136,7 +136,7 @@ class AtsFormattingTests(unittest.TestCase):
         # 15 no special chars + 0 sections + 5 short + 0 contact + 5 verbs
         self.assertEqual(result["formatting_score"], 25)
         messages = [issue["message"] for issue in result["issues"]]
-        self.assertIn("Your CV seems very short", messages)
+        self.assertIn("Resume seems very short", messages)
         self.assertIn("No email address detected", messages)
         self.assertIn("Few action verbs detected", messages)
         self.assertTrue(any(m.startswith("Missing standard section headers") for m in messages))
@@ -177,7 +177,7 @@ class AtsFormattingTests(unittest.TestCase):
 
     def test_long_cv_is_info_not_warning(self):
         result = engine.analyze_ats_formatting(ats_cv(extra_words=1300))
-        long_issue = next(i for i in result["issues"] if i["message"] == "Your CV is quite long")
+        long_issue = next(i for i in result["issues"] if i["message"] == "Resume is quite long")
         self.assertEqual(long_issue["type"], "info")
 
     def test_contact_points(self):
@@ -274,7 +274,7 @@ class RecruiterTipsScoreTests(unittest.TestCase):
                                (800, 20), (801, 15), (1000, 15), (1001, 10)):
             with self.subTest(count=count):
                 result = engine.calculate_recruiter_tips_score(words(count))
-                self.assertEqual(points(result, "CV length"), expected)
+                self.assertEqual(points(result, "Resume length"), expected)
 
     def test_title_alignment_defaults_without_a_job(self):
         result = engine.calculate_recruiter_tips_score("Python developer")

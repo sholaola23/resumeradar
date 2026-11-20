@@ -191,7 +191,7 @@ class DocxExtractionTests(TempDirTestCase):
         with redirect_stdout(StringIO()):
             text, error = parser.extract_text_from_docx(self.make_zip([("hello.txt", b"hello")]))
         self.assertIsNone(text)
-        self.assertEqual(error, "Could not read that DOCX. Please try a different file or paste your CV text.")
+        self.assertEqual(error, "Could not read that DOCX. Please try a different file or paste your resume text.")
 
 
 class PdfExtractionTests(TempDirTestCase):
@@ -232,7 +232,7 @@ class PdfExtractionTests(TempDirTestCase):
         with redirect_stdout(StringIO()):
             text, error = parser.extract_text_from_pdf(path)
         self.assertIsNone(text)
-        self.assertEqual(error, "Could not read that PDF. Please try a different file or paste your CV text.")
+        self.assertEqual(error, "Could not read that PDF. Please try a different file or paste your resume text.")
 
     def test_password_protected_pdf(self):
         pdf = FPDF()
@@ -258,7 +258,7 @@ class PasteAndCleanTests(unittest.TestCase):
             with self.subTest(text=text):
                 result, error = parser.extract_text_from_paste(text)
                 self.assertIsNone(result)
-                self.assertIn("No CV text provided", error)
+                self.assertIn("No resume text provided", error)
 
     def test_short_paste(self):
         result, error = parser.extract_text_from_paste(" ".join(["word"] * 19))
@@ -292,7 +292,7 @@ class ParseResumeTests(TempDirTestCase):
                 result = parser.parse_resume(**kwargs)
                 self.assertIsNone(result["text"])
                 self.assertEqual(result["word_count"], 0)
-                self.assertIn("No CV provided", result["error"])
+                self.assertIn("No resume provided", result["error"])
 
     def test_errors_return_zero_words(self):
         result = parser.parse_resume(pasted_text="too short")
