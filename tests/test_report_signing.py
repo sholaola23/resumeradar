@@ -121,8 +121,13 @@ class ReportRoutesTest(unittest.TestCase):
         env = patch.dict(os.environ, {'FLASK_SECRET_KEY': 'test-only-secret'})
         env.start()
         cls.addClassCleanup(env.stop)
+        # Turn rate limits off for this class only, and put them back after.
+        old_config = app_module.app.config.get('RATELIMIT_ENABLED')
+        old_enabled = app_module.limiter.enabled
         app_module.app.config['RATELIMIT_ENABLED'] = False
         app_module.limiter.enabled = False
+        cls.addClassCleanup(app_module.app.config.__setitem__, 'RATELIMIT_ENABLED', old_config)
+        cls.addClassCleanup(setattr, app_module.limiter, 'enabled', old_enabled)
         with patch.object(app_module, 'get_ai_suggestions', return_value={'summary': 'Looks good.'}):
             r = app_module.app.test_client().post('/api/scan', data={'job_description': JOB, 'resume_text': CV})
         assert r.status_code == 200, r.data
@@ -166,6 +171,14 @@ class ReportRoutesTest(unittest.TestCase):
             ]
         self.assertEqual(codes, [200, 200, 200, 429])
         self.assertEqual(send.call_count, 3)
+
+    def test_unconfigured_email_does_not_use_a_send(self):
+        redis = FakeRedis()
+        env = {k: v for k, v in os.environ.items() if k != 'RESEND_API_KEY'}
+        with patch.dict(os.environ, env, clear=True), patch.object(app_module, '_redis_client', redis):
+            r = self.client.post('/api/email-report', json={'email': 'a@example.com', 'scan_data': self.scan})
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(redis.counts, {})
 
     def test_respelled_signature_gets_no_fresh_counter(self):
         _, issued, mac = self.scan['report_signature'].split('.')

@@ -1024,7 +1024,13 @@ Nice to Have
             });
 
             if (!response.ok) {
-                throw new Error('PDF generation failed');
+                // A 403 means the signed result is too old or was changed;
+                // the server says what to do, so show its message.
+                let serverError = '';
+                try { serverError = (await response.json()).error || ''; } catch (e) { /* not JSON */ }
+                const failure = new Error('PDF generation failed');
+                failure.serverError = serverError;
+                throw failure;
             }
 
             const blob = await response.blob();
@@ -1041,7 +1047,9 @@ Nice to Have
             showToast('PDF report downloaded!');
         } catch (err) {
             console.error('PDF download error:', err);
-            showToast('Failed to generate PDF. Downloading text version...', true);
+            showToast(err.serverError
+                ? err.serverError + ' Downloading a text version for now.'
+                : 'Failed to generate PDF. Downloading text version...', true);
 
             // Fallback to text download
             const reportText = generateTextReport(lastScanData);

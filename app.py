@@ -875,14 +875,15 @@ def email_report():
         report_data = report_signing.verify(scan_data)
         if report_data is None:
             return jsonify({"error": REPORT_EXPIRED_MESSAGE}), 403
-        if not _allow_report_send(scan_data):
-            return jsonify({"error": "This report has already been emailed a few times. Please download it instead."}), 429
-        scan_data = report_data
 
-        # Check for Resend API key
+        # Check for Resend API key before using up one of the scan's sends
         resend_key = os.getenv('RESEND_API_KEY')
         if not resend_key or resend_key == 'your-resend-api-key-here':
             return jsonify({"error": "Email service is not configured yet. Please download or copy your report instead."}), 503
+
+        if not _allow_report_send(scan_data):
+            return jsonify({"error": "This report has already been emailed a few times. Please download it instead."}), 429
+        scan_data = report_data
 
         import resend
         resend.api_key = resend_key
