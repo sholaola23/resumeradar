@@ -16,6 +16,7 @@ TTL: 90 days, the same as the funnel counters.
 from datetime import datetime, timezone, timedelta
 import json
 import re
+import unicodedata
 
 _PREFIX = "resumeradar:feedback:"
 _TTL = 90 * 86400
@@ -30,16 +31,12 @@ _URL = re.compile(
     r"|\b(?:[a-z0-9-]+\.)+(?!js\b)[a-z]{2,}/\S*",
     re.IGNORECASE,
 )
-# Bare domains (janedoe.dev, JANEDOE.NET, jane.design). There are over a
-# thousand top-level domains, so any word.letters token counts, unless the
-# last part is Capitalised and not a common TLD (a missing space, as in
-# "useful.Thanks" or "React.Native") or the whole token is a known tech name.
+# Bare domains (janedoe.dev, JANEDOE.NET, Jane.Me). There are over a thousand
+# top-level domains, so any word.letters token counts unless the whole token
+# is a known tech name. Over-removing a missing space ("useful.Thanks") is
+# harmless; keeping a personal site is not.
 _BARE_DOMAIN = re.compile(r"\b(?:[a-z0-9-]+\.)+([a-z]{2,24})\b(?![\w-]|\.\w)", re.IGNORECASE)
 _TECH_NAMES = frozenset({"asp.net", "vb.net", "ado.net", "socket.io"})
-# Common top-level domains that are not everyday words: removed even when
-# Capitalised (Jane.Net, JaneDoe.Com).
-_COMMON_TLDS = frozenset({"com", "net", "org", "io", "dev", "co", "uk", "app", "ai", "info",
-                          "biz", "xyz", "tech", "site", "online", "pro", "design"})
 # Nine or more digits, so dates (2026-11-19) and scores are left alone.
 _PHONE = re.compile(r"\+?\(?\d(?:[\s().-]{0,2}\d){8,}")
 _REMOVED = "[removed]"
@@ -57,8 +54,6 @@ def _strip_bare_domain(match):
     token, last = match.group(0), match.group(1)
     if last.lower() == "js" or token.lower() in _TECH_NAMES:
         return token
-    if last[0].isupper() and last[1:].islower() and last.lower() not in _COMMON_TLDS:
-        return token  # "useful.Thanks": a missing space, not a domain
     return _REMOVED
 
 
@@ -67,6 +62,8 @@ def clean_comment(text):
     if not isinstance(text, str):
         return ""
     text = text[:MAX_COMMENT_CHARS * 4]  # bound the work before the regexes run
+    # Fold look-alikes (full-width "ｃｏｍ", "＠") into plain letters first.
+    text = unicodedata.normalize("NFKC", text)
     text = "".join(ch if ch.isprintable() else " " for ch in text)
     text = _URL.sub(_REMOVED, text)
     text = _BARE_DOMAIN.sub(_strip_bare_domain, text)

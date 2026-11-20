@@ -96,6 +96,12 @@ class CleanCommentTests(unittest.TestCase):
             'my site jane.design': 'jane.design',
             'shop at janes.studio or janedoe.photography': 'janes',
             'see Jane.Net or JaneDoe.Com': 'Jane',
+            'Jane.Me': 'Jane',
+            'JaneDoe.Page and JaneDoe.Blog': 'JaneDoe',
+            'JaneDoe.Studio': 'JaneDoe',
+            'Jane.Ng or Jane.Ly': 'Jane',
+            'full-width janedoe.\uff43\uff4f\uff4d': 'janedoe',
+            'mail jane\uff20example.com': 'jane',
         }
         for text, leaked in cases.items():
             with self.subTest(text=text):
@@ -111,7 +117,7 @@ class CleanCommentTests(unittest.TestCase):
         for text in ('Great for Node.js and Next.js roles.', 'Vue.js, Express.js and ASP.NET listed.',
                      'Node.js/Express was matched.', 'Scored 3.5 then 4.0, e.g. better.',
                      'Python 3.11 and v2.0 came up.', 'ASP.NET is great', 'VB.NET and .NET Core too.',
-                     'Socket.io and React.Native were found.', 'Very useful.Thanks a lot',
+                     'Socket.io was found.',
                      'Three.js, D3.js and Chart.JS matched.'):
             with self.subTest(text=text):
                 self.assertEqual(feedback.clean_comment(text), text)
