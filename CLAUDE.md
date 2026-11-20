@@ -23,9 +23,9 @@ node --test tests/scan_utils.test.cjs        # expect "fail 0"
 PORT=5011 FLASK_ENV=production .venv/bin/python app.py
 ```
 
-After a local run, scan a sample CV on `/` and check `/build` returns 404. Tests need no API keys and no Redis.
+After a local run, scan a sample CV on `/` and check `/build` returns 404. Tests need no API keys and no Redis service, but `tests/test_repeat_downloads.py` starts its own `redis-server`, so the binary must be installed.
 
-There is no CI test job. The only workflow is the Claude review (below), so run the commands above yourself and paste the last lines as proof.
+CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a gitleaks secret scan over the commit's history (confirmed-dead findings go in `.gitleaksignore`, each with how it was confirmed) and the three test commands above, with no keys.
 
 ## Structure
 
@@ -33,6 +33,7 @@ There is no CI test job. The only workflow is the Claude review (below), so run 
 - `backend/`: `resume_parser.py` (PDF, DOCX, text), `keyword_engine.py` (matching and the score), `ai_analyzer.py` (Claude calls), `ai_budget.py`, `ai_cache.py`, `ai_ratelimit.py`, `ai_metrics.py`, `report_generator.py` (PDF), `audit_log.py`, `funnel_metrics.py`, `role_content.py` (role pages), `site_copy.py` (the strapline and privacy line shared by the site, email and PDF), `log_safe.py` (error text that is safe to log). `cv_builder.py`, `cv_*_generator.py`, `bundle_credits.py`, `stripe_utils.py` and `paystack_utils.py` belong to the switched-off builder.
 - `templates/` (`privacy.html` is the privacy page), `static/js/` (`app.js`, `scan-utils.js`, `share.js`), `static/css/style.css`, `static/llms.txt`.
 - `tests/`: `qa_suite.py`, the `test_*.py` unittest files and `scan_utils.test.cjs`.
+- `.github/workflows/`: `ci.yml` (secret scan and tests) and `resumeradar-claude-review.yml` (below).
 - `.claude/skills/resumeradar-final-review/SKILL.md`: the review checklist. `.claude/settings.json` runs `qa_suite.py --quick` after edits to `app.py`, `index.html`, `app.js` or `style.css` on a local machine.
 
 ## Guards
@@ -69,6 +70,7 @@ Grok (`@grok-qa review`) posts its verdict from a separate bot account through t
 
 ## What failure looks like
 
+- The CI "Secret scan (gitleaks)" job fails: a secret is in the commit's history. Revoke it first; never add it to `.gitleaksignore` until it is confirmed dead.
 - `qa_suite.py` prints FAIL lines and no "ALL CLEAR"; unittest prints `FAILED (failures=N)`; node prints `fail` above 0.
 - `/build` or any `/api/build/*` route returns anything but 404: the builder guard is broken.
 - `/api/health` shows `"ai_enabled": false`: `ANTHROPIC_API_KEY` is not set (the check only looks for the key, not whether it works), and scans fall back to rule-based suggestions.
