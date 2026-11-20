@@ -30,7 +30,7 @@ name: Claude review
 # token. The Claude Console rule (resumeradar-claude-review,
 # fdrl_01Rz7KhZyfUoJqm786YiqFBd) only accepts this
 # file on the default branch, for an issue_comment, and mints tokens for the
-# "ResumeRadar GitHub reviews" workspace, which has a monthly spend limit ($10). The
+# "ResumeRadar GitHub reviews" workspace, which has a monthly spend limit ($60, raised 20 Nov 2026). The
 # IDs below are identifiers, not secrets. If the review fails (rule mismatch,
 # spend limit reached, timeout, no verdict), the job says so.
 #

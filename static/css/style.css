@@ -2795,6 +2795,21 @@ textarea::placeholder {
 .inline-gate-card { background: var(--gray-50); border: 1px solid var(--gray-200); box-shadow: none; }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
 .improve-loop button:focus-visible { outline-color: var(--paper); }
+
+/* ---- WAS THIS USEFUL? ---- */
+.feedback-vote { display: flex; gap: 12px; flex-wrap: wrap; }
+.feedback-btn { min-width: 96px; min-height: 44px; justify-content: center; }
+.feedback-status { margin: 0; color: var(--gray-700); font-weight: 600; }
+.feedback-status:empty { display: none; }
+.feedback-status.is-error { color: var(--danger); }
+.feedback-form { margin-top: 16px; }
+.feedback-form > label:first-child { display: block; font-weight: 600; margin-bottom: 8px; color: var(--gray-800); }
+.feedback-form textarea { width: 100%; padding: 12px; border: 1px solid var(--gray-500); border-radius: var(--radius-sm); font: inherit; resize: vertical; }
+.feedback-form textarea:focus-visible, .feedback-consent input:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.feedback-privacy { font-size: 14px; color: var(--gray-600); margin: 8px 0 12px; }
+.feedback-consent { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; font-size: 15px; color: var(--gray-700); cursor: pointer; }
+.feedback-consent input { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; }
+.feedback-consent[hidden], .feedback-form[hidden], .feedback-vote[hidden] { display: none; }
 @media (max-width: 600px) {
     .hero { padding: 24px 0 20px; }
     .hero h1 { font-size: 2.3rem; }
@@ -2911,16 +2926,18 @@ button.keyword-tag:hover { text-decoration-style:solid; }
 
 /* ---- Scan form beside the hero (desktop only) ---- */
 .scanner-section { padding: 0; }
-.results-section { padding-top: 8px; padding-bottom: 60px; }
+@media (min-width: 601px) {
+    .results-section { padding-top: 8px; padding-bottom: 60px; }
+}
 .hero .scan-form { margin: 32px 0 0; }
 .hero .social-proof { padding: 16px 0 0; }
 .hero .role-keywords { justify-content: flex-start; }
 .how-it-works { padding-top: 32px; padding-bottom: 48px; }
 @media (min-width: 1100px) {
     .hero-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: start; }
-    .hero { padding-top: 48px; }
+    .hero:has(> .hero-layout) { padding-top: 48px; }
     .hero-text { padding-top: 24px; }
-    .hero h1 { font-size: clamp(2.4rem, 4vw, 3.4rem); }
+    .hero-layout h1 { font-size: clamp(2.4rem, 4vw, 3.4rem); }
     .hero .hero-scan-link { display: none; }
     .hero .scan-form { margin-top: 0; padding: 28px; }
     .hero .form-grid { grid-template-columns: 1fr; gap: 20px; }

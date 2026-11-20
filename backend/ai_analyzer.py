@@ -13,6 +13,7 @@ from backend import log_safe
 from backend.keyword_engine import display_keyword
 from backend import ai_budget
 from backend import ai_metrics
+from backend.score_format import whole_percent
 
 # Both gates run Sonnet 5 — cheaper AND stronger than Sonnet 4.6
 # ($2/$10 vs $3/$15 per MTok). Free scans degrade in tiers as the daily
@@ -143,7 +144,7 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
         # exact number the user sees (69.6 in prompt vs "70%" on screen reads
         # as two different scores).
         score_value = keyword_results.get("overall_score")
-        match_score = f"{round(score_value)}%" if score_value is not None else "Not scored — too few recognized job terms"
+        match_score = f"{whole_percent(score_value)}%" if score_value is not None else "Not scored — too few recognized job terms"
         priorities = keyword_results.get('priority_recommendations', [])
         score_rule = (f"If mentioning the custom keyword coverage estimate, use exactly {match_score}."
                       if score_value is not None else "Do not state or invent a match percentage. The result is Not scored.")
@@ -604,7 +605,7 @@ def _get_fallback_suggestions(keyword_results):
     if score is None:
         suggestions["summary"] = "Not scored: too few recognized job terms for a useful estimate. Review the job requirements manually; writing suggestions are still available."
     else:
-        suggestions["summary"] = f"Your custom job-description match estimate is {round(score)}%. Review the priorities below and describe the experience you can support. Missing wording does not necessarily mean missing experience."
+        suggestions["summary"] = f"Your custom job-description match estimate is {whole_percent(score)}%. Review the priorities below and describe the experience you can support. Missing wording does not necessarily mean missing experience."
 
     # Generate keyword suggestions
     for keyword in missing_tech[:5]:

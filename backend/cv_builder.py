@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from backend import ai_budget
 from backend import ai_metrics
 from backend.ai_analyzer import make_client, first_text, NO_THINKING
+from backend import log_safe
 
 # Paid CV builder runs on Sonnet 5 ($2/$10 per MTok — upgraded from
 # Sonnet 4.6's $3/$15 on 2026-08-26; verify on staging before prod,
@@ -648,7 +649,7 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
 
     except Exception as e:
         ai_metrics.record_error(TOOL)
-        print(f"CV Builder Claude API error: {str(e)}")
+        print(f"CV Builder Claude API error: {log_safe.describe(e)}")
         return _get_fallback(cv_data)
 
 
@@ -864,12 +865,12 @@ Respond with ONLY valid JSON:
 
         except (json.JSONDecodeError, ValueError) as parse_error:
             ai_metrics.record_error(TOOL)
-            print(f"CV extract+polish JSON parse error: {parse_error}")
+            print(f"CV extract+polish JSON parse error: {log_safe.describe(parse_error)}")
             return {"error": "Failed to parse AI response.", "ai_polished": False}
 
     except Exception as e:
         ai_metrics.record_error(TOOL)
-        print(f"CV extract+polish API error: {str(e)}")
+        print(f"CV extract+polish API error: {log_safe.describe(e)}")
         return {"error": "AI processing failed. Please try again.", "ai_polished": False}
 
 
