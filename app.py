@@ -19,7 +19,6 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template, send_from_directory, Response, abort
 from flask_cors import CORS
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -82,10 +81,93 @@ CORS(
 # bypass per-IP rate limits.
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+# Cloudflare's published edge ranges. Only a request whose TCP peer is in one
+# of these came through Cloudflare, so only then is CF-Connecting-IP real.
+# Source: https://www.cloudflare.com/ips-v4 and https://www.cloudflare.com/ips-v6
+# (the same list as GET https://api.cloudflare.com/client/v4/ips), fetched
+# 20 Nov 2026. Cloudflare rarely changes these; if it adds a range, visitors
+# behind it fall back to being keyed on the edge address until this is updated.
+_CLOUDFLARE_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in (
+    # IPv4
+    '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+    '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+    '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+    '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+    # IPv6
+    '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+    '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+))
+
+
+def _is_cloudflare_ip(addr):
+    """True if addr is inside one of Cloudflare's published edge ranges."""
+    try:
+        ip = ipaddress.ip_address((addr or '').strip())
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return any(ip in net for net in _CLOUDFLARE_NETWORKS)
+
+
+def _client_ip():
+    """
+    The real client IP, for rate-limit and quota keys.
+
+    request.remote_addr is NOT usable on its own. Production sits behind
+    Cloudflare, and the address the app sees is a Cloudflare edge node:
+    verified in the Render access logs, where a single client's consecutive
+    requests arrived as 172.68.229.194, 172.69.224.38, 172.69.224.39 and
+    162.158.216.204 (all inside the ranges above). Keying a limit on that is
+    wrong twice over: one user rotates across many edge IPs (so the cap never
+    accumulates), while unrelated users share one edge IP (so they share a cap
+    and lock each other out).
+
+    Cloudflare sets CF-Connecting-IP to the true client address and overwrites
+    any client-supplied value, so it is trustworthy, but only when the request
+    actually came from Cloudflare. Anyone reaching the Render origin directly
+    could send any CF-Connecting-IP they like and get a fresh quota bucket per
+    request. So the header is read only when remote_addr (the peer Render's
+    proxy saw, via ProxyFix x_for=1) is a Cloudflare edge address. Otherwise
+    remote_addr itself is the key, which is also what local development uses.
+    IPv6 addresses are keyed by their /64 (see _visitor_key).
+    """
+    remote = (request.remote_addr or '').strip()
+    if _is_cloudflare_ip(remote):
+        forwarded = request.headers.get('CF-Connecting-IP', '')
+        if forwarded:
+            # Take one address, bounded, and only if it parses. The value
+            # becomes part of a Redis key, so an unvalidated header would let
+            # a caller mint unlimited quota buckets.
+            candidate = forwarded.split(',')[0].strip()[:45]
+            try:
+                return _visitor_key(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
+    try:
+        return _visitor_key(ipaddress.ip_address(remote))
+    except ValueError:
+        return remote or 'unknown'
+
+
+def _visitor_key(ip):
+    """
+    One key per visitor. IPv4: the address. IPv6: its /64, because an ISP
+    hands each customer a whole /64 and they can use any address in it, so
+    keying on the full address would give one person billions of buckets.
+    """
+    if ip.version == 6:
+        if ip.ipv4_mapped:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.ip_network(f'{ip}/64', strict=False))
+    return str(ip)
+
+
 _redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
-    key_func=get_remote_address,
+    # Key on the real visitor, not the Cloudflare edge. See _client_ip().
+    key_func=_client_ip,
     default_limits=["5000 per day", "1500 per hour"],
     storage_uri=_redis_limiter_uri,
     # Redis blip must degrade rate limiting, not 500 every limited route
@@ -224,36 +306,6 @@ def _get_base_url():
         raise RuntimeError("PUBLIC_BASE_URL not configured")
     print("WARNING: PUBLIC_BASE_URL not set — using request.host_url (dev only)")
     return request.host_url.rstrip('/')
-
-
-def _client_ip():
-    """
-    The real client IP, for per-user quota keys.
-
-    request.remote_addr is NOT usable here. Production sits behind Cloudflare,
-    and the address the app sees is a Cloudflare edge node: verified in the
-    Render access logs, where a single client's consecutive requests arrived as
-    172.68.229.194, 172.69.224.38, 172.69.224.39 and 162.158.216.204. Keying a
-    daily quota on that is wrong twice over — one user rotates across many
-    edge IPs (so the cap never accumulates), while unrelated users share one
-    edge IP (so they'd share a cap and lock each other out).
-
-    Cloudflare sets CF-Connecting-IP to the true client address and overwrites
-    any client-supplied value, so it is trustworthy for traffic arriving
-    through the CDN. remote_addr remains the fallback for local development.
-    """
-    forwarded = request.headers.get('CF-Connecting-IP', '')
-    if forwarded:
-        # Take one address, bounded, and only if it parses. The value becomes
-        # part of a Redis key, so an unvalidated header would let a caller mint
-        # unlimited quota buckets and grow key cardinality without limit.
-        candidate = forwarded.split(',')[0].strip()[:45]
-        try:
-            ipaddress.ip_address(candidate)
-            return candidate
-        except ValueError:
-            pass
-    return (request.remote_addr or 'unknown').strip()
 
 
 def allowed_file(filename):
