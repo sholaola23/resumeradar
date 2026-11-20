@@ -684,20 +684,30 @@ Include the job title, requirements, responsibilities, qualifications and everyt
                 <button type="button" class="modal-close" id="closeModal" aria-label="Close">✕</button>
             </div>
             <div class="modal-body">
-                <p class="modal-desc">We'll format your full ATS analysis into a clean email you can reference later or forward to a career coach.</p>
-                <div class="modal-field">
-                    <label for="emailInput">Email address</label>
-                    <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email" required>
+                <div id="emailFormStep">
+                    <p class="modal-desc">We'll format your full ATS analysis into a clean email you can reference later or forward to a career coach. First we'll email you a link to confirm the address.</p>
+                    <div class="modal-field">
+                        <label for="emailInput">Email address</label>
+                        <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email" required>
+                    </div>
+                    <p class="modal-privacy">We use your address only to confirm it and send this report, through our email provider Resend. ResumeRadar keeps only a scrambled form of it for up to 24 hours, never the address itself, and does not add you to a mailing list. <a href="/privacy">Privacy</a></p>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn-secondary" id="cancelModal">Cancel</button>
+                        <button type="button" class="modal-btn-primary" id="sendEmailBtn">
+                            <span class="send-text">Send report</span>
+                            <span class="send-loading" style="display: none;">
+                                <span class="spinner spinner-sm"></span> Sending...
+                            </span>
+                        </button>
+                    </div>
                 </div>
-                <p class="modal-privacy">We use your address only to send this report, through our email provider Resend. ResumeRadar does not keep it or add you to a mailing list. <a href="/privacy">Privacy</a></p>
-                <div class="modal-actions">
-                    <button type="button" class="modal-btn-secondary" id="cancelModal">Cancel</button>
-                    <button type="button" class="modal-btn-primary" id="sendEmailBtn">
-                        <span class="send-text">Send report</span>
-                        <span class="send-loading" style="display: none;">
-                            <span class="spinner spinner-sm"></span> Sending...
-                        </span>
-                    </button>
+                <div id="emailWaitStep" hidden>
+                    <p class="modal-desc" id="emailWaitText" tabindex="-1" role="status" aria-live="polite"></p>
+                    <p class="modal-privacy">Open the email, press the confirm button, and your report will be sent from here. Keep this page open. The link works for one hour.</p>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn-secondary" id="emailChangeBtn">Use a different address</button>
+                        <button type="button" class="modal-btn-primary" id="emailWaitCloseBtn">Close</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -825,7 +835,7 @@ Include the job title, requirements, responsibilities, qualifications and everyt
     </div>
 
     <script src="/static/js/scan-utils.js?v=5"></script>
-    <script src="/static/js/app.js?v=20"></script>
+    <script src="/static/js/app.js?v=21"></script>
     <script src="/static/js/share.js?v=1"></script>
     <script src="/static/js/feedback.js?v=1"></script>
 </body>

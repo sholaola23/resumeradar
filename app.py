@@ -5,6 +5,7 @@ Built by Olushola Oladipupo
 """
 
 import os
+import time
 import posixpath
 import json
 import uuid
@@ -877,35 +878,151 @@ def generate_summary_endpoint():
 
 
 REPORT_EXPIRED_MESSAGE = "This report has expired. Please run the scan again, then download or email it."
+EMAIL_UNAVAILABLE_MESSAGE = "Email is unavailable right now. Please try again later, or download your report."
 _REPORT_SENDS_PER_SCAN = 3
+# Confirmation emails: per scan, and per address across all scans in a day,
+# so nobody can use the site to fill a stranger's inbox.
+_CONFIRM_SENDS_PER_SCAN = 3
+_CONFIRM_SENDS_PER_ADDRESS = 5
+_CONFIRM_ADDRESS_WINDOW_SECONDS = 24 * 60 * 60
+# Links in our emails always point here, never at the request's Host header,
+# which a caller can set to anything.
+SITE_URL = "https://resumeradar.sholastechnotes.com"
 
 
-def _allow_report_send(scan_data):
-    """Cap emails per signed scan, so one genuine result can't be replayed
-    to a list of addresses. Counts a hash of the signature, never the report.
-    Without Redis the per-IP limit on the route still applies."""
+# One plain address only: no lists, display names or spaces, so a single
+# confirmation can never cover a second inbox.
+_EMAIL_RE = re_module.compile(r"[^@\s,;:<>()\[\]\"\\]+@[^@\s,;:<>()\[\]\"\\]+\.[^@\s,;:<>()\[\]\"\\]+")
+
+
+def _valid_email(email):
+    return len(email) <= 254 and _EMAIL_RE.fullmatch(email) is not None
+
+
+class _EmailCountersUnavailable(Exception):
+    """Redis is missing or failing. Every email path refuses rather than
+    sending without its caps."""
+
+
+def _report_sends_key(scan_id):
+    return f"resumeradar:report_sends:{scan_id}"
+
+
+def _confirm_scan_key(scan_id):
+    return f"resumeradar:report_confirm_sends:{scan_id}"
+
+
+def _confirm_address_key(address_id):
+    return f"resumeradar:report_confirm_to:{address_id}"
+
+
+def _confirmed_key(scan_id, address_id):
+    return f"resumeradar:report_confirmed:{scan_id}:{address_id}"
+
+
+def _take_email_slot(key, limit, ttl):
+    """Count one email against key. True while within limit. Holds only a
+    hash in the key, never the report or the address."""
     if not _redis_client:
-        return True
-    key = f"resumeradar:report_sends:{report_signing.signature_id(scan_data)}"
+        raise _EmailCountersUnavailable()
     try:
-        sends = _redis_client.incr(key)
-        if sends == 1:
-            _redis_client.expire(key, report_signing.MAX_AGE_SECONDS)
-        return sends <= _REPORT_SENDS_PER_SCAN
+        # SET NX EX and INCR run as one MULTI/EXEC, so the key can't expire
+        # between them and come back from INCR with no TTL.
+        pipe = _redis_client.pipeline(transaction=True)
+        pipe.set(key, 0, ex=ttl, nx=True)
+        pipe.incr(key)
+        sends = pipe.execute()[1]
     except Exception as e:
         print(f"Report send counter unavailable: {type(e).__name__}")
-        return True
+        raise _EmailCountersUnavailable() from None
+    return sends <= limit
 
 
-def _refund_report_send(scan_data):
-    """Give the send back when Resend fails, so a failed email doesn't use
-    up one of the scan's three."""
+def _give_back_email_slot(key):
+    """Give a slot back when Resend fails, so a failed email doesn't use one up."""
     if not _redis_client:
         return
     try:
-        _redis_client.decr(f"resumeradar:report_sends:{report_signing.signature_id(scan_data)}")
+        if _redis_client.decr(key) < 0:
+            # The key expired in between, and DECR made a new one with no TTL.
+            _redis_client.delete(key)
     except Exception as e:
         print(f"Report send counter unavailable: {type(e).__name__}")
+
+
+def _is_confirmed(scan_id, address_id):
+    if not _redis_client:
+        raise _EmailCountersUnavailable()
+    try:
+        return bool(_redis_client.exists(_confirmed_key(scan_id, address_id)))
+    except Exception as e:
+        print(f"Report confirmation store unavailable: {type(e).__name__}")
+        raise _EmailCountersUnavailable() from None
+
+
+def _resend_key():
+    key = os.getenv('RESEND_API_KEY')
+    if not key or key == 'your-resend-api-key-here':
+        return None
+    return key
+
+
+def _send_confirm_email(email, signed_scan, resend_key):
+    """First email to a new address: a short note with a confirm link. The
+    report itself only goes out once the owner of the address confirms."""
+    scan_key = _confirm_scan_key(report_signing.signature_id(signed_scan))
+    address_key = _confirm_address_key(report_signing.inbox_id(email))
+    try:
+        if not _take_email_slot(scan_key, _CONFIRM_SENDS_PER_SCAN, report_signing.MAX_AGE_SECONDS):
+            return jsonify({"error": "This report has had several confirmation emails already. Please download it instead."}), 429
+        try:
+            address_ok = _take_email_slot(address_key, _CONFIRM_SENDS_PER_ADDRESS, _CONFIRM_ADDRESS_WINDOW_SECONDS)
+        except _EmailCountersUnavailable:
+            _give_back_email_slot(scan_key)
+            raise
+        if not address_ok:
+            _give_back_email_slot(scan_key)
+            return jsonify({"error": "This address has had several confirmation emails today. Please download your report instead."}), 429
+    except _EmailCountersUnavailable:
+        return jsonify({"error": EMAIL_UNAVAILABLE_MESSAGE}), 503
+
+    import resend
+    resend.api_key = resend_key
+
+    link = f"{SITE_URL}/confirm-email?t={report_signing.confirm_token(signed_scan, email)}"
+    html_body = f"""
+        <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #10161D;">
+            <h1 style="font-size: 20px; margin: 0 0 16px;">Confirm to receive your ResumeRadar report</h1>
+            <p style="font-size: 15px; line-height: 1.6; margin: 0 0 16px;">Someone asked for a ResumeRadar CV report to be sent to this address. If that was you, confirm below and your report will be sent from the ResumeRadar page you have open.</p>
+            <p style="margin: 24px 0;"><a href="{link}" style="display: inline-block; background: #0E5C4A; color: #FFFFFF; text-decoration: none; padding: 12px 24px; border-radius: 999px; font-weight: 600;">Confirm and get my report</a></p>
+            <p style="font-size: 13px; line-height: 1.6; color: #55606B; margin: 0 0 8px;">The link works for one hour. If you didn't ask for this, ignore this email and nothing else will be sent.</p>
+            <p style="font-size: 12px; color: #55606B; margin: 24px 0 0;">ResumeRadar, a free CV checker at <a href="{SITE_URL}/" style="color: #0E5C4A;">resumeradar.sholastechnotes.com</a></p>
+        </div>
+        """
+    text_body = (
+        "Confirm to receive your ResumeRadar report\n\n"
+        "Someone asked for a ResumeRadar CV report to be sent to this address. "
+        "If that was you, open this link and press Confirm:\n\n"
+        f"{link}\n\n"
+        "The link works for one hour. If you didn't ask for this, ignore this email and nothing else will be sent.\n"
+    )
+    try:
+        resend.Emails.send({
+            "from": "ResumeRadar <reports@sholastechnotes.com>",
+            "to": [email],
+            "subject": "Confirm to receive your ResumeRadar report",
+            "html": html_body,
+            "text": text_body,
+        })
+    except Exception:
+        _give_back_email_slot(scan_key)
+        _give_back_email_slot(address_key)
+        raise
+
+    return jsonify({
+        "status": "confirm_sent",
+        "message": f"We've sent a confirmation link to {email}.",
+    })
 
 
 @app.route('/api/download-report', methods=['POST'])
@@ -966,7 +1083,7 @@ def email_report():
         email = str(data.get('email') or '').strip()
         scan_data = data.get('scan_data')
 
-        if not email or '@' not in email:
+        if not _valid_email(email):
             return jsonify({"error": "Please provide a valid email address."}), 400
 
         if not scan_data:
@@ -979,13 +1096,20 @@ def email_report():
             return jsonify({"error": REPORT_EXPIRED_MESSAGE}), 403
 
         # Check for Resend API key before using up one of the scan's sends
-        resend_key = os.getenv('RESEND_API_KEY')
-        if not resend_key or resend_key == 'your-resend-api-key-here':
+        resend_key = _resend_key()
+        if not resend_key:
             return jsonify({"error": "Email service is not configured yet. Please download or copy your report instead."}), 503
 
-        if not _allow_report_send(scan_data):
-            return jsonify({"error": "This report has already been emailed a few times. Please download it instead."}), 429
-        signed_scan = scan_data
+        scan_id = report_signing.signature_id(scan_data)
+        report_sends_key = _report_sends_key(scan_id)
+        try:
+            confirmed = _is_confirmed(scan_id, report_signing.email_id(email))
+            if not confirmed:
+                return _send_confirm_email(email, scan_data, resend_key)
+            if not _take_email_slot(report_sends_key, _REPORT_SENDS_PER_SCAN, report_signing.MAX_AGE_SECONDS):
+                return jsonify({"error": "This report has already been emailed a few times. Please download it instead."}), 429
+        except _EmailCountersUnavailable:
+            return jsonify({"error": EMAIL_UNAVAILABLE_MESSAGE}), 503
         scan_data = report_data
 
         import resend
@@ -1089,7 +1213,7 @@ def email_report():
         try:
             resend.Emails.send(params)
         except Exception:
-            _refund_report_send(signed_scan)
+            _give_back_email_slot(report_sends_key)
             raise
 
         return jsonify({
@@ -1100,6 +1224,55 @@ def email_report():
     except Exception as e:
         print(f"Email sending error: {log_safe.describe(e)}")
         return jsonify({"error": f"Failed to send email. Please try downloading the report instead."}), 500
+
+
+@app.route('/api/email-report/status', methods=['POST'])
+@limiter.limit("600 per hour")
+def email_report_status():
+    """Has this address confirmed it wants this scan's report? The open page
+    asks every few seconds while it waits, then sends the report."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "No data provided."}), 400
+    email = str(data.get('email') or '').strip()
+    scan_data = data.get('scan_data')
+    if not _valid_email(email):
+        return jsonify({"error": "Please provide a valid email address."}), 400
+    if report_signing.verify(scan_data) is None:
+        return jsonify({"error": REPORT_EXPIRED_MESSAGE}), 403
+    try:
+        confirmed = _is_confirmed(report_signing.signature_id(scan_data), report_signing.email_id(email))
+    except _EmailCountersUnavailable:
+        return jsonify({"error": EMAIL_UNAVAILABLE_MESSAGE}), 503
+    return jsonify({"confirmed": confirmed})
+
+
+@app.route('/confirm-email', methods=['GET', 'POST'])
+@limiter.limit("30 per hour")
+def confirm_email():
+    """The link in the confirmation email. Opening it only shows a button:
+    mail scanners open links on their own, so the confirmation itself needs a
+    press (a POST), not just a visit."""
+    token = request.form.get('t') if request.method == 'POST' else request.args.get('t')
+    confirmed_for = report_signing.verify_confirm_token(token)
+    if confirmed_for is None:
+        return render_template('confirm_email.html', state='expired'), 410
+    # Only a POST confirms. Flask also answers HEAD (and OPTIONS) here, and
+    # link checkers send those, so every other method just shows the button.
+    if request.method != 'POST':
+        return render_template('confirm_email.html', state='ask', token=token)
+    scan_id, address_id, scan_expires_at = confirmed_for
+    if not _redis_client:
+        return render_template('confirm_email.html', state='unavailable', token=token), 503
+    try:
+        # nx: pressing an old link again must not restart the 24-hour clock.
+        # Keep it only as long as the scan's own signature lasts.
+        ttl = max(1, scan_expires_at - int(time.time()))
+        _redis_client.set(_confirmed_key(scan_id, address_id), 1, ex=ttl, nx=True)
+    except Exception as e:
+        print(f"Report confirmation store unavailable: {type(e).__name__}")
+        return render_template('confirm_email.html', state='unavailable', token=token), 503
+    return render_template('confirm_email.html', state='done')
 
 
 @app.route('/api/subscribe', methods=['POST'])

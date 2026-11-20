@@ -128,3 +128,78 @@ def signature_id(scan_data):
     key is the same for every request that replays it."""
     signature = str(scan_data.get(SIGNATURE_FIELD, ""))
     return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:32]
+
+
+# ---------------------------------------------------------------------------
+# Recipient confirmation
+#
+# A report is only emailed to an address whose owner clicked a confirm link.
+# The link carries a signed token naming the scan (by signature_id) and the
+# address (by email_id, a keyed hash), never the address itself, so nothing
+# readable ends up in a URL or a log. Nothing is stored until the click.
+# ---------------------------------------------------------------------------
+CONFIRM_MAX_AGE_SECONDS = 60 * 60
+_CONFIRM_VERSION = "c1"
+_CONFIRM_RE = re.compile(
+    r"c1\.([1-9][0-9]{0,11})\.([1-9][0-9]{0,11})\.([0-9a-f]{32})\.([0-9a-f]{32})\.([0-9a-f]{64})", re.ASCII
+)
+
+
+def email_id(email):
+    """Keyed hash of a normalised address. Cannot be turned back into it."""
+    normalised = str(email or "").strip().lower()
+    return hmac.new(_key(), b"email:" + normalised.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+
+_DOTLESS_DOMAINS = ("gmail.com", "googlemail.com")
+
+
+def inbox_id(email):
+    """Keyed hash of the inbox an address delivers to, for the per-address cap
+    on confirmation emails. name+anything@ and, at Gmail, dots in the name all
+    reach the same inbox, so they share one count."""
+    normalised = str(email or "").strip().lower()
+    local, _, domain = normalised.rpartition("@")
+    local = local.split("+", 1)[0]
+    if domain in _DOTLESS_DOMAINS:
+        local = local.replace(".", "")
+        domain = "gmail.com"
+    return email_id(f"{local}@{domain}")
+
+
+def _confirm_mac(issued_at, scan_issued_at, scan_id, address_id):
+    message = f"{_CONFIRM_VERSION}.{issued_at}.{scan_issued_at}.{scan_id}.{address_id}".encode("ascii")
+    return hmac.new(_key(), b"confirm:" + message, hashlib.sha256).hexdigest()
+
+
+def confirm_token(scan_data, email, now=None):
+    """Signed token for the confirm link. Call only after verify(scan_data)."""
+    issued_at = int(now if now is not None else time.time())
+    # When the scan was signed, so a confirmation never outlives the scan.
+    scan_issued_at = int(_SIGNATURE_RE.fullmatch(scan_data[SIGNATURE_FIELD]).group(1))
+    scan_id = signature_id(scan_data)
+    address_id = email_id(email)
+    mac = _confirm_mac(issued_at, scan_issued_at, scan_id, address_id)
+    return f"{_CONFIRM_VERSION}.{issued_at}.{scan_issued_at}.{scan_id}.{address_id}.{mac}"
+
+
+def verify_confirm_token(token, now=None):
+    """Return (scan_id, address_id, scan_expires_at) for a valid, unexpired
+    token whose scan has not expired either, else None."""
+    if not isinstance(token, str):
+        return None
+    match = _CONFIRM_RE.fullmatch(token)
+    if not match:
+        return None
+    issued_at = int(match.group(1))
+    current = int(now if now is not None else time.time())
+    if issued_at > current + 300 or current - issued_at > CONFIRM_MAX_AGE_SECONDS:
+        return None
+    scan_issued_at = int(match.group(2))
+    scan_id, address_id = match.group(3), match.group(4)
+    if not hmac.compare_digest(_confirm_mac(issued_at, scan_issued_at, scan_id, address_id), match.group(5)):
+        return None
+    scan_expires_at = scan_issued_at + MAX_AGE_SECONDS
+    if current >= scan_expires_at:
+        return None
+    return scan_id, address_id, scan_expires_at
