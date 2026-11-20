@@ -32,7 +32,8 @@ def _dense_pdf(lines_per_page, pages):
     return _write(p)
 
 
-def _nested_form_pdf(inner_mb):
+def _nested_form_pdf(inner_mb, fm1_resources=b"/Resources << /XObject << /Fm2 5 0 R >> >>",
+                     extra_objs=()):
     """Grok's repro on PR 34: the page draws form Fm1, and Fm1 draws Fm2
     through its own resources, so a page-level count never sees Fm2. Fm2 is
     megabytes of line drawing that compress to a few KB."""
@@ -43,13 +44,14 @@ def _nested_form_pdf(inner_mb):
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
         b"/Resources << /XObject << /Fm1 4 0 R >> >> /Contents 6 0 R >>",
         b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] "
-        b"/Resources << /XObject << /Fm2 5 0 R >> >> /Length 8 >>\n"
+        + fm1_resources + b" /Length 8 >>\n"
         b"stream\n/Fm2 Do\nendstream",
         # pypdf skips a form with no resources, so Fm2 carries a font.
         b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] /Filter /FlateDecode "
         b"/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 "
         b"/BaseFont /Helvetica >> >> >> /Length %d >>\nstream\n" % len(inner) + inner + b"\nendstream",
         b"<< /Length 8 >>\nstream\n/Fm1 Do\nendstream",
+        *extra_objs,
     ]
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
@@ -131,6 +133,25 @@ class PdfBudgetTests(unittest.TestCase):
         self.assertEqual(pages_read, 0)  # rejected before extraction
         self.assertIsNone(text)
         self.assertIn("more complex than we can process", err)
+
+    def test_nested_form_via_parent_resources_counted(self):
+        # Fm1 has no /Resources of its own but borrows them through /Parent,
+        # which pypdf follows when it draws Fm1 (Claude review on PR 45).
+        path = self._path(_nested_form_pdf(
+            40, fm1_resources=b"/Parent 7 0 R",
+            extra_objs=(b"<< /Resources << /XObject << /Fm2 5 0 R >> >> >>",)))
+        text, err, pages_read = self._extract_counting_pages(path)
+        self.assertEqual(pages_read, 0)  # rejected before extraction
+        self.assertIsNone(text)
+        self.assertIn("more complex than we can process", err)
+
+    def test_form_parent_cycle_rejected(self):
+        # Fm1 is its own /Parent and has no /Resources: must not hang.
+        path = self._path(_nested_form_pdf(1, fm1_resources=b"/Parent 4 0 R"))
+        text, err, pages_read = self._extract_counting_pages(path)
+        self.assertEqual(pages_read, 0)
+        self.assertIsNone(text)
+        self.assertIn("Could not read that PDF", err)
 
     def test_small_nested_form_still_parses(self):
         # A small nested form is under the cap: it must reach extraction

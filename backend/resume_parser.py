@@ -50,7 +50,12 @@ def _pdf_content_size_ok(reader):
     Forms can draw other forms through their own /Resources, and pypdf parses
     each one in full before our per-operator time check can fire, so nested
     forms are walked too (Grok on PR 34). Each form counts once; the seen set
-    also stops reference cycles."""
+    also stops reference cycles.
+
+    Resources are looked up with get_inherited, as pypdf does when it
+    extracts text: a form without /Resources borrows them through /Parent
+    (Claude review on PR 45). pypdf raises on a /Parent cycle, which the
+    caller turns into the usual "could not read" message."""
     total = 0
     seen = set()
 
@@ -75,14 +80,14 @@ def _pdf_content_size_ok(reader):
         contents = page.get_contents()
         if contents is not None:
             pending.append(contents)
-        pending.extend(_forms(page.get("/Resources")))
+        pending.extend(_forms(page.get_inherited("/Resources")))
         while pending:
             stream = pending.pop()
             total += len(stream.get_data())
             if total > MAX_PDF_CONTENT_BYTES:
                 return False
             if stream.get("/Subtype") == "/Form":
-                pending.extend(_forms(stream.get("/Resources")))
+                pending.extend(_forms(stream.get_inherited("/Resources")))
     return True
 
 
