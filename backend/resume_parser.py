@@ -9,6 +9,8 @@ import zipfile
 from pypdf import PdfReader
 from docx import Document
 
+from backend import log_safe
+
 
 # ---------------------------------------------------------------------------
 # Upload safety limits (AI-02)
@@ -71,14 +73,14 @@ def sniff_matches(file_path, file_type):
 def extract_text_from_pdf(file_path):
     """Extract text from a PDF file."""
     if not sniff_matches(file_path, "pdf"):
-        return None, "That file doesn't look like a valid PDF. Please upload a real PDF or paste your resume text."
+        return None, "That file doesn't look like a valid PDF. Please upload a real PDF or paste your CV text."
 
     try:
         reader = PdfReader(file_path)
 
         page_count = len(reader.pages)
         if page_count > MAX_PDF_PAGES:
-            return None, f"That PDF has {page_count} pages (limit {MAX_PDF_PAGES}). Please upload just your resume."
+            return None, f"That PDF has {page_count} pages (limit {MAX_PDF_PAGES}). Please upload just your CV."
 
         text_parts = []
         for page in reader.pages:
@@ -89,16 +91,16 @@ def extract_text_from_pdf(file_path):
         full_text = "\n".join(text_parts)
 
         if not full_text.strip():
-            return None, "The PDF appears to be empty or contains only images/scanned content. Try pasting your resume text directly."
+            return None, "The PDF appears to be empty or contains only images/scanned content. Try pasting your CV text directly."
 
         return clean_text(full_text), None
 
     except Exception as e:
         # Log the library detail, but don't hand it to the client.
-        print(f"PDF parse error: {type(e).__name__}: {e}")
+        print(f"PDF parse error: {log_safe.describe(e)}")
         if "decrypt" in str(e).lower() or "password" in str(e).lower():
-            return None, "That PDF is password-protected. Please remove the password or paste your resume text."
-        return None, "Could not read that PDF. Please try a different file or paste your resume text."
+            return None, "That PDF is password-protected. Please remove the password or paste your CV text."
+        return None, "Could not read that PDF. Please try a different file or paste your CV text."
 
 
 def _docx_zip_is_safe(file_path):
@@ -121,15 +123,15 @@ def _docx_zip_is_safe(file_path):
             infos = zf.infolist()
 
             if len(infos) > MAX_DOCX_ENTRIES:
-                return False, "That DOCX has too many parts to process safely. Please paste your resume text instead."
+                return False, "That DOCX has too many parts to process safely. Please paste your CV text instead."
 
             # Stage 1 — cheap reject on declared sizes.
             declared = sum(i.file_size for i in infos)
             compressed = sum(i.compress_size for i in infos) or 1
             if declared > MAX_DOCX_UNCOMPRESSED:
-                return False, "That DOCX expands to more than we can process. Please upload a smaller file or paste your resume text."
+                return False, "That DOCX expands to more than we can process. Please upload a smaller file or paste your CV text."
             if declared / compressed > MAX_DOCX_COMPRESSION_RATIO:
-                return False, "That DOCX looks malformed and can't be processed safely. Please paste your resume text instead."
+                return False, "That DOCX looks malformed and can't be processed safely. Please paste your CV text instead."
 
             # Word, LibreOffice and python-docx only ever emit STORED or
             # DEFLATE. Reject anything else *before* reading a byte: CPython
@@ -139,7 +141,7 @@ def _docx_zip_is_safe(file_path):
             # DOCX with a BZIP2 member allocated 404MB inside this function.
             for info in infos:
                 if info.compress_type not in _ALLOWED_COMPRESSION:
-                    return False, "That DOCX uses an unsupported compression method. Please re-save it in Word or paste your resume text."
+                    return False, "That DOCX uses an unsupported compression method. Please re-save it in Word or paste your CV text."
 
             # Stage 2 — count real decompressed bytes, capped.
             #
@@ -160,19 +162,19 @@ def _docx_zip_is_safe(file_path):
                             break
                         actual += len(chunk)
                         if actual > MAX_DOCX_UNCOMPRESSED:
-                            return False, "That DOCX expands to more than we can process. Please upload a smaller file or paste your resume text."
+                            return False, "That DOCX expands to more than we can process. Please upload a smaller file or paste your CV text."
 
         return True, None
     except zipfile.BadZipFile:
-        return False, "That file doesn't look like a valid DOCX. Please upload a real DOCX or paste your resume text."
+        return False, "That file doesn't look like a valid DOCX. Please upload a real DOCX or paste your CV text."
     except Exception:
-        return False, "Could not read that DOCX file. Please try a different file or paste your resume text."
+        return False, "Could not read that DOCX file. Please try a different file or paste your CV text."
 
 
 def extract_text_from_docx(file_path):
     """Extract text from a DOCX file."""
     if not sniff_matches(file_path, "docx"):
-        return None, "That file doesn't look like a valid DOCX. Please upload a real DOCX or paste your resume text."
+        return None, "That file doesn't look like a valid DOCX. Please upload a real DOCX or paste your CV text."
 
     safe, sniff_error = _docx_zip_is_safe(file_path)
     if not safe:
@@ -200,24 +202,24 @@ def extract_text_from_docx(file_path):
         full_text = "\n".join(text_parts)
 
         if not full_text.strip():
-            return None, "The DOCX file appears to be empty. Try pasting your resume text directly."
+            return None, "The DOCX file appears to be empty. Try pasting your CV text directly."
 
         return clean_text(full_text), None
 
     except Exception as e:
-        print(f"DOCX parse error: {type(e).__name__}: {e}")
-        return None, "Could not read that DOCX. Please try a different file or paste your resume text."
+        print(f"DOCX parse error: {log_safe.describe(e)}")
+        return None, "Could not read that DOCX. Please try a different file or paste your CV text."
 
 
 def extract_text_from_paste(text):
     """Process pasted resume text."""
     if not text or not text.strip():
-        return None, "No resume text provided. Please paste your resume content."
+        return None, "No CV text provided. Please paste your CV content."
 
     cleaned = clean_text(text)
 
     if len(cleaned.split()) < 20:
-        return None, "The pasted text seems too short to be a resume. Please paste your full resume content."
+        return None, "The pasted text seems too short to be a CV. Please paste your full CV content."
 
     return cleaned, None
 
@@ -258,7 +260,7 @@ def parse_resume(file_path=None, pasted_text=None, file_type=None):
         else:
             text, error = None, f"Unsupported file type: {file_type}"
     else:
-        text, error = None, "No resume provided. Please upload a file or paste your resume text."
+        text, error = None, "No CV provided. Please upload a file or paste your CV text."
 
     if error:
         return {"text": None, "error": error, "word_count": 0}

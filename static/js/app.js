@@ -28,13 +28,6 @@ function escapeHtml(text) {
 
 document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
-    // MODE RESOLVER — single place for feature flags
-    // ============================================================
-    const _rrMode = {
-        gate: new URLSearchParams(location.search).get('gate') === 'modal' ? 'modal' : 'inline',
-    };
-
-    // ============================================================
     // FUNNEL ANALYTICS (fire-and-forget via sendBeacon)
     // ============================================================
     let journeyId = '';
@@ -103,8 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     const scanForm = document.getElementById('scanForm');
     const scanBtn = document.getElementById('scanBtn');
-    const scanBtnText = document.querySelector('.scan-btn-text');
-    const scanBtnLoading = document.querySelector('.scan-btn-loading');
+    const scanProgress = document.getElementById('scanProgress');
     const errorMessage = document.getElementById('errorMessage');
     const resultsSection = document.getElementById('results');
     const scanAgainBtn = document.getElementById('scanAgainBtn');
@@ -133,13 +125,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailInput = document.getElementById('emailInput');
 
     // Store the last scan data for report generation
-    // Exposed on window for cross-page use (CV Builder cross-sell)
     let lastScanData = null;
     let comparisonBaseline = null;
+    // Job description segments for "View in job description". Kept apart from
+    // lastScanData so the job text is never posted back with a report request.
+    let lastJobView = [];
+    let jobTermIndex = ResumeRadarScan.jobTermIndex([]);
     // Keep the optional newsletter after the complete report and free rescan action.
     resultsSection.appendChild(document.getElementById('inlineGateCard'));
     document.getElementById('topMissingKeywords').before(document.getElementById('quickWins'));
-    window._resumeradar_getLastScanData = function () { return lastScanData; };
+
+    // Show a recognised term the way people write it (CDN, not cdn). The
+    // server sends the display names with each scan; matching stays lower-case.
+    function kw(term) {
+        const names = (lastScanData && lastScanData.keyword_display) || {};
+        return Object.prototype.hasOwnProperty.call(names, term) ? names[term] : term;
+    }
 
     // ============================================================
     // SOCIAL PROOF COUNTER
@@ -147,213 +148,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const socialProof = document.getElementById('socialProof');
     const scanCountEl = document.getElementById('scanCount');
 
-    (async function loadScanCount() {
+    function scanCountText(count) {
+        const num = count.toLocaleString();
+        if (count >= 1000) return `${num}+ CVs scanned. Join the movement`;
+        if (count >= 750) return `${num}+ job seekers have scanned their CVs`;
+        if (count >= 500) return `${num}+ CVs scanned and counting`;
+        if (count >= 250) return `${num}+ CVs scanned. Are you next?`;
+        return `${num}+ CVs scanned`;
+    }
+
+    // Used on first load and again after each scan, so the banner keeps its words.
+    async function refreshScanCount() {
+        if (!socialProof || !scanCountEl) return;
         try {
             const resp = await fetch('/api/scan-count');
             const data = await resp.json();
             const count = data.count || 0;
             const velocity = data.velocity || 0;
-            if (count >= 10 && socialProof && scanCountEl) {
-                // Milestone-aware copy
-                const num = count.toLocaleString();
-                let text = `${num}+ resumes scanned`;
-                if (count >= 1000) text = `${num}+ resumes scanned — join the movement`;
-                else if (count >= 750) text = `${num}+ job seekers have scanned their resumes`;
-                else if (count >= 500) text = `${num}+ resumes scanned and counting`;
-                else if (count >= 250) text = `${num}+ resumes scanned — are you next?`;
+            if (count < 10) return;
+            scanCountEl.textContent = scanCountText(count);
 
-                scanCountEl.textContent = text;
-
-                // Show velocity badge when traffic is active
-                const velocityEl = document.getElementById('scanVelocity');
-                if (velocity >= 5 && velocityEl) {
-                    velocityEl.textContent = `${velocity} scans this hour`;
-                    velocityEl.style.display = 'inline';
-                }
-
-                socialProof.style.display = 'block';
+            // Show velocity badge when traffic is active
+            const velocityEl = document.getElementById('scanVelocity');
+            if (velocity >= 5 && velocityEl) {
+                velocityEl.textContent = `${velocity} scans this hour`;
+                velocityEl.style.display = 'inline';
             }
+
+            socialProof.style.display = 'block';
         } catch (e) {
             // Silently fail — social proof is non-critical
         }
-    })();
-
-    // Newsletter popup elements
-    const newsletterPopup = document.getElementById('newsletterPopup');
-    const newsletterForm = document.getElementById('newsletterForm');
-    const newsletterEmail = document.getElementById('newsletterEmail');
-    const newsletterFirstName = document.getElementById('newsletterFirstName');
-
-    // hasSubscribed replaced by isSubscribed() — see cross-cutting section above
-
-    // ============================================================
-    // NEWSLETTER POPUP (MANDATORY)
-    // ============================================================
-
-    function showNewsletterPopup(data) {
-        if (!newsletterPopup) {
-            renderResults(data);
-            return;
-        }
-
-        // Show score preview in the popup header
-        const score = data.match_score;
-        const scorePreview = document.getElementById('scorePreview');
-        const scorePreviewNumber = document.getElementById('scorePreviewNumber');
-        const scorePreviewFill = document.getElementById('scorePreviewFill');
-
-        if (scorePreview && scorePreviewNumber && scorePreviewFill) {
-            // Set score text
-            scorePreviewNumber.textContent = Number.isFinite(score) ? ResumeRadarScan.scoreText(score) : '—';
-
-            // Animate the circle fill
-            const circumference = 226.195; // 2 * π * 36
-            const offset = circumference - ((Number.isFinite(score) ? score : 0) / 100) * circumference;
-            scorePreviewFill.style.strokeDashoffset = circumference; // reset
-            scorePreview.style.display = 'block';
-
-            // Color based on score
-            let color = '#dc2626';
-            if (!Number.isFinite(score)) color = '#64748b';
-        else if (score >= 75) color = '#059669';
-            else if (score >= 50) color = '#d97706';
-            scorePreviewFill.style.stroke = color;
-
-            // Animate after a brief delay
-            setTimeout(() => {
-                scorePreviewFill.style.strokeDashoffset = offset;
-            }, 300);
-        }
-
-        // Update heading to include score context
-        if (newsletterHeading) {
-            newsletterHeading.textContent = `Your estimate: ${ResumeRadarScan.scoreText(score)}`;
-        }
-        if (newsletterSubtitle) {
-            newsletterSubtitle.textContent = 'Subscribe to Shola\'s Tech Notes to unlock your full report — missing keywords, AI suggestions, and ATS fixes. Plus get weekly tech career tips in just 3 minutes.';
-        }
-
-        newsletterPopup.style.display = 'flex';
-        // gate_shown event fired by the scan handler, not here (prevents duplicates)
-        if (newsletterFirstName) newsletterFirstName.focus();
     }
-
-    // Post-subscribe confirmation elements
-    const newsletterFormWrapper = document.getElementById('newsletterFormWrapper');
-    const newsletterConfirmation = document.getElementById('newsletterConfirmation');
-    const confirmName = document.getElementById('confirmName');
-    const viewResultsBtn = document.getElementById('viewResultsBtn');
-    const newsletterHeading = document.getElementById('newsletterHeading');
-    const newsletterSubtitle = document.getElementById('newsletterSubtitle');
-
-    function showNewsletterConfirmation(firstName) {
-        // Hide the form, show the confirmation
-        if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'none';
-        if (newsletterConfirmation) {
-            newsletterConfirmation.style.display = 'block';
-            if (confirmName) confirmName.textContent = firstName;
-        }
-        // Update header text to post-subscribe message
-        if (newsletterHeading) newsletterHeading.textContent = "You're subscribed! 🎉";
-        if (newsletterSubtitle) newsletterSubtitle.textContent = "Welcome to Shola's Tech Notes — you'll get practical tech career tips, certification guides, and AI fundamentals in just 3 minutes a week.";
-
-        markSubscribed();
-    }
-
-    function closeNewsletterAfterSubscribe() {
-        if (newsletterPopup) newsletterPopup.style.display = 'none';
-
-        // Reset the popup to form state for next time (shouldn't happen since we track session)
-        if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'block';
-        if (newsletterConfirmation) newsletterConfirmation.style.display = 'none';
-
-        // Now show the results
-        if (lastScanData) {
-            renderResults(lastScanData);
-        }
-    }
-
-    // "View My Results" button on confirmation screen
-    if (viewResultsBtn) {
-        viewResultsBtn.addEventListener('click', () => {
-            closeNewsletterAfterSubscribe();
-        });
-    }
-
-    // NO backdrop close — subscription is mandatory
-    // NO skip button — subscription is mandatory
-    // NO close button — subscription is mandatory
-
-    // Newsletter form submission
-    if (newsletterForm) {
-        newsletterForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const firstName = newsletterFirstName ? newsletterFirstName.value.trim() : '';
-            const email = newsletterEmail ? newsletterEmail.value.trim() : '';
-
-            // Validate first name
-            if (!firstName) {
-                if (newsletterFirstName) {
-                    newsletterFirstName.style.borderColor = '#dc2626';
-                    newsletterFirstName.focus();
-                }
-                return;
-            }
-
-            // Validate email
-            if (!email || !email.includes('@')) {
-                if (newsletterEmail) {
-                    newsletterEmail.style.borderColor = '#dc2626';
-                    newsletterEmail.focus();
-                }
-                return;
-            }
-
-            // Reset border colors
-            if (newsletterFirstName) newsletterFirstName.style.borderColor = '';
-            if (newsletterEmail) newsletterEmail.style.borderColor = '';
-
-            const submitBtn = newsletterForm.querySelector('.newsletter-submit-btn');
-            const btnText = submitBtn ? submitBtn.querySelector('.nl-btn-text') : null;
-            const btnLoading = submitBtn ? submitBtn.querySelector('.nl-btn-loading') : null;
-
-            if (btnText) btnText.style.display = 'none';
-            if (btnLoading) btnLoading.style.display = 'inline';
-            if (submitBtn) submitBtn.disabled = true;
-
-            try {
-                // Subscribe via our backend (which calls Beehiiv API)
-                // Thread incoming UTM source so Beehiiv tracks where this subscriber came from
-                const incomingUtm = new URLSearchParams(window.location.search).get('utm_source') || 'resumeradar';
-                const response = await fetch('/api/subscribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, first_name: firstName, utm_source: incomingUtm }),
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || result.error) {
-                    throw new Error(result.error || 'Subscription failed');
-                }
-
-                // Show the confirmation screen with email tip
-                showNewsletterConfirmation(firstName);
-
-            } catch (err) {
-                console.error('Newsletter signup error:', err);
-                // Fallback: open the newsletter page directly
-                window.open('https://www.sholastechnotes.com/', '_blank');
-                showToast('Opening newsletter page — subscribe there to see results.');
-                closeNewsletterAfterSubscribe();
-            } finally {
-                if (btnText) btnText.style.display = 'inline';
-                if (btnLoading) btnLoading.style.display = 'none';
-                if (submitBtn) submitBtn.disabled = false;
-            }
-        });
-    }
+    refreshScanCount();
 
     // ============================================================
     // INLINE GATE HANDLERS
@@ -450,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHidden = content.style.display === 'none';
         content.style.display = isHidden ? 'block' : 'none';
         if (icon) icon.textContent = isHidden ? '−' : '+';
+        toggle.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
 
         // Fire section expand event (once per scan)
         if (isHidden && section) {
@@ -462,18 +290,60 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     const stickyCta = document.getElementById('stickyCta');
     if (stickyCta && resultsSection && window.IntersectionObserver) {
+        // Show the bar only after the reader has scrolled past the score and the
+        // improvement cards, so it never covers a report they have not read yet.
+        let resultsInView = false;
+        function updateStickyCta() {
+            const deep = document.getElementById('deepResults');
+            const passedImprovements = !!deep && deep.offsetParent !== null && deep.getBoundingClientRect().top < 0;
+            stickyCta.style.display = resultsInView && passedImprovements ? 'block' : 'none';
+        }
         const stickyObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                stickyCta.style.display = entry.isIntersecting ? 'block' : 'none';
-            });
-        }, { threshold: 0.1 });
+            entries.forEach(entry => { resultsInView = entry.isIntersecting; });
+            updateStickyCta();
+        }, { threshold: 0 });
         stickyObserver.observe(resultsSection);
+        window.addEventListener('scroll', updateStickyCta, { passive: true });
 
         // Track sticky CTA click
         stickyCta.querySelector('button').addEventListener('click', () => {
             trackOncePerScan('sticky_cta_clicked');
         });
     }
+
+    // ============================================================
+    // JUMP MENU (results) + in-page links to folded sections
+    // ============================================================
+    function openSection(el) {
+        // Unfold a collapsed card, or a <details>, before scrolling to it.
+        if (!el) return;
+        if (el.tagName === 'DETAILS') { el.open = true; return; }
+        const toggle = el.querySelector('.card-header-toggle');
+        const content = toggle && document.getElementById(toggle.dataset.target);
+        if (content && content.style.display === 'none') toggle.click();
+    }
+
+    function jumpTarget(link) {
+        const visible = el => el && el.offsetParent !== null;
+        const main = document.querySelector(link.getAttribute('href'));
+        if (visible(main)) return main;
+        const fallback = link.dataset.fallback && document.querySelector(link.dataset.fallback);
+        return visible(fallback) ? fallback : null;
+    }
+
+    function updateJumpMenu() {
+        document.querySelectorAll('#resultsJump a').forEach(link => { link.hidden = !jumpTarget(link); });
+    }
+
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('#resultsJump a, a[href="#privacy"]');
+        if (!link) return;
+        const target = link.closest('#resultsJump') ? jumpTarget(link) : document.querySelector(link.getAttribute('href'));
+        if (!target) return;
+        e.preventDefault();
+        openSection(target);
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     // ============================================================
     // TAB SWITCHING
@@ -579,12 +449,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (activeTab === 'upload' && !hasFile) {
-            showError('Please upload your resume file, or switch to the "Paste Text" tab.');
+            showError('Please upload your CV, or switch to the "Paste text" tab.');
             return;
         }
 
         if (activeTab === 'paste' && !resumeText) {
-            showError('Please paste your resume text.');
+            showError('Please paste your CV text.');
             return;
         }
 
@@ -607,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
 
             let response;
             try {
@@ -620,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
                     trackEvent('scan_failed');
-                    showError('The scan is taking too long. Please try again in a moment.');
+                    showError('The scan is taking longer than usual. Please try again in a moment. Your text is still here.');
                     setLoading(false);
                     return;
                 }
@@ -638,24 +508,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Store data for report generation
+            lastJobView = data.job_description_view || [];
+            delete data.job_description_view;
             lastScanData = data;
             try { activeJobKey = await ResumeRadarScan.jobKey(jobDescription); } catch (e) { activeJobKey = ''; }
 
             // Set scan ID for event deduplication
             currentScanId = data.scan_id || data.request_id || String(Date.now());
 
-            // Update social proof counter after successful scan
-            if (socialProof && scanCountEl) {
-                try {
-                    const countResp = await fetch('/api/scan-count');
-                    const countData = await countResp.json();
-                    const newCount = countData.count || 0;
-                    if (newCount >= 10) {
-                        scanCountEl.textContent = newCount.toLocaleString() + '+';
-                        socialProof.style.display = 'block';
-                    }
-                } catch (e) { /* non-critical */ }
-            }
+            // Update social proof counter after successful scan (not awaited: non-critical)
+            refreshScanCount();
 
             // Every scan includes the complete free report; signup is optional.
             renderResults(data);
@@ -663,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Scan error:', err);
             trackEvent('scan_failed');
-            showError('Could not connect to the server. Please make sure the app is running and try again.');
+            showError('We could not reach ResumeRadar. Check your connection and try again. Your text is still here.');
         } finally {
             setLoading(false);
         }
@@ -721,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('stickyRescanBtn').addEventListener('click', rescanUpdatedCV);
 
     // ============================================================
-    // DEMO SCAN — "Try a demo scan" feature
+    // EXAMPLE REPORT: fills in a sample CV and job, then scans
     // ============================================================
     const demoScanBtn = document.getElementById('demoScanBtn');
 
@@ -729,69 +591,65 @@ document.addEventListener('DOMContentLoaded', () => {
 London, UK | jamie.smith@example.com | +44 7700 900123 | linkedin.com/in/jamiesmith-demo
 
 PROFESSIONAL SUMMARY
-Cloud Engineer with 4 years of experience designing and deploying scalable infrastructure on AWS. Skilled in CI/CD pipelines, infrastructure as code, and container orchestration. Passionate about automation, cost optimisation, and building reliable cloud-native systems.
+Software Engineer with 4 years of experience building web applications and APIs for growing product teams. Skilled in Python, Django and React, with a focus on clean code, automated testing and fast, reliable releases.
 
 EXPERIENCE
 
-Cloud Engineer | TechStream Solutions | Jan 2022 - Present
-- Designed and deployed AWS infrastructure using Terraform across 3 production environments
-- Built CI/CD pipelines with GitHub Actions reducing deployment time by 60%
-- Managed Kubernetes clusters on EKS serving 2M+ daily requests
-- Implemented CloudWatch monitoring and alerting, reducing incident response time by 45%
-- Led migration of 12 legacy applications to containerised microservices on Docker
+Software Engineer | TechStream Solutions | Jan 2022 - Present
+- Built and maintained a Django and PostgreSQL booking platform used by 40,000 customers a month
+- Designed REST APIs consumed by web and mobile apps, cutting page load time by 35%
+- Set up CI/CD pipelines with GitHub Actions, reducing release time from a day to 20 minutes
+- Introduced pytest and unit testing standards, raising test coverage from 30% to 85%
+- Moved background jobs to Redis queues, removing timeouts at peak traffic
+- Added monitoring and alerting that cut the time to spot incidents by half
 
-Junior Cloud Engineer | DataFlow Inc | Jun 2020 - Dec 2021
-- Provisioned and maintained EC2, S3, RDS, and Lambda resources for development teams
-- Automated routine tasks using Python and Bash scripting, saving 15 hours per week
-- Assisted in achieving SOC 2 compliance by implementing IAM best practices
-- Created CloudFormation templates for repeatable environment deployments
+Junior Developer | DataFlow Inc | Jun 2020 - Dec 2021
+- Built React components and JavaScript features for a customer dashboard
+- Wrote SQL reports and Python scripts that saved the support team 15 hours a week
+- Packaged services with Docker so new developers could set up in under an hour
+- Took part in code reviews and Agile sprint planning
 
 EDUCATION
 BSc Computer Science | University of Manchester | 2020
 
 SKILLS
-AWS (EC2, S3, RDS, Lambda, EKS, CloudWatch, IAM, VPC, CloudFormation)
-Terraform, Docker, Kubernetes, GitHub Actions, Linux, Python, Bash
-CI/CD, Infrastructure as Code, Monitoring, Agile
+Python, Django, Flask, JavaScript, React, HTML, CSS
+PostgreSQL, SQL, Redis, REST, Docker, Git, GitHub Actions, Linux
+CI/CD, pytest, unit testing, Agile, Scrum`;
 
-CERTIFICATIONS
-AWS Solutions Architect Associate
-AWS Cloud Practitioner`;
-
-    const DEMO_JOB = `Senior Cloud Engineer
+    const DEMO_JOB = `Senior Software Engineer
 
 About the Role
-We are looking for a Senior Cloud Engineer to join our Platform team and help scale our cloud infrastructure. You will design, build, and maintain reliable, secure, and cost-effective cloud solutions on AWS.
+We are looking for a Senior Software Engineer to join our Product team and help us build features our customers love. You will design, build and run the web services and interfaces behind our booking platform.
 
 Responsibilities
-- Design and implement scalable, highly available cloud architectures on AWS
-- Build and maintain CI/CD pipelines for automated deployments
-- Manage container orchestration using Kubernetes and Docker
-- Implement infrastructure as code using Terraform and CloudFormation
-- Monitor system performance and optimise for cost and reliability
-- Collaborate with development teams to improve deployment workflows
-- Implement security best practices including IAM policies, VPC networking, and encryption
-- Participate in on-call rotation and incident response
-- Mentor junior engineers and contribute to engineering standards
+- Build new features across our Python back end and TypeScript front end
+- Design and maintain REST and GraphQL APIs used by our web and mobile apps
+- Write well-tested code and keep our CI/CD pipelines fast and reliable
+- Run services in Docker and Kubernetes and improve how we deploy them
+- Monitor performance and fix issues before customers notice them
+- Work closely with product managers and designers to shape new features
+- Review code, mentor junior engineers and help set engineering standards
 
 Requirements
-- 5+ years of experience in cloud engineering or DevOps
-- Strong expertise with AWS services (EC2, S3, RDS, Lambda, EKS, CloudFront, Route 53, DynamoDB)
-- Proficiency in Infrastructure as Code (Terraform, CloudFormation, or Pulumi)
-- Experience with container technologies (Docker, Kubernetes, ECS)
-- Strong scripting skills (Python, Bash, or Go)
-- Experience with CI/CD tools (Jenkins, GitHub Actions, GitLab CI, or CircleCI)
-- Knowledge of monitoring and observability tools (CloudWatch, Datadog, Prometheus, Grafana)
-- Understanding of networking concepts (VPC, DNS, load balancing, CDN)
+- 5+ years of experience in software engineering
+- Strong Python skills with a web framework (Django, FastAPI or Flask)
+- Commercial experience with TypeScript and React
+- Solid knowledge of PostgreSQL and SQL
+- Experience with Docker and Kubernetes
+- Experience building and running microservices
+- Experience designing GraphQL or REST APIs
+- Experience with CI/CD tools (GitHub Actions, Jenkins or CircleCI)
+- Knowledge of monitoring tools (Prometheus, Grafana or similar)
 - Excellent communication and collaboration skills
 - Problem-solving mindset with attention to detail
 
 Nice to Have
-- AWS Solutions Architect Professional certification
-- Experience with serverless architectures
-- Knowledge of security frameworks (SOC 2, ISO 27001)
-- Experience with cost optimisation and FinOps practices
-- Familiarity with Ansible or other configuration management tools`;
+- Experience with Kafka or other event streaming tools
+- Knowledge of OAuth and web security best practices
+- Understanding of GDPR and handling personal data
+- Experience with Elasticsearch
+- Familiarity with Terraform`;
 
     if (demoScanBtn) {
         demoScanBtn.addEventListener('click', (e) => {
@@ -806,7 +664,7 @@ Nice to Have
                 document.getElementById('tab-paste').classList.add('active');
             }
 
-            // 2. Fill in the sample resume and job description
+            // 2. Fill in the sample CV and job description
             const resumeTextarea = document.getElementById('resumeText');
             const jobTextarea = document.getElementById('jobDescription');
 
@@ -821,12 +679,11 @@ Nice to Have
             // 4. Track demo scan for funnel analytics
             trackEvent('demo_scan');
 
-            // 5. Scroll up to the form so they see it filled in
-            scanForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-            // 6. Brief visual pulse on the scan button to draw attention
-            scanBtn.classList.add('pulse-hint');
-            setTimeout(() => scanBtn.classList.remove('pulse-hint'), 1500);
+            // 5. Run the scan straight away, so one click shows a full report
+            if (!scanBtn.disabled) {
+                if (scanForm.requestSubmit) scanForm.requestSubmit();
+                else scanBtn.click();
+            }
         });
     }
 
@@ -848,7 +705,7 @@ Nice to Have
 
         report.push('═══════════════════════════════════════════');
         report.push('  RESUMERADAR — ATS SCAN REPORT');
-        report.push('  Beat the scan. Land the interview.');
+        report.push('  Make your experience clear.');
         report.push('═══════════════════════════════════════════');
         report.push(`  Generated: ${now}`);
         report.push('');
@@ -881,7 +738,7 @@ Nice to Have
             action_verbs: 'Action Verbs',
         };
         for (const [key, info] of Object.entries(data.category_scores || {})) {
-            if (info.total > 0) {
+            if (info.total >= MIN_TERMS_FOR_CATEGORY_SCORE) {
                 report.push(`  ${catLabels[key] || key}: ${Math.round(info.score)}% (${info.matched}/${info.total})`);
             }
         }
@@ -891,11 +748,11 @@ Nice to Have
         const missingEntries = Object.entries(data.missing_keywords || {}).filter(([, v]) => v && v.length > 0);
         if (missingEntries.length > 0) {
             report.push('───────────────────────────────────────────');
-            report.push('  KEYWORDS NOT FOUND ON YOUR RESUME');
+            report.push('  KEYWORDS NOT FOUND IN YOUR CV');
             report.push('  (Already have these? Add them. Don\'t? Consider learning them.)');
             report.push('───────────────────────────────────────────');
             for (const [cat, words] of missingEntries) {
-                report.push(`  ${catLabels[cat] || cat}: ${words.join(', ')}`);
+                report.push(`  ${catLabels[cat] || cat}: ${words.map(kw).join(', ')}`);
             }
             report.push('');
         }
@@ -907,7 +764,7 @@ Nice to Have
             report.push('  MATCHED KEYWORDS');
             report.push('───────────────────────────────────────────');
             for (const [cat, words] of matchedEntries) {
-                report.push(`  ${catLabels[cat] || cat}: ${words.join(', ')}`);
+                report.push(`  ${catLabels[cat] || cat}: ${words.map(kw).join(', ')}`);
             }
             report.push('');
         }
@@ -971,6 +828,8 @@ Nice to Have
         report.push('  Report by ResumeRadar');
         report.push('  Built by Olushola Oladipupo');
         report.push('  https://www.linkedin.com/in/olushola-oladipupo/');
+        report.push('  Check your own CV free at');
+        report.push('  https://resumeradar.sholastechnotes.com');
         report.push('═══════════════════════════════════════════');
 
         return report.join('\n');
@@ -1057,7 +916,9 @@ Nice to Have
     // ============================================================
     // EMAIL REPORT (via mailto)
     // ============================================================
+    let modalReturnFocus = null;
     emailReportBtn.addEventListener('click', () => {
+        modalReturnFocus = document.activeElement;
         emailModal.style.display = 'flex';
         emailInput.value = '';
         emailInput.focus();
@@ -1071,15 +932,35 @@ Nice to Have
         if (e.target === emailModal) closeModal();
     });
 
-    // Close modal on Escape key
+    // Close modal on Escape key, and keep Tab focus inside the dialog
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && emailModal.style.display === 'flex') {
+        if (emailModal.style.display !== 'flex') return;
+        if (e.key === 'Escape') {
             closeModal();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        const focusable = Array.from(emailModal.querySelectorAll('button, input, a[href]'))
+            .filter(el => !el.disabled && el.offsetParent !== null);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!emailModal.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
         }
     });
 
     function closeModal() {
         emailModal.style.display = 'none';
+        if (modalReturnFocus && document.contains(modalReturnFocus)) modalReturnFocus.focus();
+        modalReturnFocus = null;
     }
 
     sendEmailBtn.addEventListener('click', async () => {
@@ -1164,7 +1045,7 @@ Nice to Have
         // Missing keywords (compact)
         const missing = Object.entries(data.missing_keywords || {})
             .filter(([, v]) => v && v.length > 0)
-            .map(([, words]) => words.join(', '));
+            .map(([, words]) => words.map(kw).join(', '));
         if (missing.length > 0) {
             report.push('MISSING KEYWORDS: ' + missing.join(', '));
             report.push('');
@@ -1178,8 +1059,8 @@ Nice to Have
         }
 
         report.push('---');
-        report.push('Full report available at ResumeRadar');
         report.push('Built by Olushola Oladipupo');
+        report.push('Check your own CV free at https://resumeradar.sholastechnotes.com');
 
         return report.join('\n');
     }
@@ -1233,7 +1114,7 @@ Nice to Have
             const change = ResumeRadarScan.compareScan(scanSnapshot(data), comparisonBaseline);
             if (change) {
                 comparison.innerHTML = `<h2>What changed for this job</h2><p>Keyword coverage ${change.delta > 0 ? 'increased by ' : change.delta < 0 ? 'decreased by ' : 'changed by '}${Math.abs(change.delta).toFixed(1)} percentage points.</p>
-                    <details><summary>Review keyword changes</summary><p>Newly found: ${escapeHtml(change.added.join(', ') || 'none')}.</p><p>No longer found: ${escapeHtml(change.removed.join(', ') || 'none')}.</p></details>
+                    <details><summary>Review keyword changes</summary><p>Newly found: ${escapeHtml(change.added.map(kw).join(', ') || 'none')}.</p><p>No longer found: ${escapeHtml(change.removed.map(kw).join(', ') || 'none')}.</p></details>
                     <p>This measures keyword evidence, not your chances of being hired.</p>`;
                 // Best moment to ask: the user has just seen the tool help them.
                 if (change.delta > 0) {
@@ -1244,6 +1125,8 @@ Nice to Have
                 comparison.textContent = 'This scan uses a different job description, scoring version, or has no numeric estimate, so a score comparison would not be meaningful.';
             }
         }
+
+        updateJumpMenu();
 
         // Scroll to results
         setTimeout(() => {
@@ -1268,6 +1151,9 @@ Nice to Have
 
         // Sub-score bars (Formatting + Recruiter Tips)
         renderSubScoreBars(data);
+
+        // Job description view first: the keyword lists link into it
+        renderJobView(data);
 
         // Missing Keywords (full)
         renderKeywords('missingKeywords', data.missing_keywords, 'missing');
@@ -1303,12 +1189,17 @@ Nice to Have
 
         const recommendations = data.priority_recommendations || [];
         if (!recommendations.length) { card.style.display = 'none'; return; }
-        list.innerHTML = recommendations.slice(0, 3).map(item => `
+        list.innerHTML = recommendations.slice(0, 3).map(item => {
+            const labels = [item.priority === 'unspecified' ? 'Mentioned in job' : item.priority];
+            if (item.one_of && item.one_of.length) labels.push('one of several options');
+            if (item.mentions > 1) labels.push(`mentioned ${item.mentions} times`);
+            return `
             <div class="top-missing-item">
-                <strong class="top-missing-keyword">${escapeHtml(item.keyword)}</strong>
-                <span class="top-missing-category">${escapeHtml(item.priority === 'unspecified' ? 'Mentioned in job' : item.priority)}</span>
+                <strong class="top-missing-keyword">${escapeHtml(item.display || item.keyword)}</strong>
+                <span class="top-missing-category">${escapeHtml(labels.join(' · '))}</span>
                 <div class="recommendation-detail"><p>${escapeHtml(item.reason)}</p><p>${escapeHtml(item.suggestion)}</p></div>
-            </div>`).join('');
+            </div>`;
+        }).join('');
         card.style.display = 'block';
     }
 
@@ -1318,7 +1209,12 @@ Nice to Have
         if (!card || !list) return;
 
         const suggestions = data.ai_suggestions;
-        if (!suggestions) {
+        // Without AI, the rule-based "quick wins" repeat the "Priorities for
+        // this job" card word for word, so hide this card and say why.
+        const aiResting = !!suggestions && typeof suggestions === 'object' && !suggestions.ai_powered;
+        const restNote = document.getElementById('aiRestNote');
+        if (restNote) restNote.hidden = !aiResting;
+        if (!suggestions || aiResting) {
             card.style.display = 'none';
             return;
         }
@@ -1326,7 +1222,7 @@ Nice to Have
         // Extract quick wins from AI suggestions
         let wins = [];
         if (suggestions.quick_wins && Array.isArray(suggestions.quick_wins)) {
-            wins = suggestions.quick_wins.slice(0, 3);
+            wins = suggestions.quick_wins.slice(0, 5);
         } else if (suggestions.critical_improvements && Array.isArray(suggestions.critical_improvements)) {
             wins = suggestions.critical_improvements.slice(0, 3);
         } else if (typeof suggestions === 'string') {
@@ -1371,6 +1267,8 @@ Nice to Have
         if (scored) animateNumber(scoreNumber, score);
         else scoreNumber.textContent = 'Not scored';
         const explanation = document.getElementById('scoreExplanation');
+        const method = document.getElementById('scoreMethod');
+        if (method) method.hidden = !scored;
         if (explanation) explanation.textContent = data.score_explanation || 'A custom keyword coverage estimate, not an employer’s score, applicant ranking, or interview prediction.';
 
         // Animate circle
@@ -1397,29 +1295,29 @@ Nice to Have
         if (!summaryText) {
             const N = data.total_missing || 0;
             if (score >= 75) {
-                summaryText = `Your CV covers many recognized terms in this job description. Review the ${N} missing term${N !== 1 ? 's' : ''} and prioritize requirements you can support with evidence.`;
+                summaryText = `Your CV covers many recognised terms in this job description. Review the ${N} missing term${N !== 1 ? 's' : ''} and prioritise requirements you can support with evidence.`;
             } else if (score >= 50) {
-                summaryText = `Your CV covers some recognized terms. Review the priorities below and describe relevant experience you already have.`;
+                summaryText = `Your CV covers some recognised terms. Review the priorities below and describe relevant experience you already have.`;
             } else {
                 summaryText = `We found ${N} terms not mentioned in your CV. This may reflect missing wording, unfamiliar vocabulary, or experience to develop.`;
             }
         }
-        if (!scored) summaryText = 'There is not enough recognized job information to give a useful estimate. You can still review the writing suggestions and check the requirements manually.';
+        if (!scored) summaryText = 'There is not enough recognised job information to give a useful estimate. You can still review the writing suggestions and check the requirements manually.';
         scoreSummary.innerHTML = `<p>${escapeHtml(summaryText)}</p>`;
 
         // Stats boxes
         scoreStats.innerHTML = `
             <div class="stat-box">
                 <span class="stat-number">${data.total_matched}</span>
-                <span class="stat-label">Keywords Matched</span>
+                <span class="stat-label">Keywords matched</span>
             </div>
             <div class="stat-box">
                 <span class="stat-number">${data.total_missing}</span>
-                <span class="stat-label">Keywords Missing</span>
+                <span class="stat-label">Keywords missing</span>
             </div>
             <div class="stat-box">
                 <span class="stat-number">${data.total_job_keywords}</span>
-                <span class="stat-label">Total Job Keywords</span>
+                <span class="stat-label">Total job keywords</span>
             </div>
         `;
 
@@ -1438,31 +1336,35 @@ Nice to Have
         if (!Number.isFinite(score)) { meter.style.display = 'none'; return; }
 
         // Determine fit tier and messaging
-        let tier, tierColor, tierBg, tierIcon, tierMsg;
+        let tier, tierColor, tierText, tierBg, tierIcon, tierMsg;
         if (score >= 75) {
             tier = 'High keyword coverage';
             tierColor = '#059669';
+            tierText = '#065f46';
             tierBg = '#d1fae5';
             tierIcon = '🎯';
-            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
+            tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else if (score >= 50) {
             tier = 'Moderate keyword coverage';
             tierColor = '#d97706';
+            tierText = '#92400e';
             tierBg = '#fef3c7';
             tierIcon = '👍';
-            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
+            tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else if (score >= 30) {
             tier = 'Some keyword coverage';
             tierColor = '#ea580c';
+            tierText = '#9a3412';
             tierBg = '#fff7ed';
             tierIcon = '🔄';
-            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
+            tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else {
             tier = 'Low keyword coverage';
             tierColor = '#dc2626';
+            tierText = '#b91c1c';
             tierBg = '#fee2e2';
             tierIcon = '📈';
-            tierMsg = 'This describes recognized terms, not your suitability for the role. Check required experience and qualifications separately.';
+            tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         }
 
         // Fill width = score percentage
@@ -1477,7 +1379,7 @@ Nice to Have
         }, 300);
 
         verdict.innerHTML = `
-            <div class="fit-verdict-badge" style="background: ${tierBg}; color: ${tierColor};">
+            <div class="fit-verdict-badge" style="background: ${tierBg}; color: ${tierText};">
                 <span class="fit-icon">${tierIcon}</span>
                 <span class="fit-tier">${tier}</span>
             </div>
@@ -1500,6 +1402,9 @@ Nice to Have
         }, 30);
     }
 
+    // Category percentages are only shown when the job names at least this many terms.
+    const MIN_TERMS_FOR_CATEGORY_SCORE = 3;
+
     function renderCategories(categories) {
         const container = document.getElementById('categoryBars');
         container.innerHTML = '';
@@ -1512,8 +1417,11 @@ Nice to Have
             action_verbs: '⚡ Action Verbs',
         };
 
+        let leftOut = false;
         for (const [key, data] of Object.entries(categories)) {
             if (data.total === 0) continue;
+            // A percentage built on one or two job terms misleads, so skip it.
+            if (data.total < MIN_TERMS_FOR_CATEGORY_SCORE) { leftOut = true; continue; }
 
             const score = data.score;
             let barClass = 'high';
@@ -1537,6 +1445,12 @@ Nice to Have
             setTimeout(() => {
                 bar.querySelector('.bar-fill').style.width = `${score}%`;
             }, 200);
+        }
+        if (leftOut) {
+            const note = document.createElement('p');
+            note.className = 'category-note';
+            note.textContent = 'Groups where this job names fewer than three terms are left out, because a percentage on one or two words would mislead.';
+            container.appendChild(note);
         }
     }
 
@@ -1645,7 +1559,9 @@ Nice to Have
             section.innerHTML = `
                 <div class="keywords-section-title">${labels[category] || category}</div>
                 <div class="keyword-tags">
-                    ${words.map(w => `<span class="keyword-tag ${type}">${escapeHtml(w)}</span>`).join('')}
+                    ${words.map(w => category !== 'action_verbs' && jobTermIndex.positions[w]
+                        ? `<button type="button" class="keyword-tag keyword-jump ${type}" data-jd-keyword="${escapeHtml(w)}" aria-label="${escapeHtml(kw(w))}: show in job description">${escapeHtml(kw(w))}</button>`
+                        : `<span class="keyword-tag ${type}">${escapeHtml(kw(w))}</span>`).join('')}
                 </div>
             `;
             container.appendChild(section);
@@ -1654,11 +1570,82 @@ Nice to Have
         if (!hasAny) {
             container.innerHTML = `<p class="no-keywords">${
                 type === 'missing'
-                    ? 'No missing recognized terms detected. This does not confirm that all job requirements are met.'
+                    ? 'No missing recognised terms detected. This does not confirm that all job requirements are met.'
                     : 'No keyword matches found.'
             }</p>`;
         }
     }
+
+    // ============================================================
+    // VIEW IN JOB DESCRIPTION
+    // ============================================================
+    function renderJobView(data) {
+        const card = document.getElementById('jobViewCard');
+        const text = document.getElementById('jobViewText');
+        if (!card || !text) return;
+        jobTermIndex = ResumeRadarScan.jobTermIndex(lastJobView);
+        const marked = jobTermIndex.matched + jobTermIndex.missing;
+        card.hidden = !marked || !Number.isFinite(data.match_score);
+        text.textContent = '';
+        if (card.hidden) { jobTermIndex = ResumeRadarScan.jobTermIndex([]); return; }
+        const notes = {matched: ' (found in your CV)', missing: ' (not found in your CV)'};
+        // Browsers submit line breaks as CRLF; show them as single breaks.
+        const clean = (value) => String(value).replace(/\r\n?/g, '\n');
+        const markFor = (piece, id) => {
+            const mark = document.createElement('mark');
+            mark.className = `jd-term ${piece.status}`;
+            mark.id = id;
+            mark.tabIndex = -1;
+            return mark;
+        };
+        const noteFor = (status) => {
+            const note = document.createElement('span');
+            note.className = 'jd-term-note';
+            note.textContent = notes[status];
+            return note;
+        };
+        lastJobView.forEach((segment, index) => {
+            if (!notes[segment.status]) { text.append(clean(segment.text)); return; }
+            const mark = markFor(segment, `jd-term-${index}`);
+            if (Array.isArray(segment.parts)) {
+                segment.parts.forEach((part, partIndex) => {
+                    if (!notes[part.status]) { mark.append(clean(part.text)); return; }
+                    const inner = markFor(part, `jd-term-${index}-${partIndex}`);
+                    inner.append(clean(part.text), noteFor(part.status));
+                    mark.appendChild(inner);
+                });
+            } else {
+                mark.append(clean(segment.text));
+            }
+            mark.appendChild(noteFor(segment.status));
+            text.appendChild(mark);
+        });
+        const count = (n) => `${n} ${n === 1 ? 'term' : 'terms'}`;
+        document.getElementById('jobViewMatchedCount').textContent = count(jobTermIndex.matched);
+        document.getElementById('jobViewMissingCount').textContent = count(jobTermIndex.missing);
+        document.getElementById('jobViewDetails').open = false;
+    }
+
+    // A keyword in the lists jumps to where the job mentions it; selecting it
+    // again moves to the next mention.
+    const jobJumpCursor = {};
+    document.getElementById('deepResults').addEventListener('click', (event) => {
+        const tag = event.target.closest('.keyword-jump');
+        if (!tag) return;
+        const keyword = tag.dataset.jdKeyword;
+        const positions = jobTermIndex.positions[keyword];
+        if (!positions) return;
+        const visit = (jobJumpCursor[keyword] || 0) % positions.length;
+        jobJumpCursor[keyword] = visit + 1;
+        const mark = document.getElementById(positions[visit]);
+        if (!mark) return;
+        document.getElementById('jobViewDetails').open = true;
+        document.querySelectorAll('.jd-term.active').forEach(el => el.classList.remove('active'));
+        mark.classList.add('active');
+        mark.focus({preventScroll: true});
+        const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        mark.scrollIntoView({behavior: calm ? 'instant' : 'smooth', block: 'center'});
+    });
 
     function renderAISuggestions(suggestions) {
         const container = document.getElementById('aiSuggestions');
@@ -1666,10 +1653,10 @@ Nice to Have
         container.innerHTML = '';
 
         if (suggestions.ai_powered) {
-            badge.textContent = '✨ AI-Powered Analysis';
+            badge.textContent = '✨ AI-powered analysis';
             badge.className = 'ai-badge powered';
         } else {
-            badge.textContent = '📊 Rule-Based Analysis';
+            badge.textContent = '📊 Rule-based analysis';
             badge.className = 'ai-badge fallback';
         }
 
@@ -1685,7 +1672,7 @@ Nice to Have
             const section = document.createElement('div');
             section.className = 'ai-section';
             section.innerHTML = `
-                <h3>💪 Your Strengths</h3>
+                <h3>💪 Your strengths</h3>
                 ${suggestions.strengths.map(s => `<div class="strength-item">${escapeHtml(s)}</div>`).join('')}
             `;
             container.appendChild(section);
@@ -1695,7 +1682,7 @@ Nice to Have
         if (suggestions.critical_improvements && suggestions.critical_improvements.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>🎯 Key Improvements</h3>`;
+            section.innerHTML = `<h3>🎯 Key improvements</h3>`;
             suggestions.critical_improvements.forEach(item => {
                 const priority = item.priority || 'medium';
                 const div = document.createElement('div');
@@ -1713,7 +1700,7 @@ Nice to Have
         if (suggestions.keyword_suggestions && suggestions.keyword_suggestions.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>🔑 How to Add These Keywords to Your Resume</h3>`;
+            section.innerHTML = `<h3>🔑 How to add these keywords to your CV</h3>`;
             suggestions.keyword_suggestions.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'ai-item';
@@ -1730,7 +1717,7 @@ Nice to Have
         if (suggestions.rewrite_suggestions && suggestions.rewrite_suggestions.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>✏️ Section Rewrite Suggestions</h3>`;
+            section.innerHTML = `<h3>✏️ Section rewrite suggestions</h3>`;
             suggestions.rewrite_suggestions.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'ai-item';
@@ -1743,15 +1730,10 @@ Nice to Have
             container.appendChild(section);
         }
 
-        // Quick Wins
-        if (suggestions.quick_wins && suggestions.quick_wins.length > 0) {
-            const section = document.createElement('div');
-            section.className = 'ai-section';
-            section.innerHTML = `
-                <h3>⚡ Quick Wins</h3>
-                ${suggestions.quick_wins.map(w => `<div class="quick-win">${escapeHtml(w)}</div>`).join('')}
-            `;
-            container.appendChild(section);
+        // Quick wins are not repeated here: they are the "Start with these
+        // improvements" card at the top of the report.
+        if (!container.children.length) {
+            container.innerHTML = '<p class="no-keywords">No extra suggestions for this scan. Start with the improvements at the top of the report.</p>';
         }
     }
 
@@ -1802,19 +1784,19 @@ Nice to Have
             const errorDiv = document.getElementById('coverLetterError');
             const body = document.getElementById('coverLetterBody');
 
-            // Get resume text from last scan data, job description from form
+            // Get CV text from last scan data, job description from form
             const resumeText = lastScanData && lastScanData.resume_text;
             const jobDesc = document.getElementById('jobDescription') && document.getElementById('jobDescription').value.trim();
 
             if (!resumeText || !jobDesc) {
-                errorDiv.textContent = 'Please complete a scan first so we have your resume and job description.';
+                errorDiv.textContent = 'Please complete a scan first so we have your CV and job description.';
                 errorDiv.style.display = 'block';
                 return;
             }
 
             // Show loading, hide others
             btn.disabled = true;
-            btn.querySelector('.cl-btn-text').textContent = 'Generating...';
+            btn.querySelector('.cl-btn-text').textContent = 'Writing...';
             loading.style.display = 'flex';
             output.style.display = 'none';
             errorDiv.style.display = 'none';
@@ -1873,7 +1855,7 @@ Nice to Have
             } finally {
                 loading.style.display = 'none';
                 btn.disabled = false;
-                btn.querySelector('.cl-btn-text').textContent = 'Generate Full Cover Letter';
+                btn.querySelector('.cl-btn-text').textContent = 'Write a first draft';
             }
         });
     })();
@@ -1921,7 +1903,7 @@ Nice to Have
                 <span class="ats-issue-icon">✅</span>
                 <div class="ats-issue-content">
                     <div class="ats-issue-title">No major ATS formatting issues detected</div>
-                    <div class="ats-issue-detail">Your resume structure looks good for ATS systems.</div>
+                    <div class="ats-issue-detail">Your CV structure looks good for ATS systems.</div>
                 </div>
             `;
             container.appendChild(success);
@@ -1932,7 +1914,7 @@ Nice to Have
             const tipsDiv = document.createElement('div');
             tipsDiv.className = 'ats-tips';
             tipsDiv.innerHTML = `
-                <h3>💡 Pro Tips</h3>
+                <h3>💡 Tips</h3>
                 ${ats.tips.map(t => `<div class="ats-tip">${escapeHtml(t)}</div>`).join('')}
             `;
             container.appendChild(tipsDiv);
@@ -1950,9 +1932,9 @@ Nice to Have
             const history = getScanHistory();
             if (history.some(entry => entry.id === currentScanId)) return;
 
-            // Extract first ~60 chars of job description for label
+            // Label the entry with the job title: the first line of the job description.
             const jdEl = document.getElementById('jobDescription');
-            const jdSnippet = jdEl ? jdEl.value.trim().substring(0, 80).replace(/\s+/g, ' ') : 'Job scan';
+            const jdSnippet = ResumeRadarScan.jobTitle(jdEl ? jdEl.value : '');
 
             const entry = {
                 id: currentScanId,
@@ -2005,6 +1987,7 @@ Nice to Have
         const chartData = history.filter(entry => ResumeRadarScan.scoreDelta(latest, entry) !== null).slice(0, 10).reverse();
         const maxScore = 100;
         chart.innerHTML = `
+            <p class="history-chart-title">This job: ${escapeHtml(ResumeRadarScan.jobTitle(latest.jdSnippet))}</p>
             <div class="history-bars">
                 ${chartData.map((entry, i) => {
                     const height = Math.max(4, (entry.score / maxScore) * 100);
@@ -2023,10 +2006,10 @@ Nice to Have
 
         // --- History list (last 5) ---
         const recent = history.slice(0, 5);
-        list.innerHTML = recent.map((entry, i) => {
+        list.innerHTML = '<p class="history-list-title">Recent scans, all jobs</p>' + recent.map((entry, i) => {
             const date = new Date(entry.date);
             const timeStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' at ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-            const snippet = entry.jdSnippet.length > 50 ? entry.jdSnippet.substring(0, 50) + '...' : entry.jdSnippet;
+            const snippet = ResumeRadarScan.jobTitle(entry.jdSnippet);
             let scoreColor = entry.score >= 75 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--danger)';
 
             let delta = '';
@@ -2063,50 +2046,43 @@ Nice to Have
         const diff = last - first;
         if (diff > 5) return `<div class="history-trend positive">📈 Up ${diff} points across revisions for this job.</div>`;
         if (diff < -5) return `<div class="history-trend negative">📉 Down ${Math.abs(diff)} points for this job. Review the changes before adding any claims.</div>`;
-        return `<div class="history-trend neutral">➡️ Score is holding steady. Check the missing keywords for your next optimization.</div>`;
+        return `<div class="history-trend neutral">➡️ Score is holding steady. Check the missing keywords for your next edit.</div>`;
     }
 
     // ============================================================
     // HELPERS
     // ============================================================
-    // Loading message rotation
-    const LOADING_STAGES = [
-        { text: 'Analyzing resume structure...', delay: 0 },
-        { text: 'Matching against job keywords...', delay: 2000 },
-        { text: 'Generating AI recommendations...', delay: 5000 },
-        { text: 'Almost there...', delay: 9000 },
-        { text: 'Taking a bit longer than usual — hang tight...', delay: 15000 },
-        { text: 'Still working on it — almost done...', delay: 22000 },
-    ];
+    // Waiting state: a progress panel takes the place of the form. The steps
+    // tick off on a timer (the server sends one answer, not progress events).
+    const PROGRESS_STEP_DELAYS = [0, 2000, 5000];
+    const SLOW_SCAN_AFTER = 25000;
+    const PROGRESS_NOTE = 'Usually about 20 seconds.';
     let loadingTimers = [];
+
+    function setProgressStep(active) {
+        scanProgress.querySelectorAll('.scan-progress-steps li').forEach((li, i) => {
+            li.classList.toggle('done', i < active);
+            li.classList.toggle('active', i === active);
+        });
+    }
 
     function setLoading(loading) {
         scanBtn.disabled = loading;
-        scanBtnText.style.display = loading ? 'none' : 'inline';
-        scanBtnLoading.style.display = loading ? 'inline' : 'none';
-        if (loading) {
-            startLoadingStages();
-        } else {
-            clearLoadingStages();
-        }
-    }
-
-    function startLoadingStages() {
-        const el = document.getElementById('loadingStageText');
-        if (!el) return;
-        el.textContent = LOADING_STAGES[0].text;
-        for (let i = 1; i < LOADING_STAGES.length; i++) {
-            loadingTimers.push(setTimeout(() => {
-                el.textContent = LOADING_STAGES[i].text;
-            }, LOADING_STAGES[i].delay));
-        }
-    }
-
-    function clearLoadingStages() {
+        scanForm.classList.toggle('is-scanning', loading);
         loadingTimers.forEach(t => clearTimeout(t));
         loadingTimers = [];
-        const el = document.getElementById('loadingStageText');
-        if (el) el.textContent = LOADING_STAGES[0].text;
+        if (!scanProgress) return;
+        scanProgress.hidden = !loading;
+        const note = document.getElementById('scanProgressNote');
+        note.textContent = PROGRESS_NOTE;
+        if (!loading) return;
+        PROGRESS_STEP_DELAYS.forEach((delay, i) => {
+            loadingTimers.push(setTimeout(() => setProgressStep(i), delay));
+        });
+        loadingTimers.push(setTimeout(() => {
+            note.textContent = 'This is taking longer than usual. Still working on it.';
+        }, SLOW_SCAN_AFTER));
+        scanProgress.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function showError(msg) {

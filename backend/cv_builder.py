@@ -642,8 +642,8 @@ CRITICAL: Same number of experience and education entries as input. Do NOT inven
 
         except (json.JSONDecodeError, ValueError) as parse_error:
             ai_metrics.record_error(TOOL)
-            print(f"CV Builder JSON parse error: {parse_error}")
-            print(f"Raw response (first 300 chars): {response_text[:300]}")
+            # Log only the error type and length: the reply holds CV content.
+            print(f"CV Builder AI reply could not be parsed ({type(parse_error).__name__}, {len(response_text)} chars)")
             return _get_fallback(cv_data)
 
     except Exception as e:
