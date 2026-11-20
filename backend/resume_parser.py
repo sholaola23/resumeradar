@@ -5,8 +5,10 @@ Handles extraction of text from PDF, DOCX, and plain text resumes.
 
 import os
 import re
+import time
 import zipfile
 from pypdf import PdfReader
+from pypdf.generic import DictionaryObject
 from docx import Document
 
 from backend import log_safe
@@ -21,6 +23,81 @@ from backend import log_safe
 # so the parsers enforce their own ceilings.
 # ---------------------------------------------------------------------------
 MAX_PDF_PAGES = 50
+# The page cap alone does not bound the work: one page can hold megabytes of
+# drawing instructions (QA on PR 34: a 0.21MB PDF of tiny overlapping text
+# held a worker for 63s). Text extraction costs about 1.4s per MB of decoded
+# page content, while a real CV uses tens of KB per page. So:
+# 1. before extracting, reject PDFs whose decoded page and form content is
+#    larger than any CV needs;
+# 2. while extracting, stop once the text is clearly longer than a CV, or
+#    the time budget is spent (covers forms drawn many times over).
+MAX_PDF_CONTENT_BYTES = 3 * 1024 * 1024
+MAX_PDF_TEXT_CHARS = 100_000   # raw text; app.py caps the cleaned text at 50k
+PDF_EXTRACT_SECONDS = 3       # heaviest realistic CV QA built: 1.0s
+_PDF_TOO_MUCH = ("That file holds more text than a CV usually does. "
+                 "Please upload just your CV or paste your CV text.")
+_PDF_TOO_COMPLEX = ("That PDF is more complex than we can process, often because of "
+                    "heavy graphics. Please save a simpler version or paste your CV text.")
+
+
+class _PdfBudgetExceeded(Exception):
+    pass
+
+
+def _pdf_content_size_ok(reader):
+    """Sum the decoded size of each page's content and every form XObject it
+    can reach, stopping as soon as the total passes MAX_PDF_CONTENT_BYTES.
+
+    Forms can draw other forms through their own /Resources, and pypdf parses
+    each one in full before our per-operator time check can fire, so nested
+    forms are walked too (Grok on PR 34). Each form counts once; the seen set
+    also stops reference cycles.
+
+    Resources are looked up with get_inherited, as pypdf does when it
+    extracts text: a form without /Resources borrows them through /Parent
+    (Claude review on PR 45). pypdf raises on a /Parent cycle, which the
+    caller turns into the usual "could not read" message."""
+    total = 0
+    seen = set()
+
+    def _forms(resources):
+        # A null or malformed entry means "absent" (PDF spec), as pypdf treats it.
+        resources = resources.get_object() if resources is not None else None
+        if not isinstance(resources, DictionaryObject):
+            return []
+        xobjects = resources.get("/XObject")
+        xobjects = xobjects.get_object() if xobjects is not None else None
+        if not isinstance(xobjects, DictionaryObject):
+            return []
+        found = []
+        for ref in xobjects.values():
+            key = getattr(ref, "idnum", None)
+            xobj = ref.get_object()
+            if not isinstance(xobj, DictionaryObject):
+                continue
+            key = ("ref", key, ref.generation) if key is not None else ("id", id(xobj))
+            if key in seen or xobj.get("/Subtype") != "/Form":
+                continue
+            seen.add(key)
+            found.append(xobj)
+        return found
+
+    for page in reader.pages:
+        pending = []
+        contents = page.get_contents()
+        if contents is not None:
+            pending.append(contents)
+        pending.extend(_forms(page.get_inherited("/Resources")))
+        while pending:
+            stream = pending.pop()
+            total += len(stream.get_data())
+            if total > MAX_PDF_CONTENT_BYTES:
+                return False
+            if stream.get("/Subtype") == "/Form":
+                pending.extend(_forms(stream.get_inherited("/Resources")))
+    return True
+
+
 # 10MB, not 50. The guard stops bombs either way, but everything under the
 # ceiling still gets handed to lxml, whose DOM costs far more than the bytes:
 # a legitimate 2.4MB upload declaring 31MB measured ~440MB and 10s in
@@ -82,11 +159,36 @@ def extract_text_from_pdf(file_path):
         if page_count > MAX_PDF_PAGES:
             return None, f"That PDF has {page_count} pages (limit {MAX_PDF_PAGES}). Please upload just your CV."
 
+        if not _pdf_content_size_ok(reader):
+            return None, _PDF_TOO_COMPLEX
+
+        # CPU time of this thread only: gunicorn runs 4 threads per worker,
+        # and wall-clock time would count the other requests' work against
+        # this one (Grok on PR 34).
+        deadline = time.thread_time() + PDF_EXTRACT_SECONDS
+        chars = 0
+
+        def _check_time(*_args):
+            if time.thread_time() > deadline:
+                raise _PdfBudgetExceeded(_PDF_TOO_COMPLEX)
+
+        def _count_text(text, *_args):
+            nonlocal chars
+            chars += len(text)
+            if chars > MAX_PDF_TEXT_CHARS:
+                raise _PdfBudgetExceeded(_PDF_TOO_MUCH)
+
         text_parts = []
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text)
+        try:
+            for page in reader.pages:
+                page_text = page.extract_text(
+                    visitor_operand_before=_check_time,
+                    visitor_text=_count_text,
+                )
+                if page_text:
+                    text_parts.append(page_text)
+        except _PdfBudgetExceeded as exc:
+            return None, str(exc)
 
         full_text = "\n".join(text_parts)
 

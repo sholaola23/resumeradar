@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% if role %}
-    <title>ATS Resume Checker for {{ role.title }}s — Free Scan | ResumeRadar</title>
+    <title>ATS Resume Checker for {{ role.title }}s: Free Scan | ResumeRadar</title>
     <meta name="description" content="{{ role.desc }}">
     {% else %}
-    <title>Free ATS Resume Checker — Check Your CV Against a Job | ResumeRadar</title>
-    <meta name="description" content="Free ATS resume scanner — upload your resume, paste a job description, and see your job-description match estimate, missing skills, and AI-powered fixes. No signup required.">
+    <title>Free ATS Resume Checker: Check Your CV Against a Job | ResumeRadar</title>
+    <meta name="description" content="Free ATS resume scanner. Upload your resume, paste a job description, and see your job-description match estimate, missing skills, and AI-powered fixes. No signup required.">
     {% endif %}
 
     <!-- Open Graph (for LinkedIn/social sharing) -->
@@ -16,7 +16,7 @@
     <meta property="og:title" content="ATS Resume Checker for {{ role.title }}s | ResumeRadar">
     <meta property="og:description" content="{{ role.desc }}">
     {% else %}
-    <meta property="og:title" content="ResumeRadar — Make your experience clear.">
+    <meta property="og:title" content="ResumeRadar: Make your experience clear.">
     <meta property="og:description" content="Free tool: upload your resume + paste a job description = a keyword match estimate, missing keywords, and practical fixes.">
     {% endif %}
     <meta property="og:type" content="website">
@@ -28,7 +28,7 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="ResumeRadar — Make your experience clear.">
+    <meta name="twitter:title" content="ResumeRadar: Make your experience clear.">
     <meta name="twitter:description" content="Free tool: compare your CV with a job description and see which keywords are missing and how to make your experience clearer.">
     <meta name="twitter:image" content="https://resumeradar.sholastechnotes.com/static/images/{{ og_image }}">
 
@@ -117,7 +117,7 @@
                 "name": "How does ResumeRadar work?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Upload your CV (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, estimates your keyword match, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to make your experience clearer — with results usually ready within a minute."
+                    "text": "Upload your CV (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, estimates your keyword match, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to make your experience clearer. Results are usually ready within a minute."
                 }
             },
             {
@@ -217,7 +217,7 @@
             <h1>Check your CV against a job <span class="highlight">for free</span>.</h1>
             <p class="hero-sub">Find missing evidence and get practical improvements you can make yourself. Built with tech and cloud applicants in mind.</p>
             {% endif %}
-            <a class="hero-scan-link" href="#scanForm">Scan my CV — free</a>
+            <a class="hero-scan-link" href="#scanForm">Scan my CV for free</a>
             <p class="hero-note">Full scan results. No account, payment or newsletter signup required.</p>
             <div class="social-proof" id="socialProof" style="display: none;">
                 <p class="proof-text">
@@ -287,7 +287,7 @@ Include everything: contact info, summary, experience, education, skills, certif
                             name="job_description"
                             placeholder="Paste the full job description here...
 
-Include the job title, requirements, responsibilities, qualifications — everything from the posting."
+Include the job title, requirements, responsibilities, qualifications and everything else from the posting."
                             rows="14"
                             required
                         ></textarea>
@@ -415,7 +415,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                             </span>
                         </button>
                     </form>
-                    <p class="inline-gate-trust">Join Shola's Tech Notes — free, 3 min/week. Unsubscribe anytime.</p>
+                    <p class="inline-gate-trust">Join Shola's Tech Notes: free, 3 min a week. Unsubscribe anytime.</p>
                     <button type="button" class="inline-gate-skip" id="inlineGateSkip">No thanks</button>
                 </div>
 
@@ -514,7 +514,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <!-- Cover Letter Key Points -->
                     <div class="result-card cover-letter-card" id="coverLetterCard" style="display: none;">
                         <h2>Cover letter key points</h2>
-                        <p class="card-subtitle">Talking points for your cover letter — check each against your actual experience.</p>
+                        <p class="card-subtitle">Talking points for your cover letter. Check each against your actual experience.</p>
                         <div class="cover-letter-points" id="coverLetterPoints"></div>
                         <div class="cover-letter-footer">
                             <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">Copy points</button>
@@ -527,7 +527,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                                 <p class="cl-generator-text">Want a full cover letter? Get a first draft to edit, written for this job.</p>
                                 <button type="button" class="cl-generate-btn" id="generateCoverLetterBtn">
                                     <span class="cl-btn-text">Write a first draft</span>
-                                    <span class="cl-btn-free">Free — 3/day</span>
+                                    <span class="cl-btn-free">Free, 3 a day</span>
                                 </button>
                             </div>
                             <div class="cl-output" id="coverLetterOutput" style="display: none;">
@@ -588,8 +588,28 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <div class="result-card improve-loop">
                         <h2>Edit, then check what changed</h2>
                         <p>Use the advice in your own editor. Upload your updated CV or edit your pasted text, keeping this job description to compare keyword evidence.</p>
-                        <button type="button" class="scan-again-btn" id="rescanUpdatedBtn">Rescan my updated CV — free</button>
+                        <button type="button" class="scan-again-btn" id="rescanUpdatedBtn">Rescan my updated CV for free</button>
                         <button type="button" class="report-btn" id="scanAgainBtn">Start a different job scan</button>
+                    </div>
+
+                    <!-- Was this useful? One tap, then an optional comment. -->
+                    <div class="result-card feedback-card" id="feedbackCard">
+                        <h2 id="feedbackHeading">Was this report useful?</h2>
+                        <div class="feedback-vote" id="feedbackVote" role="group" aria-labelledby="feedbackHeading">
+                            <button type="button" class="report-btn feedback-btn" id="feedbackYes">Yes</button>
+                            <button type="button" class="report-btn feedback-btn" id="feedbackNo">No</button>
+                        </div>
+                        <p class="feedback-status" id="feedbackStatus" role="status"></p>
+                        <form class="feedback-form" id="feedbackForm" hidden novalidate>
+                            <label for="feedbackComment" id="feedbackCommentLabel">What helped most? (optional)</label>
+                            <textarea id="feedbackComment" rows="3" maxlength="500" aria-describedby="feedbackPrivacy"></textarea>
+                            <p class="feedback-privacy" id="feedbackPrivacy">Please leave out names, contact details and anything from your CV. We save only your comment, your Yes or No answer, whether you allow quoting and today's date, with nothing that links it to you or your scan, and delete it after 90 days.</p>
+                            <label class="feedback-consent" id="feedbackConsentRow">
+                                <input type="checkbox" id="feedbackConsent">
+                                <span>ResumeRadar may quote this comment on the site, without my name.</span>
+                            </label>
+                            <button type="submit" class="scan-again-btn" id="feedbackSend">Send comment</button>
+                        </form>
                     </div>
 
 
@@ -700,7 +720,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 </div>
                 {% endfor %}
             </div>
-            <p class="role-guide-note">Keywords only help when they honestly describe your experience — the scanner below shows which ones from a real posting you can truthfully add.</p>
+            <p class="role-guide-note">Keywords only help when they honestly describe your experience. The scanner below shows which ones from a real posting you can truthfully add.</p>
 
             <h3 class="role-guide-subtitle">Three fixes that make {{ role.title }} resumes clearer</h3>
             <ol class="role-guide-tips">
@@ -745,7 +765,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 </details>
                 <details class="faq-item">
                     <summary>How does ResumeRadar work?</summary>
-                    <p>Upload your CV (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, estimates your keyword match, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to make your experience clearer — with results usually ready within a minute.</p>
+                    <p>Upload your CV (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, estimates your keyword match, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to make your experience clearer. Results are usually ready within a minute.</p>
                 </details>
                 <details class="faq-item">
                     <summary>Is ResumeRadar free?</summary>
@@ -761,7 +781,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 </details>
                 <details class="faq-item">
                     <summary>How do I improve my keyword match?</summary>
-                    <p>After scanning, look at the "Keywords Not Found" section — these are terms the job description mentions that aren't in your CV. Where you have that experience, add it to your skills section or experience bullets with a real example. Also check the AI suggestions for specific rewording tips.</p>
+                    <p>After scanning, look at the "Keywords Not Found" section. These are terms the job description mentions that aren't in your CV. Where you have that experience, add it to your skills section or experience bullets with a real example. Also check the AI suggestions for specific rewording tips.</p>
                 </details>
             </div>
         </div>
@@ -798,11 +818,12 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
     <!-- Mobile Sticky CTA (visible in results viewport on mobile) -->
     <div class="sticky-cta-bar" id="stickyCta" role="region" aria-label="Rescan" style="display: none;">
-        <button type="button" id="stickyRescanBtn">Rescan my updated CV — free</button>
+        <button type="button" id="stickyRescanBtn">Rescan my updated CV for free</button>
     </div>
 
     <script src="/static/js/scan-utils.js?v=5"></script>
-    <script src="/static/js/app.js?v=17"></script>
+    <script src="/static/js/app.js?v=19"></script>
     <script src="/static/js/share.js?v=1"></script>
+    <script src="/static/js/feedback.js?v=1"></script>
 </body>
 </html>
