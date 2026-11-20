@@ -105,6 +105,28 @@ class SiteCopyTest(unittest.TestCase):
                             offenders.append(f'{folder or "."}/{name}:{no}: {line.strip()}')
         self.assertEqual(offenders, [])
 
+    def test_scan_path_logs_error_types_not_messages(self):
+        # An exception message can quote the CV or job text that caused it, so
+        # the free scan, AI, PDF and email handlers log log_safe.describe(e).
+        from backend import log_safe
+        self.assertEqual(log_safe.describe(KeyError('Jane Doe, Acme Ltd')), 'KeyError')
+        err = RuntimeError('quoted prompt text')
+        err.status_code = 429
+        self.assertEqual(log_safe.describe(err), 'RuntimeError (status 429)')
+        leaky = re.compile(r'print\(.*(str\(e\)|\{e\}|\{error_msg\})')
+        scan_path = {
+            'app.py': ('def scan_resume', 'def email_report'),
+            'backend/ai_analyzer.py': (None, None),
+            'backend/resume_parser.py': (None, None),
+        }
+        for path, (start, end) in scan_path.items():
+            source = read(*path.split('/'))
+            if start:
+                begin = source.index(start)
+                source = source[begin:source.index('\n@app.', source.index(end))]
+            offenders = [line.strip() for line in source.splitlines() if leaky.search(line)]
+            self.assertEqual(offenders, [], path)
+
     def test_privacy_page_lists_what_the_browser_keeps(self):
         page = self.page('/privacy')
         self.assertIn('a short code made from the job description', page)

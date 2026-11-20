@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from backend import log_safe
 from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
@@ -633,7 +634,7 @@ def scan_resume():
         if 'file_path' in locals() and file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-        print(f"Scan error: {str(e)}")
+        print(f"Scan error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong during the analysis. Please try again."}), 500
 
 
@@ -697,7 +698,7 @@ def generate_cover_letter_endpoint():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Cover letter endpoint error: {str(e)}")
+        print(f"Cover letter endpoint error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -745,7 +746,7 @@ def enhance_bullet_endpoint():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Bullet enhance endpoint error: {str(e)}")
+        print(f"Bullet enhance endpoint error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -793,7 +794,7 @@ def generate_summary_endpoint():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Summary generation endpoint error: {str(e)}")
+        print(f"Summary generation endpoint error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -827,7 +828,7 @@ def download_report():
         )
 
     except Exception as e:
-        print(f"PDF generation error: {str(e)}")
+        print(f"PDF generation error: {log_safe.describe(e)}")
         return jsonify({"error": "Failed to generate PDF report."}), 500
 
 
@@ -968,7 +969,7 @@ def email_report():
         })
 
     except Exception as e:
-        print(f"Email sending error: {str(e)}")
+        print(f"Email sending error: {log_safe.describe(e)}")
         return jsonify({"error": f"Failed to send email. Please try downloading the report instead."}), 500
 
 
