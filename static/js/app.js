@@ -1008,6 +1008,10 @@ Nice to Have
         }
         emailModal.style.setProperty('--modal-top', `${visualViewport.offsetTop}px`);
         emailModal.style.setProperty('--modal-height', `${visualViewport.height}px`);
+        // The keyboard has just shrunk the dialog: keep the field being typed in on screen.
+        if (emailModal.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') {
+            document.activeElement.scrollIntoView({ block: 'nearest' });
+        }
     }
     if (visualViewport) {
         visualViewport.addEventListener('resize', fitModalToViewport);
@@ -2239,7 +2243,11 @@ Nice to Have
         loadingTimers.push(setTimeout(() => {
             note.textContent = 'This is taking longer than usual. Still working on it.';
         }, SLOW_SCAN_AFTER));
-        scanProgress.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // A short wait, so a scan that fails at once never starts this smooth scroll:
+        // it would carry on after the error message has been focused and scroll it away.
+        loadingTimers.push(setTimeout(() => {
+            scanProgress.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150));
     }
 
     // Put text into a live region a moment after it is shown, so screen readers
@@ -2261,7 +2269,10 @@ Nice to Have
         } else {
             // Moving focus to the message reads it, so fill it in before focusing.
             errorMessage.textContent = msg;
-            errorMessage.focus();
+            // An instant scroll first, so a smooth scroll still running from the
+            // progress panel can't carry the message off screen after it is focused.
+            errorMessage.scrollIntoView({ block: 'center', behavior: 'instant' });
+            errorMessage.focus({ preventScroll: true });
         }
     }
 

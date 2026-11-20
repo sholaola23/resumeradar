@@ -2969,5 +2969,9 @@ button.keyword-tag:hover { text-decoration-style:solid; }
 
     /* Keep the email dialog's Send button in view above the on-screen keyboard. */
     .modal-overlay { align-items: flex-start; padding: 12px; }
-    #emailFormStep .modal-actions { position: sticky; bottom: 0; z-index: 1; background: white; padding-top: 12px; padding-bottom: 16px; }
+    /* Side by side, so the pinned bar stays short enough not to cover the email field. */
+    #emailFormStep .modal-actions { position: sticky; bottom: 0; z-index: 1; background: white; padding-top: 12px; padding-bottom: 12px; flex-direction: row; }
+    #emailFormStep .modal-actions > button { flex: 1; width: auto; }
+    /* Room for that bar when the focused field is scrolled into view. */
+    .modal { scroll-padding-bottom: 80px; }
 }
