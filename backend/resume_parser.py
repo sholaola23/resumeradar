@@ -44,28 +44,48 @@ class _PdfBudgetExceeded(Exception):
 
 
 def _pdf_content_size_ok(reader):
-    """Sum the decoded size of each page's content and its form XObjects,
-    stopping as soon as the total passes MAX_PDF_CONTENT_BYTES."""
+    """Sum the decoded size of each page's content and every form XObject it
+    can reach, stopping as soon as the total passes MAX_PDF_CONTENT_BYTES.
+
+    Forms can draw other forms through their own /Resources, and pypdf parses
+    each one in full before our per-operator time check can fire, so nested
+    forms are walked too (Grok on PR 34). Each form counts once; the seen set
+    also stops reference cycles."""
     total = 0
     seen = set()
+
+    def _forms(resources):
+        resources = resources.get_object() if resources is not None else None
+        xobjects = resources.get("/XObject") if resources else None
+        if not xobjects:
+            return []
+        found = []
+        for ref in xobjects.get_object().values():
+            key = getattr(ref, "idnum", None)
+            xobj = ref.get_object()
+            key = ("ref", key, ref.generation) if key is not None else ("id", id(xobj))
+            if key in seen or xobj.get("/Subtype") != "/Form":
+                continue
+            seen.add(key)
+            found.append(xobj)
+        return found
+
     for page in reader.pages:
-        streams = []
+        pending = []
         contents = page.get_contents()
         if contents is not None:
-            streams.append(contents)
-        resources = page.get("/Resources")
-        xobjects = resources.get_object().get("/XObject") if resources else None
-        if xobjects:
-            for ref in xobjects.get_object().values():
-                xobj = ref.get_object()
-                if xobj.get("/Subtype") == "/Form" and id(xobj) not in seen:
-                    seen.add(id(xobj))
-                    streams.append(xobj)
-        for stream in streams:
+            pending.append(contents)
+        pending.extend(_forms(page.get("/Resources")))
+        while pending:
+            stream = pending.pop()
             total += len(stream.get_data())
             if total > MAX_PDF_CONTENT_BYTES:
                 return False
+            if stream.get("/Subtype") == "/Form":
+                pending.extend(_forms(stream.get("/Resources")))
     return True
+
+
 # 10MB, not 50. The guard stops bombs either way, but everything under the
 # ceiling still gets handed to lxml, whose DOM costs far more than the bytes:
 # a legitimate 2.4MB upload declaring 31MB measured ~440MB and 10s in
@@ -130,11 +150,14 @@ def extract_text_from_pdf(file_path):
         if not _pdf_content_size_ok(reader):
             return None, _PDF_TOO_COMPLEX
 
-        deadline = time.monotonic() + PDF_EXTRACT_SECONDS
+        # CPU time of this thread only: gunicorn runs 4 threads per worker,
+        # and wall-clock time would count the other requests' work against
+        # this one (Grok on PR 34).
+        deadline = time.thread_time() + PDF_EXTRACT_SECONDS
         chars = 0
 
         def _check_time(*_args):
-            if time.monotonic() > deadline:
+            if time.thread_time() > deadline:
                 raise _PdfBudgetExceeded(_PDF_TOO_COMPLEX)
 
         def _count_text(text, *_args):

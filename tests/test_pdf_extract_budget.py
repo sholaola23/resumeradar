@@ -1,6 +1,8 @@
 """PDF parsing stops early on files far heavier than a CV (QA on PR 34)."""
 import os
 import tempfile
+import threading
+import zlib
 import time
 import unittest
 from unittest.mock import patch
@@ -30,6 +32,41 @@ def _dense_pdf(lines_per_page, pages):
         for i in range(lines_per_page):
             p.text(5, 5 + (i % 280), LINE)
     return _write(p)
+
+
+def _nested_form_pdf(inner_mb):
+    """Grok's repro on PR 34: the page draws form Fm1, and Fm1 draws Fm2
+    through its own resources, so a page-level count never sees Fm2. Fm2 is
+    megabytes of line drawing that compress to a few KB."""
+    inner = zlib.compress(b"0 0 m 1 1 l S\n" * (inner_mb * 1024 * 1024 // 14), 9)
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /XObject << /Fm1 4 0 R >> >> /Contents 6 0 R >>",
+        b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] "
+        b"/Resources << /XObject << /Fm2 5 0 R >> >> /Length 8 >>\n"
+        b"stream\n/Fm2 Do\nendstream",
+        # pypdf skips a form with no resources, so Fm2 carries a font.
+        b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] /Filter /FlateDecode "
+        b"/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 "
+        b"/BaseFont /Helvetica >> >> >> /Length %d >>\nstream\n" % len(inner) + inner + b"\nendstream",
+        b"<< /Length 8 >>\nstream\n/Fm1 Do\nendstream",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for num, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % num + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    out += b"".join(b"%010d 00000 n \n" % off for off in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objs) + 1, xref)
+    fd, path = tempfile.mkstemp(suffix=".pdf")
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(out)
+    return path
 
 
 def _normal_cv_pdf():
@@ -81,6 +118,45 @@ class PdfBudgetTests(unittest.TestCase):
             text, err = resume_parser.extract_text_from_pdf(path)
         self.assertIsNone(text)
         self.assertIn("more complex than we can process", err)
+
+    def test_nested_form_counted_against_content_cap(self):
+        path = self._path(_nested_form_pdf(40))
+        self.assertLess(os.path.getsize(path), 1024 * 1024)
+        start = time.time()
+        text, err = resume_parser.extract_text_from_pdf(path)
+        self.assertLess(time.time() - start, 2)
+        self.assertIsNone(text)
+        self.assertIn("more complex than we can process", err)
+
+    def test_small_nested_form_still_parses(self):
+        # A small nested form is under the cap: it must reach extraction
+        # (graphics only, so the existing "empty" message comes back).
+        path = self._path(_nested_form_pdf(1))
+        text, err = resume_parser.extract_text_from_pdf(path)
+        self.assertIsNone(text)
+        self.assertIn("empty", err)
+
+    def test_time_budget_ignores_other_threads(self):
+        # Other threads burning CPU must not use up this request's budget.
+        stop = threading.Event()
+
+        def burn():
+            while not stop.is_set():
+                sum(range(10_000))
+
+        burners = [threading.Thread(target=burn) for _ in range(3)]
+        for t in burners:
+            t.start()
+        try:
+            path = self._path(_normal_cv_pdf())
+            with patch.object(resume_parser, "PDF_EXTRACT_SECONDS", 0.5):
+                text, err = resume_parser.extract_text_from_pdf(path)
+        finally:
+            stop.set()
+            for t in burners:
+                t.join()
+        self.assertIsNone(err)
+        self.assertTrue(text)
 
     def test_normal_cv_text_unchanged(self):
         path = self._path(_normal_cv_pdf())
