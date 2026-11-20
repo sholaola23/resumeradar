@@ -158,9 +158,12 @@ _CV_EDUCATION_CUE = re.compile(r"\b(?:education|academic|school|institute|univer
 _CV_EDUCATION_LINES = 3
 # Under an education heading, "MS Machine Learning" or "BA, History" is a
 # degree in any subject, not only the fields listed above.
+# "MS Office" and the like are software, not degrees.
+_NOT_A_SUBJECT = (r"(?!(?:office|excel|word|outlook|powerpoint|teams|project|access|sql|azure|dynamics|"
+                  r"visio|sharepoint|exchange|windows|365)\b)")
 _CV_SHORT_DEGREE = {
-    "bachelor": re.compile(r"^[ \t]*b[as],?[ \t]+[a-z]", re.IGNORECASE | re.MULTILINE),
-    "master": re.compile(r"^[ \t]*m[as],?[ \t]+[a-z]", re.IGNORECASE | re.MULTILINE),
+    "bachelor": re.compile(r"^[ \t]*b[as],?[ \t]+" + _NOT_A_SUBJECT + r"[a-z]", re.IGNORECASE | re.MULTILINE),
+    "master": re.compile(r"^[ \t]*m[as],?[ \t]+" + _NOT_A_SUBJECT + r"[a-z]", re.IGNORECASE | re.MULTILINE),
 }
 # Levels offered as a choice: "MS or PhD", "Bachelor's or Master's", "BS/MS".
 EDUCATION_LEVELS = {"bachelor", "master", "phd", "doctorate", "mba", "bsc", "msc", "b.s.", "m.s.", "b.a.", "m.a."}
@@ -477,8 +480,12 @@ def calculate_match(resume_keywords, job_keywords):
             # other fields in that list are no longer asked for.
             resume_edu_expanded = _expand_education(original_resume_edu)
             for group in job_keywords.get("education_alternatives", []):
-                if group & resume_edu_expanded:
-                    original_job_edu -= group - resume_edu_expanded
+                met = group & resume_edu_expanded
+                if met:
+                    # One option meets the choice: keep it, preferring what the
+                    # CV names itself, and drop the rest so it counts once.
+                    keep = min(met & original_resume_edu or met)
+                    original_job_edu -= group - {keep}
             job_set = set(original_job_edu)
             job_set = _expand_education(job_set)
             resume_set = _expand_education(resume_set)

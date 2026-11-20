@@ -148,6 +148,14 @@ class SubjectAlternatives(unittest.TestCase):
                    'BS/MS in Machine Learning.'):
             with self.subTest(jd=jd):
                 self.assertEqual(self.score(cv, jd)['missing_keywords']['education'], [])
+        for cv, jd in ((cv, 'MS or PhD in Machine Learning. Python, SQL, AWS.'),
+                       ('Education\nMSc Statistics, University of Leeds', "Master's or PhD in Statistics.")):
+            with self.subTest(jd=jd):
+                result = self.score(cv, jd)
+                edu = result['category_scores']['education']
+                self.assertLessEqual(edu['matched'], edu['total'])
+                self.assertLessEqual(edu['score'], 100)
+                self.assertLessEqual(result['overall_score'], 100)
         groups = engine.extract_keywords_from_text('MS or PhD in Machine Learning.', strict=True)['education_alternatives']
         self.assertIn(frozenset({'master', 'phd'}), groups)
 
@@ -189,6 +197,29 @@ class MoreDegreeWords(unittest.TestCase):
 
     def test_milliseconds_are_not_a_degree(self):
         self.assertNotIn('engineering', jd_education('Latency under 50 ms in our engineering stack.'))
+
+
+class ScoreBounds(unittest.TestCase):
+    JOBS = ("MS or PhD in Machine Learning.", "Master's or PhD in Statistics.", 'BS/MS in Computer Science.',
+            "Bachelor's or Master's degree in Engineering or Mathematics.",
+            'BS in Computer Science, Engineering, or a related field.', 'MBA or MSc in Business Administration.',
+            'Degree in Mathematics and Statistics.', 'Senior Cloud Engineer. Python, AWS.')
+    CVS = ('Education\nMS Machine Learning, Stanford', 'Education\nMSc Statistics, University of Leeds',
+           'EDUCATION\nBSc Computer Science\nMSc Data Science\nPhD Statistics, University of Oxford',
+           'EDUCATION\nBEng Mechanical Engineering, Imperial College', 'Software Engineer. Python, AWS.',
+           'EDUCATION\nMBA, London Business School')
+
+    def test_matched_never_exceeds_total(self):
+        for jd in self.JOBS:
+            for cv in self.CVS:
+                with self.subTest(jd=jd, cv=cv):
+                    result = engine.calculate_match(engine.extract_keywords_from_text(cv),
+                                                    engine.extract_keywords_from_text(jd, strict=True))
+                    for category, data in result['category_scores'].items():
+                        if category != 'action_verbs':
+                            self.assertLessEqual(data['matched'], data['total'], category)
+                    # None means too few terms to score, which is fine here.
+                    self.assertLessEqual(result['overall_score'] or 0, 100)
 
 
 class JobView(unittest.TestCase):
@@ -260,6 +291,8 @@ class CvSide(unittest.TestCase):
         self.assertIn('master', cv_education('EDUCATION\nMS Finance, NYU'))
         self.assertIn('bachelor', cv_education('Education\nBA, History, University of York'))
         self.assertNotIn('master', cv_education('Skills\nMS Office, Excel'))
+        self.assertNotIn('master', cv_education('Skills\nMS Office, Excel, Python\nUniversity liaison role'))
+        self.assertNotIn('master', cv_education('Education\nMS Office certification'))
 
     def test_engineering_job_title_on_cv_is_not_a_degree(self):
         self.assertNotIn('engineering', cv_education('Engineering Manager at Acme\nLed a team of 8.'))
