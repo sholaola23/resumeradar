@@ -1,0 +1,7 @@
+# Findings the CI secret scan (.github/workflows/ci.yml) skips.
+# Add a line only for a secret that is confirmed revoked, and say how it was confirmed.
+#
+# Old Render API key in scripts/t48_soak_check.sh, added in Feb 2026.
+# Shola confirmed it is dead (the Render API returns 401), 20 Nov 2026.
+# PR 33 removes the script; this line keeps the commit that added it from failing the scan.
+42bdcfd6a924601068da34236138250a4ceafcc4:scripts/t48_soak_check.sh:generic-api-key:10
