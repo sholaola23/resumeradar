@@ -1066,8 +1066,7 @@ textarea::placeholder {
 
 /* Scan History */
 .history-card {
-    background: linear-gradient(135deg, #fefce8 0%, #fffbeb 100%);
-    border: 1px solid #fde68a;
+    background: var(--paper);
 }
 
 .history-bars {
@@ -1308,9 +1307,9 @@ textarea::placeholder {
 .flagged-bullets {
     margin-top: 8px;
     padding: 10px 12px;
-    background: #fffbeb;
-    border-radius: 6px;
-    border: 1px solid #fde68a;
+    background: var(--gray-50);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200);
 }
 .flagged-header {
     font-size: 12px;
@@ -1765,6 +1764,7 @@ textarea::placeholder {
     color: var(--primary);
     transition: transform 0.2s;
 }
+.faq-item a { color: var(--primary); text-underline-offset: 3px; }
 .faq-item[open] summary::after {
     content: '−';
 }
