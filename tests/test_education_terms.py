@@ -142,6 +142,15 @@ class SubjectAlternatives(unittest.TestCase):
         self.assertEqual((edu['matched'], edu['total']), (1, 2))
         self.assertEqual(result['total_missing'], result['total_job_keywords'] - result['total_matched'])
 
+    def test_degree_levels_offered_as_a_choice(self):
+        cv = 'Education\nMS Machine Learning, Stanford University'
+        for jd in ('MS or PhD in Machine Learning.', "Master's or PhD in Machine Learning.",
+                   'BS/MS in Machine Learning.'):
+            with self.subTest(jd=jd):
+                self.assertEqual(self.score(cv, jd)['missing_keywords']['education'], [])
+        groups = engine.extract_keywords_from_text('MS or PhD in Machine Learning.', strict=True)['education_alternatives']
+        self.assertIn(frozenset({'master', 'phd'}), groups)
+
     def test_or_list_with_no_subject_lists_every_option(self):
         result = self.score('EDUCATION\nBA History, University of York',
                             "Bachelor's degree in Computer Science or Engineering.")
@@ -245,6 +254,12 @@ class CvSide(unittest.TestCase):
 
     def test_ma_or_ms_is_a_master_requirement(self):
         self.assertIn('master', jd_education('MA or MS in Statistics.'))
+
+    def test_short_degree_in_any_subject_under_education(self):
+        self.assertIn('master', cv_education('Education\nMS Machine Learning, Stanford'))
+        self.assertIn('master', cv_education('EDUCATION\nMS Finance, NYU'))
+        self.assertIn('bachelor', cv_education('Education\nBA, History, University of York'))
+        self.assertNotIn('master', cv_education('Skills\nMS Office, Excel'))
 
     def test_engineering_job_title_on_cv_is_not_a_degree(self):
         self.assertNotIn('engineering', cv_education('Engineering Manager at Acme\nLed a team of 8.'))

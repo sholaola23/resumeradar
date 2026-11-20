@@ -154,8 +154,17 @@ _FIELD_JOIN = re.compile(r"\s*(?:,\s*)?(?:(?:and\s*/\s*)?or\s+(?:(?:an?|any)\s+)
 _RELATED_FIELD = re.compile(r"\s*,?\s*or\s+(?:an?\s+|any\s+)?(?:other\s+)?(?:related|similar|equivalent|relevant)\b",
                             re.IGNORECASE)
 # On a CV the subject often sits a line or two from the degree or heading.
-_CV_EDUCATION_CUE = re.compile(r"\b(?:education|academic|school|institute)\b", re.IGNORECASE)
+_CV_EDUCATION_CUE = re.compile(r"\b(?:education|academic|school|institute|university|college)\b", re.IGNORECASE)
 _CV_EDUCATION_LINES = 3
+# Under an education heading, "MS Machine Learning" or "BA, History" is a
+# degree in any subject, not only the fields listed above.
+_CV_SHORT_DEGREE = {
+    "bachelor": re.compile(r"^[ \t]*b[as],?[ \t]+[a-z]", re.IGNORECASE | re.MULTILINE),
+    "master": re.compile(r"^[ \t]*m[as],?[ \t]+[a-z]", re.IGNORECASE | re.MULTILINE),
+}
+# Levels offered as a choice: "MS or PhD", "Bachelor's or Master's", "BS/MS".
+EDUCATION_LEVELS = {"bachelor", "master", "phd", "doctorate", "mba", "bsc", "msc", "b.s.", "m.s.", "b.a.", "m.a."}
+_LEVEL_JOIN = re.compile(r"(?:['’]?s)?\s*(?:,\s*)?(?:or\s+|/\s*)?", re.IGNORECASE)
 
 # Sentence units for job descriptions. Abbreviations such as "B.S." and "e.g."
 # do not end a sentence, so "B.S. in Computer Science" stays together.
@@ -324,6 +333,8 @@ def _education_in_text(term, text, *, strict=False):
     a job description (strict), or within a few lines on a CV.
     """
     pattern = _education_pattern(term)
+    if not strict and term in _CV_SHORT_DEGREE and _cv_short_degree(term, text):
+        return True
     if term not in EDUCATION_FIELDS:
         return bool(pattern.search(text))
     if strict:
@@ -333,6 +344,17 @@ def _education_in_text(term, text, *, strict=False):
         if pattern.search(line):
             nearby = '\n'.join(lines[max(0, index - _CV_EDUCATION_LINES):index + _CV_EDUCATION_LINES + 1])
             if _has_degree_cue(nearby) or _CV_EDUCATION_CUE.search(nearby):
+                return True
+    return False
+
+
+def _cv_short_degree(term, text):
+    """A CV line that starts "MS <subject>" or "BA, <subject>" near an education cue."""
+    lines = text.split('\n')
+    for index, line in enumerate(lines):
+        if _CV_SHORT_DEGREE[term].match(line):
+            nearby = '\n'.join(lines[max(0, index - _CV_EDUCATION_LINES):index + _CV_EDUCATION_LINES + 1])
+            if _CV_EDUCATION_CUE.search(nearby):
                 return True
     return False
 
@@ -359,9 +381,14 @@ def _job_education_spans(term, text):
 
 
 def _field_alternatives(text):
-    """Groups of fields a job description offers as a choice, as frozensets."""
-    spans = sorted((start, end, field) for field in EDUCATION_FIELDS
-                   for start, end in _job_education_spans(field, text))
+    """Groups of fields, or of degree levels, a job offers as a choice, as frozensets."""
+    return (_alternatives(text, EDUCATION_FIELDS, _FIELD_JOIN) +
+            _alternatives(text, EDUCATION_LEVELS, _LEVEL_JOIN))
+
+
+def _alternatives(text, terms, join):
+    spans = sorted((start, end, term) for term in terms
+                   for start, end in _job_education_spans(term, text))
     groups, run, has_or = [], [], False
 
     def close():
@@ -371,7 +398,7 @@ def _field_alternatives(text):
 
     for span in spans:
         joiner = text[run[-1][1]:span[0]] if run else ''
-        if run and span[0] >= run[-1][1] and _FIELD_JOIN.fullmatch(joiner):
+        if run and span[0] >= run[-1][1] and join.fullmatch(joiner):
             has_or = has_or or bool(re.search(r'\bor\b|/', joiner))
             run.append(span)
             continue
@@ -448,9 +475,10 @@ def calculate_match(resume_keywords, job_keywords):
             original_resume_edu = set(resume_set)
             # One field from an "X or Y" list meets the requirement, so the
             # other fields in that list are no longer asked for.
+            resume_edu_expanded = _expand_education(original_resume_edu)
             for group in job_keywords.get("education_alternatives", []):
-                if group & original_resume_edu:
-                    original_job_edu -= group - original_resume_edu
+                if group & resume_edu_expanded:
+                    original_job_edu -= group - resume_edu_expanded
             job_set = set(original_job_edu)
             job_set = _expand_education(job_set)
             resume_set = _expand_education(resume_set)
