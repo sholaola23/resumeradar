@@ -42,6 +42,10 @@ class FakeRedis:
         self.counts[key] = self.counts.get(key, 0) + 1
         return self.counts[key]
 
+    def decr(self, key):
+        self.counts[key] = self.counts.get(key, 0) - 1
+        return self.counts[key]
+
     def expire(self, key, seconds):
         return True
 
@@ -179,6 +183,17 @@ class ReportRoutesTest(unittest.TestCase):
             r = self.client.post('/api/email-report', json={'email': 'a@example.com', 'scan_data': self.scan})
         self.assertEqual(r.status_code, 503)
         self.assertEqual(redis.counts, {})
+
+    def test_failed_send_gives_the_send_back(self):
+        redis = FakeRedis()
+        body = {'email': 'a@example.com', 'scan_data': self.scan}
+        with patch.dict(os.environ, {'RESEND_API_KEY': 'test'}), \
+                patch.object(app_module, '_redis_client', redis), \
+                patch('resend.Emails.send', side_effect=[RuntimeError('resend down'), None, None, None, None]) as send:
+            codes = [self.client.post('/api/email-report', json=body).status_code for _ in range(5)]
+        # One failure, then still three real sends before the cap.
+        self.assertEqual(codes, [500, 200, 200, 200, 429])
+        self.assertEqual(send.call_count, 4)
 
     def test_respelled_signature_gets_no_fresh_counter(self):
         _, issued, mac = self.scan['report_signature'].split('.')

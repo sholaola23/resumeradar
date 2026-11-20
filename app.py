@@ -806,6 +806,17 @@ def _allow_report_send(scan_data):
         return True
 
 
+def _refund_report_send(scan_data):
+    """Give the send back when Resend fails, so a failed email doesn't use
+    up one of the scan's three."""
+    if not _redis_client:
+        return
+    try:
+        _redis_client.decr(f"resumeradar:report_sends:{report_signing.signature_id(scan_data)}")
+    except Exception as e:
+        print(f"Report send counter unavailable: {type(e).__name__}")
+
+
 @app.route('/api/download-report', methods=['POST'])
 @limiter.limit("20 per hour")
 def download_report():
@@ -883,6 +894,7 @@ def email_report():
 
         if not _allow_report_send(scan_data):
             return jsonify({"error": "This report has already been emailed a few times. Please download it instead."}), 429
+        signed_scan = scan_data
         scan_data = report_data
 
         import resend
@@ -982,7 +994,11 @@ def email_report():
             ],
         }
 
-        result = resend.Emails.send(params)
+        try:
+            resend.Emails.send(params)
+        except Exception:
+            _refund_report_send(signed_scan)
+            raise
 
         return jsonify({
             "success": True,
