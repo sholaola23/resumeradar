@@ -123,6 +123,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelModalBtn = document.getElementById('cancelModal');
     const sendEmailBtn = document.getElementById('sendEmailBtn');
     const emailInput = document.getElementById('emailInput');
+    const emailFormStep = document.getElementById('emailFormStep');
+    const emailWaitStep = document.getElementById('emailWaitStep');
+    const emailWaitText = document.getElementById('emailWaitText');
 
     // Store the last scan data for report generation
     let lastScanData = null;
@@ -928,8 +931,20 @@ Nice to Have
     function openEmailModal() {
         modalReturnFocus = document.activeElement;
         emailModal.style.display = 'flex';
+        if (emailConfirmWait) {
+            // Still waiting for a click on the confirm link: show that, not a blank form.
+            showEmailStep('wait');
+            return;
+        }
+        showEmailStep('form');
         emailInput.value = '';
         emailInput.focus();
+    }
+
+    function showEmailStep(step) {
+        emailFormStep.hidden = step !== 'form';
+        emailWaitStep.hidden = step !== 'wait';
+        if (step === 'wait') emailWaitText.focus();
     }
     emailReportBtn.addEventListener('click', openEmailModal);
     // The same dialog, offered beside the score where people first see their result.
@@ -938,6 +953,12 @@ Nice to Have
 
     closeModalBtn.addEventListener('click', closeModal);
     cancelModalBtn.addEventListener('click', closeModal);
+    document.getElementById('emailWaitCloseBtn').addEventListener('click', closeModal);
+    document.getElementById('emailChangeBtn').addEventListener('click', () => {
+        stopConfirmWait();
+        showEmailStep('form');
+        emailInput.focus();
+    });
 
     // Close modal on backdrop click
     emailModal.addEventListener('click', (e) => {
@@ -975,6 +996,111 @@ Nice to Have
         modalReturnFocus = null;
     }
 
+    // ------------------------------------------------------------
+    // Waiting for the address to be confirmed. The first email is only a
+    // confirm link; once its owner presses Confirm, this page sends the report.
+    // ------------------------------------------------------------
+    const CONFIRM_POLL_MS = 5000;
+    const CONFIRM_WAIT_MS = 60 * 60 * 1000; // the link's own lifetime
+    let emailConfirmWait = null; // { email, scan, timer, until }
+
+    function stopConfirmWait() {
+        if (emailConfirmWait && emailConfirmWait.timer) clearTimeout(emailConfirmWait.timer);
+        emailConfirmWait = null;
+    }
+
+    function startConfirmWait(email, scan) {
+        stopConfirmWait();
+        emailConfirmWait = { email, scan, timer: null, until: Date.now() + CONFIRM_WAIT_MS };
+        emailWaitText.textContent = `We've sent a confirmation link to ${email}. Check your inbox (and spam folder).`;
+        showEmailStep('wait');
+        scheduleConfirmCheck();
+    }
+
+    function scheduleConfirmCheck() {
+        const wait = emailConfirmWait;
+        if (!wait) return;
+        wait.timer = setTimeout(() => checkConfirmed(wait), CONFIRM_POLL_MS);
+    }
+
+    let confirmCheckBusy = false;
+    async function checkConfirmed(wait) {
+        if (wait !== emailConfirmWait || confirmCheckBusy) return;
+        // A new scan replaces the report this address was confirming.
+        if (wait.scan !== lastScanData || Date.now() > wait.until) {
+            stopConfirmWait();
+            if (emailModal.style.display === 'flex') showEmailStep('form');
+            return;
+        }
+        confirmCheckBusy = true;
+        let confirmed = false;
+        try {
+            const response = await fetch('/api/email-report/status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: wait.email, scan_data: wait.scan }),
+            });
+            if (response.ok) confirmed = (await response.json()).confirmed === true;
+        } catch (err) {
+            // Network blip: try again on the next tick.
+        } finally {
+            confirmCheckBusy = false;
+        }
+        if (wait !== emailConfirmWait) return;
+        if (confirmed) {
+            stopConfirmWait();
+            emailWaitText.textContent = `Address confirmed. Sending your report to ${wait.email}...`;
+            await sendReportEmail(wait.email, wait.scan);
+        } else {
+            scheduleConfirmCheck();
+        }
+    }
+
+    // Coming back from the inbox: check straight away rather than on the next tick.
+    function checkConfirmedNow() {
+        if (!emailConfirmWait || document.visibilityState !== 'visible') return;
+        clearTimeout(emailConfirmWait.timer);
+        checkConfirmed(emailConfirmWait);
+    }
+    document.addEventListener('visibilitychange', checkConfirmedNow);
+    window.addEventListener('focus', checkConfirmedNow);
+
+    async function sendReportEmail(email, scan) {
+        const response = await fetch('/api/email-report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, scan_data: scan }),
+        }).catch(() => null);
+        let result = {};
+        try { result = response ? await response.json() : {}; } catch (e) { result = {}; }
+
+        if (response && response.ok && result.status === 'confirm_sent') {
+            startConfirmWait(email, scan);
+            return;
+        }
+        if (response && response.ok && !result.error) {
+            if (emailModal.style.display === 'flex') closeModal();
+            showEmailStep('form');
+            showToast(`Report sent to ${email}!`);
+            return;
+        }
+
+        const message = result.error || 'Failed to send email. Please try again.';
+        // If the API isn't configured, fall back to mailto
+        if (message.includes('not configured')) {
+            showToast('Email service not set up yet. Opening email client...', true);
+            const reportText = generateShortReport(scan);
+            const score = ResumeRadarScan.scoreText(scan.match_score);
+            const subject = encodeURIComponent(`ResumeRadar Report (match estimate: ${score})`);
+            const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(reportText)}`;
+            window.location.href = mailtoUrl;
+            closeModal();
+            return;
+        }
+        if (!emailWaitStep.hidden) showEmailStep('form');
+        showToast(message, true);
+    }
+
     sendEmailBtn.addEventListener('click', async () => {
         const email = emailInput.value.trim();
 
@@ -995,39 +1121,7 @@ Nice to Have
         emailInput.style.borderColor = '';
 
         try {
-            const response = await fetch('/api/email-report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: email,
-                    scan_data: lastScanData,
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok || result.error) {
-                throw new Error(result.error || 'Failed to send email');
-            }
-
-            closeModal();
-            showToast(`Report sent to ${email}!`);
-
-        } catch (err) {
-            console.error('Email send error:', err);
-
-            // If the API isn't configured, fallback to mailto
-            if (err.message.includes('not configured')) {
-                showToast('Email service not set up yet. Opening email client...', true);
-                const reportText = generateShortReport(lastScanData);
-                const score = ResumeRadarScan.scoreText(lastScanData.match_score);
-                const subject = encodeURIComponent(`ResumeRadar Report (match estimate: ${score})`);
-                const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(reportText)}`;
-                window.location.href = mailtoUrl;
-                closeModal();
-            } else {
-                showToast(err.message || 'Failed to send email. Please try again.', true);
-            }
+            await sendReportEmail(email, lastScanData);
         } finally {
             sendText.style.display = 'inline';
             sendLoading.style.display = 'none';

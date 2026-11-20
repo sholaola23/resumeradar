@@ -1,6 +1,7 @@
 """Emailed and downloaded reports only use scan results the server signed."""
 import json
 import os
+import re
 import sys
 import unittest
 from unittest.mock import patch
@@ -37,6 +38,14 @@ def browser_round_trip(data):
 class FakeRedis:
     def __init__(self):
         self.counts = {}
+        self.values = {}
+
+    def exists(self, key):
+        return int(key in self.values)
+
+    def set(self, key, value, ex=None):
+        self.values[key] = value
+        return True
 
     def incr(self, key):
         self.counts[key] = self.counts.get(key, 0) + 1
@@ -119,6 +128,28 @@ class SignatureUnitTest(unittest.TestCase):
             self.assertIsNone(report_signing.verify(self.data))
 
 
+def confirm_address(client, email, scan, send):
+    """Ask for the report, then click the link and press Confirm, as a person would."""
+    r = client.post('/api/email-report', json={'email': email, 'scan_data': scan})
+    assert r.status_code == 200 and r.get_json()['status'] == 'confirm_sent', r.data
+    return click_confirm(client, send.call_args[0][0])
+
+
+def confirm_link_token(params):
+    match = re.search(r'https://resumeradar\.sholastechnotes\.com/confirm-email\?t=([^"\s]+)', params['html'])
+    assert match, params['html']
+    return match.group(1)
+
+
+def click_confirm(client, params):
+    token = confirm_link_token(params)
+    page = client.get(f'/confirm-email?t={token}')
+    assert page.status_code == 200, page.data
+    r = client.post('/confirm-email', data={'t': token})
+    assert r.status_code == 200, r.data
+    return token
+
+
 class ReportRoutesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -169,12 +200,15 @@ class ReportRoutesTest(unittest.TestCase):
         with patch.dict(os.environ, {'RESEND_API_KEY': 'test'}), \
                 patch('resend.Emails.send') as send, \
                 patch.object(app_module, '_redis_client', FakeRedis()):
+            confirm_address(self.client, 'u@example.com', extra, send)
+            send.reset_mock()
             codes = [
-                self.client.post('/api/email-report', json={'email': f'u{i}@example.com', 'scan_data': extra}).status_code
-                for i in range(4)
+                self.client.post('/api/email-report', json={'email': 'u@example.com', 'scan_data': extra}).status_code
+                for _ in range(4)
             ]
         self.assertEqual(codes, [200, 200, 200, 429])
         self.assertEqual(send.call_count, 3)
+        self.assertNotIn('bad.example', send.call_args[0][0]['html'])
 
     def test_unconfigured_email_does_not_use_a_send(self):
         redis = FakeRedis()
@@ -189,7 +223,10 @@ class ReportRoutesTest(unittest.TestCase):
         body = {'email': 'a@example.com', 'scan_data': self.scan}
         with patch.dict(os.environ, {'RESEND_API_KEY': 'test'}), \
                 patch.object(app_module, '_redis_client', redis), \
-                patch('resend.Emails.send', side_effect=[RuntimeError('resend down'), None, None, None, None]) as send:
+                patch('resend.Emails.send') as send:
+            confirm_address(self.client, 'a@example.com', self.scan, send)
+            send.reset_mock()
+            send.side_effect = [RuntimeError('resend down'), None, None, None, None]
             codes = [self.client.post('/api/email-report', json=body).status_code for _ in range(5)]
         # One failure, then still three real sends before the cap.
         self.assertEqual(codes, [500, 200, 200, 200, 429])
