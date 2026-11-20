@@ -49,7 +49,10 @@ jobs:
 
       - name: Scan git history
         # --redact keeps any secret it finds out of the job log.
-        run: '"$RUNNER_TEMP/gitleaks" git . --redact --no-banner --verbose --exit-code 1'
+        # --log-opts=HEAD scans only the history of the commit under test.
+        # Without it gitleaks scans every branch it fetched (git log --all),
+        # so a leak on some other branch would fail every PR.
+        run: '"$RUNNER_TEMP/gitleaks" git . --log-opts=HEAD --redact --no-banner --verbose --exit-code 1'
 
   tests:
     name: Tests
