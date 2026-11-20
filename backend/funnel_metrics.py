@@ -43,6 +43,9 @@ VALID_EVENTS = frozenset({
     "purchase_completed",
     "download_completed",
     "free_download_nigeria",
+    "feedback_yes",
+    "feedback_no",
+    "feedback_comment",
 })
 
 # Subset allowed from the public POST /api/event endpoint
@@ -65,6 +68,16 @@ CLIENT_EVENTS = frozenset({
     "sticky_cta_clicked",
     "cv_optimize_clicked",
     "cover_letter_started",
+    "feedback_yes",
+    "feedback_no",
+})
+
+# Events counted by day only. A journey ID sent with them is ignored, so a
+# "Was this useful?" vote is never tied to a browser session.
+DAILY_ONLY_EVENTS = frozenset({
+    "feedback_yes",
+    "feedback_no",
+    "feedback_comment",
 })
 
 # Referral loop: aggregate daily counts only, no identity of sharer or friend.
@@ -80,12 +93,14 @@ _REFERRAL_EVENTS = frozenset({
 })
 VALID_EVENTS = VALID_EVENTS | _REFERRAL_EVENTS
 CLIENT_EVENTS = CLIENT_EVENTS | _REFERRAL_EVENTS
+# Referral events stay daily totals only too: never tie them to a journey.
+DAILY_ONLY_EVENTS = DAILY_ONLY_EVENTS | _REFERRAL_EVENTS
 
 _redis = None
 
 
 def init(redis_client):
-    """Initialize with the app's Redis client."""
+    """Initialise with the app's Redis client."""
     global _redis
     _redis = redis_client
 
@@ -116,8 +131,7 @@ def record(event_name, journey_id=None):
         pipe.hincrby(key, event_name, 1)
         pipe.expire(key, _FUNNEL_TTL)
         pipe.execute()
-        # Referral events stay daily totals only: never tie them to a journey.
-        normalized = None if event_name in _REFERRAL_EVENTS else normalize_journey_id(journey_id)
+        normalized = None if event_name in DAILY_ONLY_EVENTS else normalize_journey_id(journey_id)
         if normalized:
             journey_key = _JOURNEY_PREFIX + normalized
             now = datetime.now(timezone.utc).isoformat()
