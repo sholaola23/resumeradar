@@ -2929,3 +2929,8 @@ button.keyword-tag:hover { text-decoration-style:solid; }
     .hero #resumeText { height: 180px; }
     .hero #jobDescription { height: 150px; }
 }
+
+/* ---- "Email me this report" beside the score ---- */
+.score-side { flex: 1; min-width: 0; }
+.score-email-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; padding: 0; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--primary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.score-email-link:hover { color: var(--primary-dark); }
