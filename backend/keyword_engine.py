@@ -384,9 +384,21 @@ def _job_education_spans(term, text):
 
 
 def _field_alternatives(text):
-    """Groups of fields, or of degree levels, a job offers as a choice, as frozensets."""
-    return (_alternatives(text, EDUCATION_FIELDS, _FIELD_JOIN) +
-            _alternatives(text, EDUCATION_LEVELS, _LEVEL_JOIN))
+    """Groups of fields, or of degree levels, a job offers as a choice, as frozensets.
+
+    A choice repeated in several sentences ("BS in X or Y ... MS in X or Y")
+    and choices that share a term are merged, so each term is in at most one
+    group and calculate_match counts each choice once.
+    """
+    merged = []
+    for group in (_alternatives(text, EDUCATION_FIELDS, _FIELD_JOIN) +
+                  _alternatives(text, EDUCATION_LEVELS, _LEVEL_JOIN)):
+        group = set(group)
+        for other in [other for other in merged if other & group]:
+            group |= other
+            merged.remove(other)
+        merged.append(group)
+    return [frozenset(group) for group in merged]
 
 
 def _alternatives(text, terms, join):

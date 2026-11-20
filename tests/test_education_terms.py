@@ -203,11 +203,21 @@ class ScoreBounds(unittest.TestCase):
     JOBS = ("MS or PhD in Machine Learning.", "Master's or PhD in Statistics.", 'BS/MS in Computer Science.',
             "Bachelor's or Master's degree in Engineering or Mathematics.",
             'BS in Computer Science, Engineering, or a related field.', 'MBA or MSc in Business Administration.',
-            'Degree in Mathematics and Statistics.', 'Senior Cloud Engineer. Python, AWS.')
+            'Degree in Mathematics and Statistics.', 'Senior Cloud Engineer. Python, AWS.',
+            'BS in Computer Science or Engineering required.\nMS in Computer Science or Engineering preferred.',
+            'BS in Computer Science or Engineering required.\nMS in Computer Science or Engineering preferred.\n'
+            'PhD in Computer Science or Engineering a plus. Python, SQL, AWS.',
+            'BS in Computer Science or Mathematics.\nMS in Mathematics or Statistics preferred.')
     CVS = ('Education\nMS Machine Learning, Stanford', 'Education\nMSc Statistics, University of Leeds',
            'EDUCATION\nBSc Computer Science\nMSc Data Science\nPhD Statistics, University of Oxford',
            'EDUCATION\nBEng Mechanical Engineering, Imperial College', 'Software Engineer. Python, AWS.',
-           'EDUCATION\nMBA, London Business School')
+           'EDUCATION\nMBA, London Business School', 'EDUCATION\nBA History, University of York',
+           'EDUCATION\nBSc History, University of Leeds\nPython, SQL, AWS')
+
+    def test_repeated_choice_is_one_group(self):
+        jd = 'BS in Computer Science or Engineering required.\nMS in Computer Science or Engineering preferred.'
+        groups = engine.extract_keywords_from_text(jd, strict=True)['education_alternatives']
+        self.assertEqual(groups, [frozenset({'computer science', 'engineering'})])
 
     def test_matched_never_exceeds_total(self):
         for jd in self.JOBS:
