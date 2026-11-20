@@ -27,6 +27,12 @@ test('rescan comparison names evidence changes only for the same job and score v
   assert.equal(utils.compareScan?.({...after, score:null}, before), null);
 });
 
+test('history labels a job by the first line of its description', () => {
+  assert.equal(utils.jobTitle?.('\n  Senior Cloud Engineer  \n\nAbout the role...'), 'Senior Cloud Engineer');
+  assert.equal(utils.jobTitle?.(''), 'Job scan');
+  assert.equal(utils.jobTitle?.('x'.repeat(80)).length, 60);
+});
+
 test('job view index finds every mention, with a term inside a longer one keeping its own status', () => {
   const segments = [
     {text: 'We use '},

@@ -7,6 +7,11 @@ from fpdf import FPDF
 from datetime import datetime
 import io
 
+from backend.keyword_engine import display_keyword
+
+# Category percentages are only shown when the job names at least this many terms.
+MIN_TERMS_FOR_CATEGORY_SCORE = 3
+
 
 def _safe(text):
     """Replace Unicode characters that core PDF fonts can't handle."""
@@ -116,7 +121,7 @@ class ResumeRadarPDF(FPDF):
             self.set_text_color(5, 150, 105)  # Green
 
         # Join keywords with commas and wrap
-        keywords_text = ', '.join(keywords)
+        keywords_text = ', '.join(display_keyword(str(k)) for k in keywords)
         self.multi_cell(0, 5, _safe(keywords_text))
         self.ln(3)
 
@@ -202,7 +207,8 @@ def generate_pdf_report(scan_data):
 
     category_scores = scan_data.get('category_scores', {})
     for key, info in category_scores.items():
-        if info.get('total', 0) == 0:
+        # A percentage built on one or two job terms misleads, so it is not shown.
+        if info.get('total', 0) < MIN_TERMS_FOR_CATEGORY_SCORE:
             continue
 
         cat_score = round(info.get('score', 0))
@@ -252,7 +258,7 @@ def generate_pdf_report(scan_data):
         pdf.section_title('Missing Keywords', '')
         pdf.set_font('Helvetica', '', 9)
         pdf.set_text_color(107, 114, 128)
-        pdf.multi_cell(0, 5, 'These keywords appear in the job description but NOT in your resume. ATS systems are scanning for them.')
+        pdf.multi_cell(0, 5, 'These keywords appear in the job description but not in your CV. Some may be optional or alternatives to tools you already use.')
         pdf.ln(4)
 
         for cat, words in missing_entries.items():
@@ -435,6 +441,11 @@ def generate_pdf_report(scan_data):
     pdf.cell(0, 5, 'ResumeRadar', new_x='LMARGIN', new_y='NEXT')
     pdf.set_text_color(37, 99, 235)
     pdf.cell(0, 5, 'https://www.linkedin.com/in/olushola-oladipupo/', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_text_color(75, 85, 99)
+    pdf.cell(0, 5, 'Check your own CV free at', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_text_color(37, 99, 235)
+    pdf.cell(0, 5, 'https://resumeradar.sholastechnotes.com', new_x='LMARGIN', new_y='NEXT',
+             link='https://resumeradar.sholastechnotes.com/?utm_source=report_pdf&utm_medium=pdf')
     pdf.ln(2)
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(156, 163, 175)
