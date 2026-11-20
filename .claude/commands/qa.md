@@ -5,7 +5,7 @@ Run the ResumeRadar QA test suite to verify production readiness.
 1. Activate the virtual environment and run the full QA suite:
 
 ```
-cd "$PROJECT_DIR" && source .venv/bin/activate && python tests/qa_suite.py
+cd "$PROJECT_DIR" && { source .venv/bin/activate 2>/dev/null || source venv/bin/activate; } && python tests/qa_suite.py
 ```
 
 2. Read the output carefully. Report the results to the user:
@@ -23,7 +23,7 @@ cd "$PROJECT_DIR" && source .venv/bin/activate && python tests/qa_suite.py
 For fast checks only (skips live scan + PDF generation), add `--quick`:
 
 ```
-cd "$PROJECT_DIR" && source .venv/bin/activate && python tests/qa_suite.py --quick
+cd "$PROJECT_DIR" && { source .venv/bin/activate 2>/dev/null || source venv/bin/activate; } && python tests/qa_suite.py --quick
 ```
 
 Use quick mode when checking after small CSS/HTML changes.

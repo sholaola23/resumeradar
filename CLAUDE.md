@@ -48,7 +48,7 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a g
 
 **Reports.** `/api/scan` signs the fields the PDF and the report email use, and `/api/email-report` and `/api/download-report` only build a report from a result with a valid signature less than 24 hours old (`backend/report_signing.py`). Each signed scan can be emailed at most 3 times (`_REPORT_SENDS_PER_SCAN` in `app.py`). A new field in the report must be added to `SIGNED_FIELDS`, or it never reaches the report.
 
-**Secrets.** No keys in the repo. Env var names only. Never remove `FLASK_SECRET_KEY` from Render: report signing keys off it (`backend/report_signing.py`), and without it each gunicorn worker makes its own key, so a report download or email that lands on another worker fails with a 403.
+**Secrets.** No keys in the repo. Env var names only. Never remove `FLASK_SECRET_KEY` from Render: report signing keys off it (`backend/report_signing.py`), and without it (and without `AUDIT_HMAC_SECRET`) each gunicorn worker makes its own key, so a report download or email that lands on another worker fails with a 403.
 
 ## Wording
 
