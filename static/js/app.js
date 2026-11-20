@@ -1239,6 +1239,9 @@ Nice to Have
         // Auto-hide after 3 seconds
         setTimeout(() => {
             toast.style.display = 'none';
+            // Don't leave the message (which can hold an email address) in the page.
+            const live = document.getElementById('toastLive');
+            if (live && live.textContent === message) live.textContent = '';
         }, 3000);
     }
 
