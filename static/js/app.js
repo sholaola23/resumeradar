@@ -1000,9 +1000,15 @@ Nice to Have
     // Waiting for the address to be confirmed. The first email is only a
     // confirm link; once its owner presses Confirm, this page sends the report.
     // ------------------------------------------------------------
-    const CONFIRM_POLL_MS = 5000;
+    // Every 5 seconds for the first 5 minutes, then every 15, then every 60
+    // if the server says to slow down: well inside the status route's limit.
     const CONFIRM_WAIT_MS = 60 * 60 * 1000; // the link's own lifetime
-    let emailConfirmWait = null; // { email, scan, timer, until }
+    let emailConfirmWait = null; // { email, scan, timer, until, started, busy, slow }
+
+    function confirmPollDelay(wait) {
+        if (wait.slow) return 60000;
+        return Date.now() - wait.started < 5 * 60 * 1000 ? 5000 : 15000;
+    }
 
     function stopConfirmWait() {
         if (emailConfirmWait && emailConfirmWait.timer) clearTimeout(emailConfirmWait.timer);
@@ -1011,7 +1017,8 @@ Nice to Have
 
     function startConfirmWait(email, scan) {
         stopConfirmWait();
-        emailConfirmWait = { email, scan, timer: null, until: Date.now() + CONFIRM_WAIT_MS };
+        const now = Date.now();
+        emailConfirmWait = { email, scan, timer: null, until: now + CONFIRM_WAIT_MS, started: now, busy: false, slow: false };
         emailWaitText.textContent = `We've sent a confirmation link to ${email}. Check your inbox (and spam folder).`;
         showEmailStep('wait');
         scheduleConfirmCheck();
@@ -1020,19 +1027,18 @@ Nice to Have
     function scheduleConfirmCheck() {
         const wait = emailConfirmWait;
         if (!wait) return;
-        wait.timer = setTimeout(() => checkConfirmed(wait), CONFIRM_POLL_MS);
+        wait.timer = setTimeout(() => checkConfirmed(wait), confirmPollDelay(wait));
     }
 
-    let confirmCheckBusy = false;
     async function checkConfirmed(wait) {
-        if (wait !== emailConfirmWait || confirmCheckBusy) return;
+        if (wait !== emailConfirmWait || wait.busy) return;
         // A new scan replaces the report this address was confirming.
         if (wait.scan !== lastScanData || Date.now() > wait.until) {
             stopConfirmWait();
             if (emailModal.style.display === 'flex') showEmailStep('form');
             return;
         }
-        confirmCheckBusy = true;
+        wait.busy = true;
         let confirmed = false;
         try {
             const response = await fetch('/api/email-report/status', {
@@ -1041,10 +1047,11 @@ Nice to Have
                 body: JSON.stringify({ email: wait.email, scan_data: wait.scan }),
             });
             if (response.ok) confirmed = (await response.json()).confirmed === true;
+            wait.slow = response.status === 429;
         } catch (err) {
             // Network blip: try again on the next tick.
         } finally {
-            confirmCheckBusy = false;
+            wait.busy = false;
         }
         if (wait !== emailConfirmWait) return;
         if (confirmed) {
@@ -1058,7 +1065,7 @@ Nice to Have
 
     // Coming back from the inbox: check straight away rather than on the next tick.
     function checkConfirmedNow() {
-        if (!emailConfirmWait || document.visibilityState !== 'visible') return;
+        if (!emailConfirmWait || emailConfirmWait.busy || document.visibilityState !== 'visible') return;
         clearTimeout(emailConfirmWait.timer);
         checkConfirmed(emailConfirmWait);
     }

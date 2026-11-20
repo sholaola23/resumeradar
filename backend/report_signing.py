@@ -149,6 +149,22 @@ def email_id(email):
     return hmac.new(_key(), b"email:" + normalised.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
+_DOTLESS_DOMAINS = ("gmail.com", "googlemail.com")
+
+
+def inbox_id(email):
+    """Keyed hash of the inbox an address delivers to, for the per-address cap
+    on confirmation emails. name+anything@ and, at Gmail, dots in the name all
+    reach the same inbox, so they share one count."""
+    normalised = str(email or "").strip().lower()
+    local, _, domain = normalised.rpartition("@")
+    local = local.split("+", 1)[0]
+    if domain in _DOTLESS_DOMAINS:
+        local = local.replace(".", "")
+        domain = "gmail.com"
+    return email_id(f"{local}@{domain}")
+
+
 def _confirm_mac(issued_at, scan_id, address_id):
     message = f"{_CONFIRM_VERSION}.{issued_at}.{scan_id}.{address_id}".encode("ascii")
     return hmac.new(_key(), b"confirm:" + message, hashlib.sha256).hexdigest()

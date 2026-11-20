@@ -43,9 +43,19 @@ class FakeRedis:
     def exists(self, key):
         return int(key in self.values)
 
-    def set(self, key, value, ex=None):
+    def set(self, key, value, ex=None, nx=False):
+        if nx:
+            # Counters are created with SET NX EX, then INCR'd.
+            if key in self.counts:
+                return None
+            self.counts[key] = int(value)
+            return True
         self.values[key] = value
         return True
+
+    def delete(self, key):
+        self.counts.pop(key, None)
+        self.values.pop(key, None)
 
     def incr(self, key):
         self.counts[key] = self.counts.get(key, 0) + 1

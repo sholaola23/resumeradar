@@ -925,9 +925,10 @@ def _take_email_slot(key, limit, ttl):
     if not _redis_client:
         raise _EmailCountersUnavailable()
     try:
+        # Create the key with its expiry in one step, so a failure between
+        # two calls can never leave a counter (and its hash) with no TTL.
+        _redis_client.set(key, 0, ex=ttl, nx=True)
         sends = _redis_client.incr(key)
-        if sends == 1:
-            _redis_client.expire(key, ttl)
     except Exception as e:
         print(f"Report send counter unavailable: {type(e).__name__}")
         raise _EmailCountersUnavailable() from None
@@ -939,7 +940,9 @@ def _give_back_email_slot(key):
     if not _redis_client:
         return
     try:
-        _redis_client.decr(key)
+        if _redis_client.decr(key) < 0:
+            # The key expired in between, and DECR made a new one with no TTL.
+            _redis_client.delete(key)
     except Exception as e:
         print(f"Report send counter unavailable: {type(e).__name__}")
 
@@ -965,7 +968,7 @@ def _send_confirm_email(email, signed_scan, resend_key):
     """First email to a new address: a short note with a confirm link. The
     report itself only goes out once the owner of the address confirms."""
     scan_key = _confirm_scan_key(report_signing.signature_id(signed_scan))
-    address_key = _confirm_address_key(report_signing.email_id(email))
+    address_key = _confirm_address_key(report_signing.inbox_id(email))
     try:
         if not _take_email_slot(scan_key, _CONFIRM_SENDS_PER_SCAN, report_signing.MAX_AGE_SECONDS):
             return jsonify({"error": "This report has had several confirmation emails already. Please download it instead."}), 429
@@ -1221,7 +1224,7 @@ def email_report():
 
 
 @app.route('/api/email-report/status', methods=['POST'])
-@limiter.limit("300 per hour")
+@limiter.limit("600 per hour")
 def email_report_status():
     """Has this address confirmed it wants this scan's report? The open page
     asks every few seconds while it waits, then sends the report."""

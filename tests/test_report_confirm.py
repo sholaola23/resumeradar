@@ -151,6 +151,38 @@ class ReportConfirmTest(unittest.TestCase):
         # The refused one did not use up a slot on its own scan.
         self.assertEqual(self.ask('someone@example.com', self.rescan(50)).status_code, 200)
 
+    def test_tagged_and_dotted_addresses_share_one_cap(self):
+        variants = ['victim@gmail.com', 'victim+1@gmail.com', 'vic.tim@gmail.com',
+                    'VICTIM+x@googlemail.com', 'v.i.c.t.i.m+2@gmail.com', 'victim+3@gmail.com']
+        codes = [self.ask(v, self.rescan(i * 10)).status_code for i, v in enumerate(variants)]
+        self.assertEqual(codes, [200, 200, 200, 200, 200, 429])
+        # Dots still count as different people outside Gmail.
+        self.assertNotEqual(report_signing.inbox_id('a.b@example.com'), report_signing.inbox_id('ab@example.com'))
+        self.assertEqual(report_signing.inbox_id('a+x@example.com'), report_signing.inbox_id('a@example.com'))
+
+    def test_counters_get_their_expiry_before_counting(self):
+        calls = []
+
+        class Recording(FakeRedis):
+            def set(self, key, value, ex=None, nx=False):
+                calls.append(('set', key, ex, nx))
+                return super().set(key, value, ex, nx)
+
+            def incr(self, key):
+                calls.append(('incr', key))
+                return super().incr(key)
+        with patch.object(app_module, '_redis_client', Recording()):
+            self.ask()
+        for i, call in enumerate(calls):
+            if call[0] == 'incr':
+                self.assertEqual(calls[i - 1][:2], ('set', call[1]))
+                self.assertTrue(calls[i - 1][3])
+                self.assertGreater(calls[i - 1][2], 0)
+
+    def test_give_back_after_expiry_leaves_no_key(self):
+        app_module._give_back_email_slot('resumeradar:report_sends:gone')
+        self.assertNotIn('resumeradar:report_sends:gone', self.redis.counts)
+
     def test_failed_confirm_email_gives_both_slots_back(self):
         self.send.side_effect = RuntimeError('resend down')
         self.assertEqual(self.ask().status_code, 500)
