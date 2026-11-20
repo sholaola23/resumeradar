@@ -8,6 +8,7 @@ import re
 import time
 import zipfile
 from pypdf import PdfReader
+from pypdf.generic import DictionaryObject
 from docx import Document
 
 from backend import log_safe
@@ -60,14 +61,20 @@ def _pdf_content_size_ok(reader):
     seen = set()
 
     def _forms(resources):
+        # A null or malformed entry means "absent" (PDF spec), as pypdf treats it.
         resources = resources.get_object() if resources is not None else None
-        xobjects = resources.get("/XObject") if resources else None
-        if not xobjects:
+        if not isinstance(resources, DictionaryObject):
+            return []
+        xobjects = resources.get("/XObject")
+        xobjects = xobjects.get_object() if xobjects is not None else None
+        if not isinstance(xobjects, DictionaryObject):
             return []
         found = []
-        for ref in xobjects.get_object().values():
+        for ref in xobjects.values():
             key = getattr(ref, "idnum", None)
             xobj = ref.get_object()
+            if not isinstance(xobj, DictionaryObject):
+                continue
             key = ("ref", key, ref.generation) if key is not None else ("id", id(xobj))
             if key in seen or xobj.get("/Subtype") != "/Form":
                 continue

@@ -153,6 +153,14 @@ class PdfBudgetTests(unittest.TestCase):
         self.assertIsNone(text)
         self.assertIn("Could not read that PDF", err)
 
+    def test_form_with_null_resources_still_parses(self):
+        # "/Resources null" means absent (PDF spec). It must be skipped, not
+        # turned into "Could not read that PDF" (QA on PR 45).
+        path = self._path(_nested_form_pdf(1, fm1_resources=b"/Resources null"))
+        text, err = resume_parser.extract_text_from_pdf(path)
+        self.assertIsNone(text)
+        self.assertIn("empty", err)
+
     def test_small_nested_form_still_parses(self):
         # A small nested form is under the cap: it must reach extraction
         # (graphics only, so the existing "empty" message comes back).
