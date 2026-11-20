@@ -53,6 +53,22 @@ class AiLogPrivacyTest(unittest.TestCase):
         self.assertNotIn('Marker-Doe', logged)
         self.assertNotIn('Acme', logged)
 
+    def test_cv_builder_does_not_log_reply_text(self):
+        # cv_builder imports make_client by name, so patch its own copy.
+        cv_data = {
+            'personal': {'name': 'Test Person'},
+            'summary': 'summary', 'experience': [], 'education': [],
+            'skills': ['Python'], 'certifications': [],
+            'target_job_description': 'job text',
+        }
+        with mock.patch.object(cv_builder, 'make_client', _fake_client), \
+                mock.patch.object(cv_builder.ai_budget, 'check_budget', return_value=True), \
+                mock.patch.object(cv_builder.ai_budget, 'record_usage'):
+            logged = self._logged(lambda: cv_builder.polish_cv_sections(cv_data))
+        self.assertIn('could not be parsed', logged)
+        self.assertNotIn('Marker-Doe', logged)
+        self.assertNotIn('Acme', logged)
+
     def test_no_source_line_logs_a_slice_of_the_reply(self):
         for module in (ai_analyzer, cv_builder):
             with open(module.__file__, encoding='utf-8') as f:
