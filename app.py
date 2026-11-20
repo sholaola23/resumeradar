@@ -1253,13 +1253,16 @@ def confirm_email():
     token = request.form.get('t') if request.method == 'POST' else request.args.get('t')
     if report_signing.verify_confirm_token(token) is None:
         return render_template('confirm_email.html', state='expired'), 410
-    if request.method == 'GET':
+    # Only a POST confirms. Flask also answers HEAD (and OPTIONS) here, and
+    # link checkers send those, so every other method just shows the button.
+    if request.method != 'POST':
         return render_template('confirm_email.html', state='ask', token=token)
     scan_id, address_id = report_signing.verify_confirm_token(token)
     if not _redis_client:
         return render_template('confirm_email.html', state='unavailable', token=token), 503
     try:
-        _redis_client.set(_confirmed_key(scan_id, address_id), 1, ex=report_signing.MAX_AGE_SECONDS)
+        # nx: pressing an old link again must not restart the 24-hour clock.
+        _redis_client.set(_confirmed_key(scan_id, address_id), 1, ex=report_signing.MAX_AGE_SECONDS, nx=True)
     except Exception as e:
         print(f"Report confirmation store unavailable: {type(e).__name__}")
         return render_template('confirm_email.html', state='unavailable', token=token), 503

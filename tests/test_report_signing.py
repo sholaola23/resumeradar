@@ -44,6 +44,13 @@ class FakeRedis:
         return int(key in self.values)
 
     def set(self, key, value, ex=None, nx=False):
+        if nx and key.startswith('resumeradar:report_confirmed:'):
+            if key in self.values:
+                return None
+            self.values[key] = value
+            self.ttls = getattr(self, 'ttls', {})
+            self.ttls[key] = ex
+            return True
         if nx:
             # Counters are created with SET NX EX, then INCR'd.
             if key in self.counts:

@@ -96,6 +96,29 @@ class ReportConfirmTest(unittest.TestCase):
         self.assertIn(b'Address confirmed', done.data)
         self.assertEqual(self.status().get_json(), {'confirmed': True})
 
+    def test_head_and_options_do_not_confirm(self):
+        self.ask()
+        token = confirm_link_token(self.send.call_args[0][0])
+        self.assertEqual(self.client.head(f'/confirm-email?t={token}').status_code, 200)
+        self.client.options(f'/confirm-email?t={token}')
+        self.assertEqual(self.redis.values, {})
+        self.assertEqual(self.status().get_json(), {'confirmed': False})
+
+    def test_pressing_an_old_link_again_does_not_extend_the_confirmation(self):
+        self.ask()
+        token = click_confirm(self.client, self.send.call_args[0][0])
+        calls = []
+        original = self.redis.set
+
+        def spy(key, value, ex=None, nx=False):
+            calls.append((key, nx))
+            return original(key, value, ex, nx)
+        with patch.object(self.redis, 'set', spy):
+            self.assertEqual(self.client.post('/confirm-email', data={'t': token}).status_code, 200)
+        confirmed = [c for c in calls if c[0].startswith('resumeradar:report_confirmed:')]
+        self.assertEqual(len(confirmed), 1)
+        self.assertTrue(confirmed[0][1], 'the confirmed key must be set with nx')
+
     def test_report_goes_out_only_after_confirm(self):
         self.ask()
         self.ask()  # asking again before confirming sends another link, not the report
