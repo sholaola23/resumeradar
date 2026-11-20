@@ -102,7 +102,7 @@ class DocxSafetyTests(TempDirTestCase):
         self.assertIn("too many parts", message)
 
     def test_declared_size_over_the_limit(self):
-        # Stored, so the ratio is 1 and only the size check can catch it.
+        # Stored, so the ratio is 1 and the ratio check cannot catch it.
         members = [("word/document.xml", b"a" * (parser.MAX_DOCX_UNCOMPRESSED + 1))]
         safe, message = parser._docx_zip_is_safe(self.make_zip(members, zipfile.ZIP_STORED))
         self.assertFalse(safe)

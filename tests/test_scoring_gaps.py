@@ -255,6 +255,7 @@ class RecruiterTipsScoreTests(unittest.TestCase):
     def test_measurable_results_points_follow_quantification(self):
         quant, plain = BulletQuantificationTests.QUANT, BulletQuantificationTests.PLAIN
         for text, expected in (("\n".join([quant] * 3 + [plain] * 2), 30),
+                               ("\n".join([quant, plain]), 30),
                                ("\n".join([quant] + [plain] * 4), 20),
                                ("Jo Bloggs", 15),
                                ("\n".join([plain] * 3), 5)):
@@ -292,6 +293,14 @@ class RecruiterTipsScoreTests(unittest.TestCase):
                              ("gardener", 3)):
             with self.subTest(cv=cv):
                 result = engine.calculate_recruiter_tips_score(cv, jd)
+                self.assertEqual(points(result, "Job title alignment"), expected)
+
+    def test_title_alignment_band_edges(self):
+        jd = "alpha bravo charlie delta echo foxtrot golf hotel india juliet"
+        title = jd.split()
+        for matched, expected in ((5, 25), (4, 18), (3, 18), (2, 10), (1, 10), (0, 3)):
+            with self.subTest(matched=matched):
+                result = engine.calculate_recruiter_tips_score(" ".join(title[:matched]) or "zzz", jd)
                 self.assertEqual(points(result, "Job title alignment"), expected)
 
     def test_title_alignment_reads_only_the_first_three_lines(self):
