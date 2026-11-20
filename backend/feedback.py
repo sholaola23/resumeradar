@@ -23,20 +23,17 @@ _TTL = 90 * 86400
 MAX_COMMENT_CHARS = 500
 MAX_COMMENTS_PER_DAY = 200  # bounds Redis memory if someone floods the form
 
-# Links and emails are found one whitespace-separated word at a time, with
-# patterns that cannot backtrack, so the work grows in step with the length.
+# Links and emails are found one whitespace-separated word at a time, in a
+# single pass over each word, so the work grows in step with the length.
 #
 # A word holding "@", "://" or starting "www." is removed whole. Otherwise any
-# run like "janedoe.dev", "Jane.Me", "janedoe.рф" or "linkedin.com/in/x" is a
-# domain: dot-separated parts whose last part is 2 to 24 letters in any script
-# (or a punycode "xn--" part). There are over a thousand top-level domains, so
-# no list is kept. Known tech names are the only exception. Over-removing a
-# missing space ("useful.Thanks") is harmless; keeping a personal site is not.
-# Underscores count as breaks ("_janedoe.dev_"), so runs use [^\W_].
-_RUN = re.compile(r"(?:[^\W_]|[.-])+")
-_TRAILING = re.compile(r"[^\w/]*$")
-_DOMAIN = re.compile(r"[\w-]+(?:\.[\w-]+)+")
-_TOP_LEVEL = re.compile(r"[^\W\d_]{2,24}|xn--[\w-]+", re.IGNORECASE)
+# run like "janedoe.dev", "Jane.Me", "janedoe.рф", "janedoe.भारत" or
+# "linkedin.com/in/x" is a domain: dot-separated parts whose last part is 2 to
+# 24 letters in any script (combining vowel signs included) or a punycode
+# "xn--" part. There are over a thousand top-level domains, so no list is
+# kept. Known tech names are the only exception. Over-removing a missing space
+# ("useful.Thanks") is harmless; keeping a personal site is not. Underscores
+# count as breaks ("_janedoe.dev_").
 # Tech names and degree abbreviations that look like domains.
 _TECH_NAMES = frozenset({"asp.net", "vb.net", "ado.net", "socket.io",
                          "b.sc", "m.sc", "b.eng", "m.eng", "b.tech", "m.tech", "m.phil", "b.ed"})
@@ -55,12 +52,19 @@ def init(redis_client):
     _redis = redis_client
 
 
+def _is_letter(ch):
+    """A letter, digit or combining mark in any script (not "_")."""
+    return ch.isalnum() or unicodedata.category(ch)[0] == "M"
+
+
 def _is_domain(run):
     domain = run.strip(".-")
-    if not _DOMAIN.fullmatch(domain):
+    parts = domain.split(".")
+    if len(parts) < 2 or not all(parts):
         return False
-    top = domain.rsplit(".", 1)[1]
-    if not _TOP_LEVEL.fullmatch(top):
+    top = parts[-1]
+    is_punycode = top.lower().startswith("xn--")
+    if not is_punycode and not (2 <= len(top) <= 24 and not any(ch.isdigit() or ch == "-" for ch in top)):
         return False  # 3.11, v2.0, e.g
     return not (top.lower() == "js" or domain.lower() in _TECH_NAMES)  # Node.js, ASP.NET
 
@@ -68,14 +72,24 @@ def _is_domain(run):
 def _clean_word(word):
     if "@" in word or "://" in word or word.lower().startswith("www."):
         return _REMOVED
-    # The first domain in a word removes it and the rest of the word, so a
-    # path (linkedin.com/in/jane) or a tail (janedoe.dev_thanks) goes too.
-    # Closing punctuation at the end of the word is kept.
-    for match in _RUN.finditer(word):
-        if _is_domain(match.group(0)):
-            lead = len(match.group(0)) - len(match.group(0).lstrip(".-"))
-            tail = _TRAILING.search(word[match.end():]).group(0)
-            return word[:match.start() + lead] + _REMOVED + tail
+    # Runs of letters, digits, marks, "." and "-". The first run that is a
+    # domain removes it and the rest of the word, so a path
+    # (linkedin.com/in/jane) or a tail (janedoe.dev_thanks) goes too. Closing
+    # punctuation at the end of the word is kept.
+    start = None
+    for i in range(len(word) + 1):
+        inside = i < len(word) and (word[i] in ".-" or _is_letter(word[i]))
+        if inside and start is None:
+            start = i
+        elif not inside and start is not None:
+            run = word[start:i]
+            if _is_domain(run):
+                lead = len(run) - len(run.lstrip(".-"))
+                end = len(word)
+                while end > i and not _is_letter(word[end - 1]) and word[end - 1] not in "/_":
+                    end -= 1
+                return word[:start + lead] + _REMOVED + word[end:]
+            start = None
     return word
 
 
