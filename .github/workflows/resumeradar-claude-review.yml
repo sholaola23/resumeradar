@@ -49,10 +49,11 @@ jobs:
     # 123071861 is Shola's GitHub account (sholaola23); the id survives a rename.
     # The comment must come from his account, either typed by him or posted
     # through the Claude GitHub app (app id 1236702), which project build
-    # threads use. Comments that any other app posts under his account (Grok
-    # posts through the Cursor app) never start a run, and nor does a comment
-    # that only mentions the phrase. The monthly limit on the "ResumeRadar
-    # GitHub reviews" workspace caps what repeated requests can cost.
+    # threads use. A comment posted through any other app never starts a run
+    # (Grok replies from its own bot account through the Cursor app), and nor
+    # does a comment that only mentions the phrase. The monthly limit on the
+    # "ResumeRadar GitHub reviews" workspace caps what repeated requests can
+    # cost.
     if: >-
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '@claude-qa review') &&

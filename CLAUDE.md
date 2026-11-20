@@ -7,7 +7,7 @@ Process (review levels, reviews, merging, feature map) follows shola-project-run
 ## Stack
 
 - Python 3.11 (`runtime.txt`), Flask, gunicorn (`Procfile`, `render.yaml`). Vanilla HTML, CSS and JS. Use pip and a venv, not bun or npm.
-- Redis for rate limits, the AI budget, the AI cache and funnel counts. Without `REDIS_URL`, Flask-Limiter and the scan count fall back to memory, but the AI budget and the per-IP daily limits let every call through, so production must always have Redis.
+- Redis for rate limits, the AI budget, the AI cache and funnel counts. Without `REDIS_URL`, Flask-Limiter and the scan count fall back to memory, but the AI budget, the per-IP daily limits and the 3-emails-per-scan cap on reports let every call through, so production must always have Redis.
 - Anthropic Claude for suggestions (`backend/ai_analyzer.py`), Resend for emailed reports, Beehiiv for newsletter sign-ups. fpdf2 for the report PDF.
 - Env var names are in `.env.example`. Never put values in code, commits or chat.
 
@@ -48,7 +48,7 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a g
 
 **Reports.** `/api/scan` signs the fields the PDF and the report email use, and `/api/email-report` and `/api/download-report` only build a report from a result with a valid signature less than 24 hours old (`backend/report_signing.py`). Each signed scan can be emailed at most 3 times (`_REPORT_SENDS_PER_SCAN` in `app.py`). A new field in the report must be added to `SIGNED_FIELDS`, or it never reaches the report.
 
-**Secrets.** No keys in the repo. Env var names only.
+**Secrets.** No keys in the repo. Env var names only. Never remove `FLASK_SECRET_KEY` from Render: report signing keys off it (`backend/report_signing.py`), and without it (and without `AUDIT_HMAC_SECRET`) each gunicorn worker makes its own key, so a report download or email that lands on another worker fails with a 403.
 
 ## Wording
 
