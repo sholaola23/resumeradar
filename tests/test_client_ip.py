@@ -50,7 +50,7 @@ class ClientIpTest(unittest.TestCase):
 
     def test_ipv6_cloudflare_peer_uses_header(self):
         got = self._client_ip(CF_EDGE_V6, cf_header='2001:db8::1')
-        self.assertEqual(got['ip'], '2001:db8::1')
+        self.assertEqual(got['ip'], '2001:db8::/64')
 
     def test_spoofed_header_from_non_cloudflare_peer_is_ignored(self):
         got = self._client_ip(NOT_CF, cf_header='198.51.100.23')
@@ -62,7 +62,23 @@ class ClientIpTest(unittest.TestCase):
 
     def test_header_is_normalised(self):
         got = self._client_ip(CF_EDGE_V4, cf_header='2001:DB8:0:0::1, 1.2.3.4')
-        self.assertEqual(got['ip'], '2001:db8::1')
+        self.assertEqual(got['ip'], '2001:db8::/64')
+
+    def test_ipv6_keyed_by_slash_64(self):
+        a = self._client_ip(CF_EDGE_V4, cf_header='2001:db8:1:2::1')['ip']
+        b = self._client_ip(CF_EDGE_V4, cf_header='2001:db8:1:2:ffff:ffff:ffff:fffe')['ip']
+        c = self._client_ip(CF_EDGE_V4, cf_header='2001:db8:1:3::1')['ip']
+        self.assertEqual(a, '2001:db8:1:2::/64')
+        self.assertEqual(a, b)
+        self.assertNotEqual(a, c)
+
+    def test_ipv4_mapped_header_is_keyed_as_ipv4(self):
+        got = self._client_ip(CF_EDGE_V4, cf_header='::ffff:198.51.100.23')
+        self.assertEqual(got['ip'], '198.51.100.23')
+
+    def test_ipv6_peer_without_cloudflare_keyed_by_slash_64(self):
+        got = self._client_ip('2001:db8:9:9::5', cf_header='198.51.100.23')
+        self.assertEqual(got['ip'], '2001:db8:9:9::/64')
 
     def test_no_header_uses_peer(self):
         got = self._client_ip(NOT_CF)
@@ -120,6 +136,14 @@ class LimiterEndToEndTest(unittest.TestCase):
                              headers={'CF-Connecting-IP': '198.51.100.250'},
                              environ_base=_env(f'{CF_EDGE_V4}, {NOT_CF}'))
         self.assertEqual(r.status_code, 429)
+
+    def test_ipv6_visitor_rotating_inside_their_64_is_counted_together(self):
+        for i in range(LIMIT):
+            r = self._post(CF_EDGE_V4, cf_header=f'2001:db8:1:2::{i + 1:x}')
+            self.assertNotEqual(r.status_code, 429, f'request {i + 1} limited early')
+        self.assertEqual(self._post(CF_EDGE_V4, cf_header='2001:db8:1:2::ffff').status_code, 429)
+        # A different /64 is a different visitor.
+        self.assertNotEqual(self._post(CF_EDGE_V4, cf_header='2001:db8:1:3::1').status_code, 429)
 
     def test_spoofed_header_from_origin_cannot_dodge_the_limit(self):
         for i in range(LIMIT):

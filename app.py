@@ -129,6 +129,7 @@ def _client_ip():
     request. So the header is read only when remote_addr (the peer Render's
     proxy saw, via ProxyFix x_for=1) is a Cloudflare edge address. Otherwise
     remote_addr itself is the key, which is also what local development uses.
+    IPv6 addresses are keyed by their /64 (see _visitor_key).
     """
     remote = (request.remote_addr or '').strip()
     if _is_cloudflare_ip(remote):
@@ -139,10 +140,26 @@ def _client_ip():
             # a caller mint unlimited quota buckets.
             candidate = forwarded.split(',')[0].strip()[:45]
             try:
-                return str(ipaddress.ip_address(candidate))
+                return _visitor_key(ipaddress.ip_address(candidate))
             except ValueError:
                 pass
-    return remote or 'unknown'
+    try:
+        return _visitor_key(ipaddress.ip_address(remote))
+    except ValueError:
+        return remote or 'unknown'
+
+
+def _visitor_key(ip):
+    """
+    One key per visitor. IPv4: the address. IPv6: its /64, because an ISP
+    hands each customer a whole /64 and they can use any address in it, so
+    keying on the full address would give one person billions of buckets.
+    """
+    if ip.version == 6:
+        if ip.ipv4_mapped:
+            return str(ip.ipv4_mapped)
+        return str(ipaddress.ip_network(f'{ip}/64', strict=False))
+    return str(ip)
 
 
 _redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
