@@ -107,6 +107,96 @@ EDUCATION_KEYWORDS = {
     "bsc", "msc", "b.s.", "m.s.", "b.a.", "m.a.",
 }
 
+# How each recognised term is written when shown to a person. Matching stays
+# lower-case; this only changes display ("cdn" -> "CDN"). Terms not listed
+# are ordinary words and are shown as they are.
+KEYWORD_DISPLAY = {
+    "aws": "AWS", "azure": "Azure", "gcp": "GCP", "google cloud": "Google Cloud",
+    "amazon web services": "Amazon Web Services", "ec2": "EC2", "s3": "S3",
+    "lambda": "Lambda", "rds": "RDS", "vpc": "VPC", "iam": "IAM",
+    "cloudformation": "CloudFormation", "cloudwatch": "CloudWatch",
+    "terraform": "Terraform", "pulumi": "Pulumi", "ansible": "Ansible",
+    "puppet": "Puppet", "chef": "Chef", "iac": "IaC",
+    "docker": "Docker", "kubernetes": "Kubernetes", "k8s": "K8s", "ecs": "ECS",
+    "eks": "EKS", "fargate": "Fargate", "openshift": "OpenShift", "helm": "Helm",
+    "ci/cd": "CI/CD", "cicd": "CI/CD", "jenkins": "Jenkins",
+    "github actions": "GitHub Actions", "gitlab ci": "GitLab CI",
+    "circleci": "CircleCI", "devops": "DevOps", "devsecops": "DevSecOps",
+    "argocd": "Argo CD", "spinnaker": "Spinnaker",
+    "python": "Python", "javascript": "JavaScript", "typescript": "TypeScript",
+    "java": "Java", "c#": "C#", "c++": "C++", "go": "Go", "golang": "Golang",
+    "rust": "Rust", "ruby": "Ruby", "php": "PHP", "swift": "Swift",
+    "kotlin": "Kotlin", "scala": "Scala", "r": "R", "matlab": "MATLAB",
+    "bash": "Bash", "powershell": "PowerShell",
+    "react": "React", "reactjs": "ReactJS", "react.js": "React.js",
+    "angular": "Angular", "vue": "Vue", "vuejs": "Vue.js", "vue.js": "Vue.js",
+    "next.js": "Next.js", "nextjs": "Next.js", "node.js": "Node.js",
+    "nodejs": "Node.js", "express": "Express", "html": "HTML", "css": "CSS",
+    "tailwind": "Tailwind", "bootstrap": "Bootstrap", "sass": "Sass",
+    "webpack": "Webpack", "vite": "Vite",
+    "rest": "REST", "restful": "RESTful", "graphql": "GraphQL", "api": "API",
+    "apis": "APIs", "flask": "Flask", "django": "Django",
+    "spring boot": "Spring Boot", "fastapi": "FastAPI",
+    "sql": "SQL", "nosql": "NoSQL", "postgresql": "PostgreSQL", "mysql": "MySQL",
+    "mongodb": "MongoDB", "dynamodb": "DynamoDB", "redis": "Redis",
+    "elasticsearch": "Elasticsearch", "cassandra": "Cassandra", "oracle": "Oracle",
+    "etl": "ETL", "redshift": "Redshift", "bigquery": "BigQuery",
+    "snowflake": "Snowflake", "apache spark": "Apache Spark", "spark": "Spark",
+    "tableau": "Tableau", "kafka": "Kafka", "airflow": "Airflow",
+    "ai": "AI", "ml": "ML", "nlp": "NLP", "tensorflow": "TensorFlow",
+    "pytorch": "PyTorch", "llm": "LLM", "generative ai": "generative AI",
+    "oauth": "OAuth", "sso": "SSO", "siem": "SIEM", "gdpr": "GDPR",
+    "hipaa": "HIPAA", "soc2": "SOC 2", "soc 2": "SOC 2",
+    "prometheus": "Prometheus", "grafana": "Grafana", "datadog": "Datadog",
+    "splunk": "Splunk", "new relic": "New Relic", "elk stack": "ELK Stack",
+    "cloudtrail": "CloudTrail",
+    "dns": "DNS", "tcp/ip": "TCP/IP", "http": "HTTP", "https": "HTTPS",
+    "cdn": "CDN", "cloudfront": "CloudFront", "route 53": "Route 53", "vpn": "VPN",
+    "git": "Git", "github": "GitHub", "gitlab": "GitLab", "bitbucket": "Bitbucket",
+    "linux": "Linux", "windows server": "Windows Server", "unix": "Unix",
+    "macos": "macOS",
+    "agile": "Agile", "scrum": "Scrum", "kanban": "Kanban", "sdlc": "SDLC",
+    "jira": "Jira", "confluence": "Confluence",
+    "selenium": "Selenium", "cypress": "Cypress", "jest": "Jest", "qa": "QA",
+    # Certifications
+    "aws certified": "AWS Certified", "solutions architect": "Solutions Architect",
+    "cloud practitioner": "Cloud Practitioner",
+    "developer associate": "Developer Associate",
+    "sysops administrator": "SysOps Administrator",
+    "devops engineer": "DevOps Engineer", "azure certified": "Azure Certified",
+    "az-900": "AZ-900", "az-104": "AZ-104", "az-305": "AZ-305", "az-400": "AZ-400",
+    "azure fundamentals": "Azure Fundamentals",
+    "azure administrator": "Azure Administrator",
+    "azure solutions architect": "Azure Solutions Architect",
+    "google cloud certified": "Google Cloud Certified",
+    "professional cloud architect": "Professional Cloud Architect",
+    "associate cloud engineer": "Associate Cloud Engineer",
+    "professional data engineer": "Professional Data Engineer",
+    "pmp": "PMP", "prince2": "PRINCE2", "itil": "ITIL", "comptia": "CompTIA",
+    "cissp": "CISSP", "cism": "CISM", "cisa": "CISA", "ccna": "CCNA",
+    "ccnp": "CCNP", "certified kubernetes": "Certified Kubernetes", "cka": "CKA",
+    "ckad": "CKAD", "scrum master": "Scrum Master", "csm": "CSM", "safe": "SAFe",
+    "togaf": "TOGAF",
+    # Education
+    "mba": "MBA", "phd": "PhD", "bsc": "BSc", "msc": "MSc", "b.s.": "B.S.",
+    "m.s.": "M.S.", "b.a.": "B.A.", "m.a.": "M.A.",
+}
+
+
+def display_keyword(keyword):
+    """Return a recognised term the way people write it (CDN, CloudFront)."""
+    return KEYWORD_DISPLAY.get(keyword, keyword)
+
+
+def keyword_display_map(*keyword_groups):
+    """Display names for the terms in the given {category: [terms]} dicts.
+
+    Only terms whose display form differs are included, so the map stays small.
+    """
+    terms = {term for group in keyword_groups for words in group.values() for term in words}
+    return {term: KEYWORD_DISPLAY[term] for term in sorted(terms) if term in KEYWORD_DISPLAY}
+
+
 # Education terms that are equivalent for matching purposes.
 # If a JD says "bachelor" and a resume says "bsc", that's a match.
 EDUCATION_EQUIVALENCES = [
@@ -237,23 +327,25 @@ def _keyword_in_text(keyword, text, *, use_stemming=True):
                       technical skills where stems cause false positives
                       (e.g., "scala" stem "scal" matching "scalable").
     """
-    # Escape special regex characters in the keyword
-    escaped = re.escape(keyword)
-    # Use word boundaries for accurate matching
-    pattern = r'(?<!\w)' + escaped + r'(?!\w)'
-    if re.search(pattern, text, re.IGNORECASE):
-        return True
+    return any(re.search(pattern, text, re.IGNORECASE)
+               for pattern in _keyword_patterns(keyword, use_stemming=use_stemming))
 
+
+def _keyword_patterns(keyword, *, use_stemming=True):
+    """Regex patterns that count as evidence of a keyword, strongest first.
+
+    Shared by matching and by locate_job_terms so the highlighted job text
+    can never disagree with the keyword lists.
+    """
+    # Word boundaries that also work for names such as c++ and node.js
+    patterns = [r'(?<!\w)' + re.escape(keyword) + r'(?!\w)']
     if use_stemming:
-        # Check stem variations for common word forms
-        # e.g., "collaboration" should match "collaborate", "collaborated", "collaborating"
+        # Stem variations for common word forms, e.g. "collaboration"
+        # matches "collaborate", "collaborated", "collaborating"
         stem = keyword.rstrip('esiond').rstrip('at').rstrip('ing')
         if len(stem) >= 4:
-            stem_pattern = r'\b' + re.escape(stem) + r'\w*\b'
-            if re.search(stem_pattern, text, re.IGNORECASE):
-                return True
-
-    return False
+            patterns.append(r'\b' + re.escape(stem) + r'\w*\b')
+    return patterns
 
 
 def _expand_education(keywords):
@@ -450,6 +542,14 @@ def _positive_evidence(text):
     return re.sub(terms + suffix, ' ', text, flags=re.I)
 
 
+# A list introduced as examples ("monitoring tools (A, B, C)", "such as A, B")
+# names options, so one of them is enough. A plain "Technologies: A, B, C"
+# heading is a full list, not a choice. Used by analyze_requirements.
+_EXAMPLE_LIST_LEAD = re.compile(
+    r'\b(?:tools?|technologies|frameworks?|platforms?|languages?)\s*\(\s*$'
+    r'|\b(?:such as|for example|e\.g\.|like)\s*[(:]?\s*$', re.I)
+
+
 def analyze_requirements(resume_text, job_description, match_results):
     """Return source-grounded missing-term advice; priorities are textual cues only.
 
@@ -457,7 +557,8 @@ def analyze_requirements(resume_text, job_description, match_results):
     are suppressed only when positive resume evidence satisfies that local list.
     """
     resume = extract_keywords_from_text(resume_text)
-    sentences = re.split(r'(?<=[.!?])\s+|[;\n]+', _strip_jd_boilerplate(job_description))
+    # Do not end a sentence at "e.g." or "i.e.": the list after it belongs to the same ask.
+    sentences = re.split(r'(?<!\be\.g\.)(?<!\bi\.e\.)(?<=[.!?])\s+|[;\n]+', _strip_jd_boilerplate(job_description))
     evidence = []
     section_priority = "unspecified"
     for sentence in sentences:
@@ -476,6 +577,7 @@ def analyze_requirements(resume_text, job_description, match_results):
             continue
         terms = extract_keywords_from_text(sentence, strict=True)
         alternatives = set()
+        one_of = {}  # term -> the other options in an unmet "A, B or C" list
         # A list such as Jenkins, GitHub Actions or CircleCI is one choice.
         # Limit candidates to contiguous tool names joined only by list syntax.
         positions = []
@@ -494,34 +596,151 @@ def analyze_requirements(resume_text, job_description, match_results):
             connected = bool(pos[2] and group and re.fullmatch(r',?\s*(?:or)?\s*|/', connector, re.I))
             if not connected and group:
                 keys = {item[2] for item in group}
-                if has_or and keys & resume['technical_skills']:
-                    alternatives |= keys
+                # "tools (A, B, C)" and "such as A, B" also list options, not a full set.
+                is_choice = has_or or bool(_EXAMPLE_LIST_LEAD.search(sentence[:group[0][0]]))
+                if is_choice and len(keys) > 1:
+                    if keys & resume['technical_skills']:
+                        alternatives |= keys
+                    else:
+                        for key in keys:
+                            one_of.setdefault(key, set()).update(keys - {key})
                 group, has_or = [], False
             if connected and re.search(r'\bor\b|/', connector, re.I):
                 has_or = True
             group.append(pos)
-        evidence.append((sentence, priority, terms, alternatives))
+        evidence.append((sentence, priority, terms, alternatives, one_of))
 
     recommendations = []
     order = {'required': 0, 'unspecified': 1, 'preferred': 2}
+    category_order = {'technical_skills': 0, 'certifications': 1, 'education': 2, 'soft_skills': 3}
     for category, missing in match_results.get('missing_keywords', {}).items():
         if category == 'action_verbs':
             continue
         for keyword in missing:
-            sources = [(sentence, priority) for sentence, priority, terms, alternatives in evidence
+            sources = [(order[priority], index, sentence, priority, sorted(one_of.get(keyword, ())))
+                       for index, (sentence, priority, terms, alternatives, one_of) in enumerate(evidence)
                        if keyword in terms.get(category, set()) and keyword not in alternatives]
             if not sources:
                 continue
-            sentence, priority = min(sources, key=lambda source: order[source[1]])
+            _, first_index, sentence, priority, options = min(sources)
+            name = display_keyword(keyword)
+            option_names = [display_keyword(option) for option in options]
+            if category in ('education', 'certifications'):
+                suggestion = f'If you hold this qualification, list {name} accurately in your education or certifications section.'
+            elif option_names:
+                suggestion = (f'The job lists {name} as one option alongside {", ".join(option_names)}. '
+                              'If you have used any of them, add a relevant experience bullet describing the project and your contribution. Otherwise, leave it out.')
+            else:
+                suggestion = f'If you have used {name}, add a relevant experience bullet describing the project and your contribution. Otherwise, leave it out.'
             recommendations.append({
-                'keyword': keyword, 'category': category, 'priority': priority,
+                'keyword': keyword, 'display': name, 'category': category, 'priority': priority,
+                'one_of': option_names, 'mentions': len(sources),
                 'reason': f'Job description: “{sentence}”',
-                'suggestion': (f'If you hold this qualification, list {keyword} accurately in your education or certifications section.'
-                               if category in ('education', 'certifications') else
-                               f'If you have used {keyword}, add a relevant experience bullet describing the project and your contribution. Otherwise, leave it out.'),
+                'suggestion': suggestion,
+                # Sort key: a definite ask beats one option from a list; then terms in the
+                # job's first line (usually the title), technical terms, terms the job
+                # repeats, and finally the order the job gives them in.
+                '_rank': (order[priority], bool(option_names), min(source[1] for source in sources) != 0,
+                          category_order.get(category, 4), -len(sources), first_index, keyword),
             })
-    category_order = {'technical_skills': 0, 'certifications': 1, 'education': 2, 'soft_skills': 3}
-    return sorted(recommendations, key=lambda item: (order[item['priority']], category_order.get(item['category'], 4), item['keyword']))
+    recommendations.sort(key=lambda item: item.pop('_rank'))
+    return recommendations
+
+
+def locate_job_terms(job_description, match_results):
+    """Split the job description into segments marking each recognised term.
+
+    Returns a list of {"text"} and {"text", "keyword", "category", "status"}
+    segments whose text joins back to the job description exactly. A marked
+    segment holding a shorter listed term also has "parts": the same text split
+    into plain and marked pieces, so the inner term keeps its own status.
+    Every listed term gets at least one mark carrying its own status. Status is
+    "matched" or "missing", taken from match_results, so this view is the same
+    evidence as the keyword lists. Text after the equal-opportunity boilerplate
+    marker is returned unmarked because extraction ignores it. Action verbs are
+    left out: they are scored from the CV, not the job description.
+    """
+    status = {}
+    for label, key in (("matched", "matched_keywords"), ("missing", "missing_keywords")):
+        for category, keywords in match_results.get(key, {}).items():
+            if category != "action_verbs":
+                for keyword in keywords:
+                    status[(category, keyword)] = label
+
+    scanned = _strip_jd_boilerplate(job_description)
+    spans = []
+    for (category, keyword), label in status.items():
+        if category == "technical_skills" and keyword in _AMBIGUOUS_TECH:
+            patterns = [_AMBIGUOUS_TECH[keyword]]
+        else:
+            patterns = [re.compile(pattern, re.IGNORECASE) for pattern in
+                        _keyword_patterns(keyword, use_stemming=category != "technical_skills")]
+        for pattern in patterns:
+            found = False
+            for match in pattern.finditer(scanned):
+                start, end = match.span()
+                # Some context patterns consume a leading separator, e.g. " R".
+                while start < end and scanned[start] in " \t\r\n,;(/":
+                    start += 1
+                if start < end:
+                    spans.append((start, end, keyword, category, label))
+                    found = True
+            if found:
+                break  # same order as _keyword_in_text: exact form, then stem
+
+    # Longest term wins where two overlap ("google cloud" over "cloud"). A
+    # term inside it ("aws" in "aws certified") gets its own mark within that
+    # one, so it keeps its own status.
+    spans.sort(key=lambda span: (span[0], span[0] - span[1]))
+    marks, cursor = [], 0
+    for start, end, keyword, category, label in spans:
+        if start >= cursor:
+            marks.append({"span": (start, end), "keyword": keyword, "category": category,
+                          "status": label, "inner": []})
+            cursor = end
+            continue
+        outer = marks[-1]
+        inner = outer["inner"]
+        if keyword == outer["keyword"] or any(item["keyword"] == keyword for item in inner):
+            continue
+        if end <= cursor and (not inner or start >= inner[-1]["span"][1]):
+            inner.append({"span": (start, end), "keyword": keyword, "category": category, "status": label})
+        elif end > cursor:
+            # Overlaps only partly ("cloud computing" after "Google Cloud"):
+            # mark the part not already marked, so it keeps its own status.
+            rest = cursor
+            while rest < end and scanned[rest].isspace():
+                rest += 1
+            marks.append({"span": (rest, end), "keyword": keyword, "category": category,
+                          "status": label, "inner": []})
+            cursor = end
+
+    def piece(mark):
+        start, end = mark["span"]
+        return {"text": job_description[start:end], "keyword": mark["keyword"],
+                "category": mark["category"], "status": mark["status"]}
+
+    segments, cursor = [], 0
+    for mark in marks:
+        start, end = mark["span"]
+        if start > cursor:
+            segments.append({"text": job_description[cursor:start]})
+        segment = piece(mark)
+        if mark["inner"]:
+            parts, at = [], start
+            for item in mark["inner"]:
+                if item["span"][0] > at:
+                    parts.append({"text": job_description[at:item["span"][0]]})
+                parts.append(piece(item))
+                at = item["span"][1]
+            if at < end:
+                parts.append({"text": job_description[at:end]})
+            segment["parts"] = parts
+        segments.append(segment)
+        cursor = end
+    if cursor < len(job_description):
+        segments.append({"text": job_description[cursor:]})
+    return segments
 
 
 def analyze_ats_formatting(resume_text):
@@ -553,7 +772,7 @@ def analyze_ats_formatting(resume_text):
         issues.append({
             "type": "warning",
             "message": f"Missing standard section headers: {', '.join(missing_sections).title()}",
-            "detail": "ATS systems look for standard section headers to categorize your information. Make sure you have clearly labeled sections."
+            "detail": "ATS systems look for standard section headers to categorise your information. Make sure you have clearly labelled sections."
         })
 
     sections_found_ratio = (len(required_sections) - len(missing_sections)) / len(required_sections)
@@ -565,15 +784,15 @@ def analyze_ats_formatting(resume_text):
     if word_count < 150:
         issues.append({
             "type": "warning",
-            "message": "Resume seems very short",
-            "detail": f"Your resume is about {word_count} words. Most effective resumes are 400-800 words. Consider adding more detail about your accomplishments."
+            "message": "Your CV seems very short",
+            "detail": f"Your CV is about {word_count} words. Most effective CVs are 400-800 words. Consider adding more detail about your accomplishments."
         })
         wc_points = 5
     elif word_count > 1200:
         issues.append({
             "type": "info",
-            "message": "Resume is quite long",
-            "detail": f"Your resume is about {word_count} words. For most roles, 1-2 pages (400-800 words) is ideal. Consider trimming less relevant details."
+            "message": "Your CV is quite long",
+            "detail": f"Your CV is about {word_count} words. For most roles, 1-2 pages (400-800 words) is ideal. Consider trimming less relevant details."
         })
         wc_points = 10
     elif 400 <= word_count <= 800:
@@ -591,7 +810,7 @@ def analyze_ats_formatting(resume_text):
         issues.append({
             "type": "critical",
             "message": "No email address detected",
-            "detail": "Make sure your email address is clearly visible at the top of your resume."
+            "detail": "Make sure your email address is clearly visible at the top of your CV."
         })
 
     if not has_phone:
@@ -611,7 +830,7 @@ def analyze_ats_formatting(resume_text):
         issues.append({
             "type": "warning",
             "message": "Few action verbs detected",
-            "detail": "Strong resumes use action verbs (led, built, improved, managed) to describe accomplishments. Consider rewriting bullet points to start with impactful verbs."
+            "detail": "Strong CVs use action verbs (led, built, improved, managed) to describe accomplishments. Consider rewriting bullet points to start with impactful verbs."
         })
 
     if action_verb_count >= 8:
@@ -769,7 +988,7 @@ def calculate_recruiter_tips_score(resume_text, job_description=""):
         rl_points = 10
         length_ok = False
     checklist.append({
-        "label": "Resume length",
+        "label": "CV length",
         "passed": length_ok,
         "points": rl_points,
         "detail": f"{word_count} words (400-800 ideal)",
@@ -797,7 +1016,7 @@ def calculate_recruiter_tips_score(resume_text, job_description=""):
         "label": "Job title alignment",
         "passed": jt_points >= 18,
         "points": jt_points,
-        "detail": "Resume aligns with job requirements" if jt_points >= 18 else "Consider tailoring resume to match the job title",
+        "detail": "Your CV aligns with the job requirements" if jt_points >= 18 else "Consider tailoring your CV to match the job title",
     })
 
     total_score = sum(item["points"] for item in checklist)

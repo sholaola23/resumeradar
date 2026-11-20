@@ -82,6 +82,37 @@ class SiteCopyTest(unittest.TestCase):
         from backend import ai_cache
         self.assertEqual(ai_cache._CACHE_TTL, 3600)
         self.assertIn('one hour', PRIVACY_LINE)
+        # "Results are cached" must stay true for the scan itself, not only
+        # for cover letters: the scan's AI call has to write to the cache.
+        analyzer = read('backend', 'ai_analyzer.py')
+        scan = analyzer[analyzer.index('def get_ai_suggestions'):analyzer.index('\ndef ', analyzer.index('def get_ai_suggestions') + 1)]
+        self.assertIn('ai_cache.cache_set(', scan)
+        self.assertIn('cached for up to one hour', self.page('/privacy'))
+
+    def test_no_log_line_carries_cv_or_job_text(self):
+        # "Not saved by ResumeRadar" covers the server logs too.
+        risky = re.compile(r'\b(print|logger\.\w+|logging\.\w+)\(.*\b(response_text|resume_text|job_description|cv_text|clean_text)\b')
+        offenders = []
+        for folder in ('backend', ''):
+            base = os.path.join(ROOT, folder)
+            for name in sorted(os.listdir(base)):
+                if not name.endswith('.py'):
+                    continue
+                with open(os.path.join(base, name), encoding='utf-8') as f:
+                    for no, line in enumerate(f, 1):
+                        code = line.split('#', 1)[0]
+                        if risky.search(code) and 'len(' not in code:
+                            offenders.append(f'{folder or "."}/{name}:{no}: {line.strip()}')
+        self.assertEqual(offenders, [])
+
+    def test_privacy_page_lists_what_the_browser_keeps(self):
+        page = self.page('/privacy')
+        self.assertIn('a short code made from the job description', page)
+        js = read('static', 'js', 'app.js')
+        entry = js[js.index('const entry = {'):js.index('};', js.index('const entry = {'))]
+        fields = set(re.findall(r'^\s*(\w+):', entry, re.M))
+        # Every field a history entry stores is named on the privacy page.
+        self.assertEqual(fields, {'id', 'jobKey', 'scoreVersion', 'date', 'score', 'matched', 'missing', 'total', 'jdSnippet'})
 
     def test_strapline(self):
         home = self.page('/')
@@ -94,7 +125,7 @@ class SiteCopyTest(unittest.TestCase):
         home = self.page('/')
         blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', home, re.S)
         faq = next(json.loads(b) for b in blocks if '"FAQPage"' in b)
-        visible = dict(re.findall(r'<summary>(.*?)</summary>\s*<p>(.*?)</p>', home, re.S))
+        visible = dict(re.findall(r'<summary>([^<]*)</summary>\s*<p>(.*?)</p>', home, re.S))
         for item in faq['mainEntity']:
             question = item['name']
             self.assertIn(question, visible)
@@ -124,7 +155,7 @@ class SiteCopyTest(unittest.TestCase):
         self.assertRegex(home, r'<button type="button" class="file-upload-area" id="dropZone"')
         self.assertNotIn('<div class="card-header-toggle"', home)
         toggles = re.findall(r'<button type="button" class="card-header-toggle"[^>]*>', home)
-        self.assertEqual(len(toggles), 4)  # the share card is open by default since PR #7
+        self.assertEqual(len(toggles), 5)  # save, AI, categories, matched, ATS
         for tag in toggles:
             target = re.search(r'data-target="(\w+)"', tag).group(1)
             self.assertIn(f'aria-controls="{target}"', tag)

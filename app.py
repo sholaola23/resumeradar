@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.resume_parser import parse_resume
-from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements
+from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
@@ -557,7 +557,7 @@ def scan_resume():
             file_type = resume_file.filename.rsplit('.', 1)[1].lower()
 
         elif not resume_text:
-            return jsonify({"error": "Please upload a resume file or paste your resume text."}), 400
+            return jsonify({"error": "Please upload your CV or paste your CV text."}), 400
 
         # 3. Parse the resume
         parse_result = parse_resume(
@@ -615,6 +615,10 @@ def scan_resume():
             "category_scores": match_results["category_scores"],
             "matched_keywords": match_results["matched_keywords"],
             "missing_keywords": match_results["missing_keywords"],
+            "keyword_display": keyword_display_map(match_results["matched_keywords"], match_results["missing_keywords"]),
+            # The visitor's own job text, marked up for the "View in job
+            # description" panel. Computed per request; never stored or logged.
+            "job_description_view": locate_job_terms(job_description, match_results),
             "ats_formatting": ats_check,
             "recruiter_tips": recruiter_tips,
             "ai_suggestions": ai_suggestions,
@@ -933,7 +937,8 @@ def email_report():
 
             <div style="background: #1f2937; padding: 24px; border-radius: 0 0 12px 12px; text-align: center;">
                 <p style="color: #9ca3af; margin: 0 0 4px; font-size: 13px;">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" style="color: #93c5fd; text-decoration: none;">Olushola Oladipupo</a></p>
-                <p style="color: #6b7280; margin: 0; font-size: 11px;">{PRIVACY_LINE}</p>
+                <p style="color: #9ca3af; margin: 0 0 4px; font-size: 13px;">Check your own CV free at <a href="https://resumeradar.sholastechnotes.com/?utm_source=report_email&amp;utm_medium=email" style="color: #93c5fd; text-decoration: none;">resumeradar.sholastechnotes.com</a></p>
+                                <p style="color: #6b7280; margin: 0; font-size: 11px;">{PRIVACY_LINE}</p>
             </div>
         </div>
         """
