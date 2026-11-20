@@ -53,7 +53,7 @@ CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a g
 - AI prompts must tell the model not to invent experience, metrics or skills.
 - The strapline is "Make your experience clear." (`STRAPLINE` in `backend/site_copy.py`). Change it there, not in a template.
 - UK spelling and "CV" in new text. "resume" stays where it is part of an existing page URL, title or the product name.
-- Never name WorkCrew on the site, in emails or in docs.
+- Never name any company as the site's owner or operator on the site, in emails or in docs. It is Shola's personal project.
 - The public scan count (`/api/scan-count`) is also shown on sholaoladipupo.com. Don't change how it is counted or shown without Shola's OK.
 
 ## Hosting and deploys
@@ -74,5 +74,5 @@ Grok (`@grok-qa review`) posts its verdict from a separate bot account through t
 - `qa_suite.py` prints FAIL lines and no "ALL CLEAR"; unittest prints `FAILED (failures=N)`; node prints `fail` above 0.
 - `/build` or any `/api/build/*` route returns anything but 404: the builder guard is broken.
 - `/api/health` shows `"ai_enabled": false`: `ANTHROPIC_API_KEY` is not set (the check only looks for the key, not whether it works), and scans fall back to rule-based suggestions.
-- Users see "This tool is temporarily unavailable due to high demand": the daily AI budget or a per-IP limit is spent. That is the guard working, not a bug to fix by raising limits.
+- Users see "This tool is temporarily unavailable due to high demand" (`BUDGET_EXCEEDED_MESSAGE` in `backend/ai_budget.py`): the daily AI budget is spent. A 429 with "Daily limit reached (N per day). Try again tomorrow." means a per-IP tool limit is spent. Both are the guards working, not bugs to fix by raising limits.
 - A review comment says the review failed (sign-in, spend limit, timeout): report it to Shola, don't retry.
