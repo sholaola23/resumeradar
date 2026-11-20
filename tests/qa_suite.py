@@ -132,11 +132,12 @@ def run_tests():
             ('copyReportBtn', 'Copy report button'),
             ('downloadReportBtn', 'Download PDF button'),
             ('shareCard', 'Share card'),
-            ('newsletterPopup', 'Newsletter popup'),
             ('errorMessage', 'Error message div'),
         ]
         for elem_id, label in key_elements:
             check(f"HTML has #{elem_id}", f'id="{elem_id}"' in html, label)
+        # The forced newsletter pop-up was removed in Nov 2026 and must not return.
+        check("HTML has no #newsletterPopup", 'id="newsletterPopup"' not in html, "Forced newsletter popup removed")
 
         # ---- SECTION 5: META TAGS ----
         check("OG title meta tag", 'og:title' in html)

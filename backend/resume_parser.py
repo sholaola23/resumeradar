@@ -9,6 +9,8 @@ import zipfile
 from pypdf import PdfReader
 from docx import Document
 
+from backend import log_safe
+
 
 # ---------------------------------------------------------------------------
 # Upload safety limits (AI-02)
@@ -95,7 +97,7 @@ def extract_text_from_pdf(file_path):
 
     except Exception as e:
         # Log the library detail, but don't hand it to the client.
-        print(f"PDF parse error: {type(e).__name__}: {e}")
+        print(f"PDF parse error: {log_safe.describe(e)}")
         if "decrypt" in str(e).lower() or "password" in str(e).lower():
             return None, "That PDF is password-protected. Please remove the password or paste your CV text."
         return None, "Could not read that PDF. Please try a different file or paste your CV text."
@@ -205,7 +207,7 @@ def extract_text_from_docx(file_path):
         return clean_text(full_text), None
 
     except Exception as e:
-        print(f"DOCX parse error: {type(e).__name__}: {e}")
+        print(f"DOCX parse error: {log_safe.describe(e)}")
         return None, "Could not read that DOCX. Please try a different file or paste your CV text."
 
 

@@ -9,6 +9,7 @@ import json
 from anthropic import Anthropic
 
 from backend import ai_cache
+from backend import log_safe
 from backend.keyword_engine import display_keyword
 from backend import ai_budget
 from backend import ai_metrics
@@ -318,8 +319,7 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
             }
 
     except Exception as e:
-        error_msg = str(e)
-        print(f"Claude API error: {error_msg}")
+        print(f"Claude API error: {log_safe.describe(e)}")
 
         # Return fallback suggestions if API fails
         fallback = _get_fallback_suggestions(keyword_results)
@@ -428,7 +428,7 @@ Write the cover letter body now:"""
 
     except Exception as e:
         ai_metrics.record_error(tool)
-        print(f"Cover letter generation error: {str(e)}")
+        print(f"Cover letter generation error: {log_safe.describe(e)}")
         return {"error": "Could not generate cover letter. Please try again."}
 
 
@@ -502,7 +502,7 @@ Rewritten bullet:"""
 
     except Exception as e:
         ai_metrics.record_error(tool)
-        print(f"Bullet enhance error: {str(e)}")
+        print(f"Bullet enhance error: {log_safe.describe(e)}")
         return {"error": "Could not enhance bullet point. Please try again."}
 
 
@@ -575,7 +575,7 @@ Professional Summary:"""
 
     except Exception as e:
         ai_metrics.record_error(tool)
-        print(f"Summary generation error: {str(e)}")
+        print(f"Summary generation error: {log_safe.describe(e)}")
         return {"error": "Could not generate summary. Please try again."}
 
 
