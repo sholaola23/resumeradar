@@ -28,6 +28,7 @@ from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
+from backend.score_format import whole_percent
 from backend import report_signing
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.role_content import ROLE_CONTENT
@@ -1003,7 +1004,7 @@ def email_report():
             except (TypeError, ValueError):
                 return 0
 
-        score = _as_int(scan_data.get('match_score', 0))
+        score = whole_percent(scan_data.get('match_score', 0))
         score_label = 'Not scored' if scan_data.get('match_score') is None else f'{score}%'
         total_matched = _as_int(scan_data.get('total_matched', 0))
         total_missing = _as_int(scan_data.get('total_missing', 0))
