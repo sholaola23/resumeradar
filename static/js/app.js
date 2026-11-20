@@ -361,6 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             btn.classList.add('active');
             document.getElementById(`tab-${targetTab}`).classList.add('active');
+            uploadError.hidden = true; // an old file error no longer applies
         });
     });
 
@@ -494,8 +495,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
                     trackEvent('scan_failed');
+                    setLoading(false); // bring the form back first, so the error is not pushed off screen
                     showError('The scan is taking longer than usual. Please try again in a moment. Your text is still here.');
-                    setLoading(false);
                     return;
                 }
                 throw err;
@@ -506,8 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok || data.error) {
                 trackEvent('scan_failed');
-                showError(data.error || 'Something went wrong. Please try again.');
                 setLoading(false);
+                showError(data.error || 'Something went wrong. Please try again.');
                 return;
             }
 
@@ -529,6 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Scan error:', err);
             trackEvent('scan_failed');
+            setLoading(false);
             showError('We could not reach ResumeRadar. Check your connection and try again. Your text is still here.');
         } finally {
             setLoading(false);
@@ -998,6 +1000,12 @@ Nice to Have
     const visualViewport = window.visualViewport;
     function fitModalToViewport() {
         if (!visualViewport || emailModal.style.display !== 'flex') return;
+        if (Math.abs(visualViewport.scale - 1) > 0.01) {
+            // Pinch-zoomed: leave the overlay at full size rather than squash the dialog.
+            emailModal.style.removeProperty('--modal-top');
+            emailModal.style.removeProperty('--modal-height');
+            return;
+        }
         emailModal.style.setProperty('--modal-top', `${visualViewport.offsetTop}px`);
         emailModal.style.setProperty('--modal-height', `${visualViewport.height}px`);
     }
@@ -1008,7 +1016,8 @@ Nice to Have
 
     // Return in the email field sends, as it would in a form.
     emailInput.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || e.isComposing) return;
+        // keyCode 229: Safari's Return that confirms an input-method word.
+        if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
         e.preventDefault();
         if (!sendEmailBtn.disabled) sendEmailBtn.click();
     });
@@ -2246,8 +2255,14 @@ Nice to Have
     function showError(msg, focusEl) {
         uploadError.hidden = true;
         errorMessage.style.display = 'block';
-        announce(errorMessage, msg);
-        (focusEl || errorMessage).focus();
+        if (focusEl) {
+            announce(errorMessage, msg);
+            focusEl.focus();
+        } else {
+            // Moving focus to the message reads it, so fill it in before focusing.
+            errorMessage.textContent = msg;
+            errorMessage.focus();
+        }
     }
 
     // Errors about the CV file sit beside the upload box, not below the Scan button.
