@@ -23,20 +23,23 @@ _TTL = 90 * 86400
 MAX_COMMENT_CHARS = 500
 MAX_COMMENTS_PER_DAY = 200  # bounds Redis memory if someone floods the form
 
-_EMAIL = re.compile(r"\S+@\S+")
-# Links: any scheme (https, ftp, ...), www., or a domain followed by a path
-# (linkedin.com/in/x).
-_URL = re.compile(
-    r"(?:\b[a-z][a-z0-9+.-]*://|\bwww\.)\S+"
-    r"|\b(?:[a-z0-9-]+\.)+(?!js\b)[a-z]{2,}/\S*",
-    re.IGNORECASE,
-)
-# Bare domains (janedoe.dev, JANEDOE.NET, Jane.Me). There are over a thousand
-# top-level domains, so any word.letters token counts unless the whole token
-# is a known tech name. Over-removing a missing space ("useful.Thanks") is
-# harmless; keeping a personal site is not.
-_BARE_DOMAIN = re.compile(r"\b(?:[a-z0-9-]+\.)+([a-z]{2,24})\b(?![\w-]|\.\w)", re.IGNORECASE)
-_TECH_NAMES = frozenset({"asp.net", "vb.net", "ado.net", "socket.io"})
+# Links and emails are found one whitespace-separated word at a time, with
+# patterns that cannot backtrack, so the work grows in step with the length.
+#
+# A word holding "@", "://" or starting "www." is removed whole. Otherwise any
+# run like "janedoe.dev", "Jane.Me", "janedoe.рф" or "linkedin.com/in/x" is a
+# domain: dot-separated parts whose last part is 2 to 24 letters in any script
+# (or a punycode "xn--" part). There are over a thousand top-level domains, so
+# no list is kept. Known tech names are the only exception. Over-removing a
+# missing space ("useful.Thanks") is harmless; keeping a personal site is not.
+_RUN = re.compile(r"[\w.-]+(/\S*)?")
+_DOMAIN = re.compile(r"[\w-]+(?:\.[\w-]+)+")
+_TOP_LEVEL = re.compile(r"[^\W\d_]{2,24}|xn--[\w-]+", re.IGNORECASE)
+# Tech names and degree abbreviations that look like domains.
+_TECH_NAMES = frozenset({"asp.net", "vb.net", "ado.net", "socket.io",
+                         "b.sc", "m.sc", "b.eng", "m.eng", "b.tech", "m.tech", "m.phil", "b.ed"})
+# Full stops that NFKC leaves alone: ideographic and halfwidth ideographic.
+_DOTS = str.maketrans({"\u3002": ".", "\uff61": "."})
 # Nine or more digits, so dates (2026-11-19) and scores are left alone.
 _PHONE = re.compile(r"\+?\(?\d(?:[\s().-]{0,2}\d){8,}")
 _REMOVED = "[removed]"
@@ -50,26 +53,40 @@ def init(redis_client):
     _redis = redis_client
 
 
-def _strip_bare_domain(match):
-    token, last = match.group(0), match.group(1)
-    if last.lower() == "js" or token.lower() in _TECH_NAMES:
-        return token
-    return _REMOVED
+def _strip_run(match):
+    run, path = match.group(0), match.group(1) or ""
+    core = run[:len(run) - len(path)]
+    domain = core.strip(".-")
+    if not _DOMAIN.fullmatch(domain):
+        return run
+    top = domain.rsplit(".", 1)[1]
+    if not _TOP_LEVEL.fullmatch(top):
+        return run  # 3.11, v2.0, e.g
+    if top.lower() == "js" or (not path and domain.lower() in _TECH_NAMES):
+        return run  # Node.js, Node.js/Express, ASP.NET
+    start = core.index(domain)
+    return core[:start] + _REMOVED + core[start + len(domain):]
+
+
+def _clean_word(word):
+    if "@" in word or "://" in word or word.lower().startswith("www."):
+        return _REMOVED
+    return _RUN.sub(_strip_run, word)
 
 
 def clean_comment(text):
     """Return a storable comment: one line, contact details removed, capped."""
     if not isinstance(text, str):
         return ""
-    text = text[:MAX_COMMENT_CHARS * 4]  # bound the work before the regexes run
-    # Fold look-alikes (full-width "ｃｏｍ", "＠") into plain letters first.
-    text = unicodedata.normalize("NFKC", text)
+    # Fold look-alikes (full-width "ｃｏｍ", "＠", "jane。dev") into plain
+    # characters first. NFKC can lengthen text ("㏂" becomes "a.m."), so the
+    # cap is applied on both sides of it.
+    cap = MAX_COMMENT_CHARS * 4
+    text = unicodedata.normalize("NFKC", text[:cap])[:cap].translate(_DOTS)
     text = "".join(ch if ch.isprintable() else " " for ch in text)
-    text = _URL.sub(_REMOVED, text)
-    text = _BARE_DOMAIN.sub(_strip_bare_domain, text)
-    text = _EMAIL.sub(_REMOVED, text)
+    text = " ".join(_clean_word(word) for word in text.split())
     text = _PHONE.sub(_REMOVED, text)
-    return " ".join(text.split())[:MAX_COMMENT_CHARS].strip()
+    return text[:MAX_COMMENT_CHARS].strip()
 
 
 def save_comment(useful, comment, may_quote=False):

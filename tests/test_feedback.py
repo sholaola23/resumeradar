@@ -102,6 +102,12 @@ class CleanCommentTests(unittest.TestCase):
             'Jane.Ng or Jane.Ly': 'Jane',
             'full-width janedoe.\uff43\uff4f\uff4d': 'janedoe',
             'mail jane\uff20example.com': 'jane',
+            'see janedoe.\u043c\u0435': 'janedoe',
+            'see J\u0430ne.me': 'ne.me',
+            'punycode janedoe.xn--p1ai': 'janedoe',
+            'ideographic jane\u3002dev': 'jane',
+            '(see janedoe.dev).': 'janedoe',
+            'site:jane.io': 'jane',
         }
         for text, leaked in cases.items():
             with self.subTest(text=text):
@@ -117,10 +123,21 @@ class CleanCommentTests(unittest.TestCase):
         for text in ('Great for Node.js and Next.js roles.', 'Vue.js, Express.js and ASP.NET listed.',
                      'Node.js/Express was matched.', 'Scored 3.5 then 4.0, e.g. better.',
                      'Python 3.11 and v2.0 came up.', 'ASP.NET is great', 'VB.NET and .NET Core too.',
-                     'Socket.io was found.',
+                     'Socket.io was found.', 'My M.Sc and B.Eng were matched.',
+                     'e.g. it was quick, i.e. 18 seconds.', 'Release v1.2.3 noted.',
                      'Three.js, D3.js and Chart.JS matched.'):
             with self.subTest(text=text):
                 self.assertEqual(feedback.clean_comment(text), text)
+
+    def test_hostile_input_stays_fast(self):
+        import time
+        for text in ('\u33c2' * 2000, ('\u33c2' + 'b') * 1000, 'a.' * 1000, 'a' * 2000,
+                     'a-' * 1000 + '.com', '1 ' * 1000, ('x.' * 30 + ' ') * 60, 'a@' * 1000):
+            with self.subTest(text=text[:12]):
+                started = time.perf_counter()
+                cleaned = feedback.clean_comment(text)
+                self.assertLess(time.perf_counter() - started, 0.1)
+                self.assertLessEqual(len(cleaned), feedback.MAX_COMMENT_CHARS)
 
     def test_messy_input(self):
         self.assertEqual(feedback.clean_comment('  line one\r\n\tline two\x00\x1b[31m  '), 'line one line two [31m')
