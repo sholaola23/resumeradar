@@ -4,6 +4,7 @@ Each check here comes from the November 2026 UX audit (section A): promise
 wording, unverifiable testimonials, contradicting privacy lines, the forced
 newsletter pop-up, developer error text and keyboard access.
 """
+import ast
 import os
 import re
 import sys
@@ -34,6 +35,86 @@ BANNED = [
 def read(*parts):
     with open(os.path.join(ROOT, *parts), encoding='utf-8') as handle:
         return handle.read()
+
+
+USER_TEXT_NAMES = {'resume_text', 'job_description', 'cv_text', 'response_text', 'clean_text',
+                   'email', 'jd_text', 'bullet_text', 'job_context'}
+
+
+def _leaky_log_lines(scope):
+    """Lines where logging could carry user text, an exception message or a response body.
+
+    - A print, logging, logger or app.logger call, or a write to sys.stderr or
+      sys.stdout, may show a caught exception only as log_safe.describe(e) or
+      type(e).__name__. That also applies to any name copied from it, such
+      as msg = str(e).
+    - Such a call may never show a response body (.text) or a variable that
+      holds CV, job or email text, except as len(...).
+    - traceback.* calls, .exception(...) calls and exc_info= are never
+      allowed, because they write the exception message.
+    """
+    def chain(node):
+        parts = []
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.Name):
+            parts.append(node.id)
+        return list(reversed(parts))
+
+    def is_log_call(call):
+        names = chain(call.func)
+        if names == ['print']:
+            return True
+        if len(names) >= 2 and names[0] in ('logging', 'logger', 'log', 'app', 'current_app'):
+            return names[0] != 'app' or names[1] == 'logger'
+        return names[:2] in (['sys', 'stderr'], ['sys', 'stdout']) and names[-1] == 'write'
+
+    def always_leaky(call):
+        names = chain(call.func)
+        return (names[:1] == ['traceback'] or names[-1:] == ['exception']
+                or any(k.arg == 'exc_info' for k in call.keywords))
+
+    def safe_use(parent):
+        f = parent.func if isinstance(parent, ast.Call) else None
+        if chain(f) == ['log_safe', 'describe']:
+            return True
+        return isinstance(f, ast.Name) and f.id in ('type', 'len')
+
+    def parent_map(node):
+        return {child: n for n in ast.walk(node) for child in ast.iter_child_nodes(n)}
+
+    lines = []
+    calls = [n for n in ast.walk(scope) if isinstance(n, ast.Call)]
+    for call in calls:
+        if always_leaky(call):
+            lines.append(call.lineno)
+        elif is_log_call(call):
+            parents = parent_map(call)
+            for n in ast.walk(call):
+                if isinstance(n, ast.Attribute) and n.attr == 'text':
+                    lines.append(call.lineno)
+                if isinstance(n, ast.Name) and n.id in USER_TEXT_NAMES and not safe_use(parents.get(n)):
+                    lines.append(call.lineno)
+
+    for handler in ast.walk(scope):
+        if not isinstance(handler, ast.ExceptHandler) or not handler.name:
+            continue
+        body = [n for stmt in handler.body for n in ast.walk(stmt)]
+        tainted = {handler.name}
+        for stmt in body:
+            if isinstance(stmt, ast.Assign):
+                uses = [n for n in ast.walk(stmt.value) if isinstance(n, ast.Name) and n.id in tainted]
+                if uses and not (isinstance(stmt.value, ast.Call) and safe_use(stmt.value)):
+                    tainted |= {t.id for t in stmt.targets if isinstance(t, ast.Name)}
+        for call in body:
+            if not (isinstance(call, ast.Call) and is_log_call(call)):
+                continue
+            parents = parent_map(call)
+            for n in ast.walk(call):
+                if isinstance(n, ast.Name) and n.id in tainted and not safe_use(parents.get(n)):
+                    lines.append(call.lineno)
+    return sorted(set(lines))
 
 
 class SiteCopyTest(unittest.TestCase):
@@ -88,6 +169,14 @@ class SiteCopyTest(unittest.TestCase):
         scan = analyzer[analyzer.index('def get_ai_suggestions'):analyzer.index('\ndef ', analyzer.index('def get_ai_suggestions') + 1)]
         self.assertIn('ai_cache.cache_set(', scan)
         self.assertIn('cached for up to one hour', self.page('/privacy'))
+        # Every AI tool that writes to the cache is named on the privacy page.
+        page = self.page('/privacy')
+        for fn, words in [('def generate_cover_letter', 'cover letters'), ('def enhance_bullet_point', 'bullet rewrites'),
+                          ('def generate_resume_summary', 'summaries')]:
+            body = analyzer[analyzer.index(fn):analyzer.index('\ndef ', analyzer.index(fn) + 1)]
+            self.assertIn('ai_cache.cache_set(', body, fn)
+            self.assertIn(words, page, fn)
+        self.assertEqual(analyzer.count('ai_cache.cache_set('), 4)
 
     def test_no_log_line_carries_cv_or_job_text(self):
         # "Not saved by ResumeRadar" covers the server logs too.
@@ -106,26 +195,31 @@ class SiteCopyTest(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_scan_path_logs_error_types_not_messages(self):
-        # An exception message can quote the CV or job text that caused it, so
-        # the free scan, AI, PDF and email handlers log log_safe.describe(e).
+        # An exception message can quote the CV, job text or email address that
+        # caused it, so the free handlers log log_safe.describe(e) instead.
         from backend import log_safe
         self.assertEqual(log_safe.describe(KeyError('Jane Doe, Acme Ltd')), 'KeyError')
         err = RuntimeError('quoted prompt text')
         err.status_code = 429
         self.assertEqual(log_safe.describe(err), 'RuntimeError (status 429)')
-        leaky = re.compile(r'print\(.*(str\(e\)|\{e\}|\{error_msg\})')
-        scan_path = {
-            'app.py': ('def scan_resume', 'def email_report'),
-            'backend/ai_analyzer.py': (None, None),
-            'backend/resume_parser.py': (None, None),
-        }
-        for path, (start, end) in scan_path.items():
-            source = read(*path.split('/'))
-            if start:
-                begin = source.index(start)
-                source = source[begin:source.index('\n@app.', source.index(end))]
-            offenders = [line.strip() for line in source.splitlines() if leaky.search(line)]
-            self.assertEqual(offenders, [], path)
+
+        free_routes = {'scan_resume', 'generate_cover_letter_endpoint', 'enhance_bullet_endpoint',
+                       'generate_summary_endpoint', 'download_report', 'email_report',
+                       'subscribe_newsletter',
+                       # CV builder routes: behind the 404 today, but they hold CV text.
+                       'build_generate', 'build_generate_from_scan', 'build_generate_from_upload',
+                       'build_download', '_send_cv_email'}
+        offenders = []
+        for path in ('app.py', 'backend/ai_analyzer.py', 'backend/resume_parser.py', 'backend/cv_builder.py'):
+            tree = ast.parse(read(*path.split('/')))
+            if path == 'app.py':
+                scopes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in free_routes]
+                self.assertEqual({n.name for n in scopes}, free_routes)
+            else:
+                scopes = [tree]
+            for scope in scopes:
+                offenders += [f'{path}:{line}' for line in _leaky_log_lines(scope)]
+        self.assertEqual(offenders, [])
 
     def test_privacy_page_lists_what_the_browser_keeps(self):
         page = self.page('/privacy')
