@@ -17,9 +17,7 @@ Process (review levels, reviews, merging, feature map) follows shola-project-run
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 .venv/bin/python tests/qa_suite.py          # expect "STATUS: ALL CLEAR"
-.venv/bin/python -m unittest tests.test_funnel_metrics tests.test_keyword_quality \
-  tests.test_product_integration tests.test_repeat_downloads \
-  tests.test_builder_disabled tests.test_referral   # expect "OK"
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py'   # expect "OK"
 node --test tests/scan_utils.test.cjs        # expect "fail 0"
 
 PORT=5011 FLASK_ENV=production .venv/bin/python app.py
@@ -31,17 +29,17 @@ There is no CI test job. The only workflow is the Claude review (below), so run 
 
 ## Structure
 
-- `app.py`: every route (scan, AI tools, report download and email, subscribe, health, scan count, role landing pages, sitemap, admin, and the switched-off builder and payment routes).
-- `backend/`: `resume_parser.py` (PDF, DOCX, text), `keyword_engine.py` (matching and the score), `ai_analyzer.py` (Claude calls), `ai_budget.py`, `ai_cache.py`, `ai_ratelimit.py`, `ai_metrics.py`, `report_generator.py` (PDF), `audit_log.py`, `funnel_metrics.py`, `role_content.py` (role pages). `cv_builder.py`, `cv_*_generator.py`, `bundle_credits.py`, `stripe_utils.py` and `paystack_utils.py` belong to the switched-off builder.
-- `templates/`, `static/js/` (`app.js`, `scan-utils.js`, `share.js`), `static/css/style.css`, `static/llms.txt`.
-- `tests/`: `qa_suite.py` plus the unittest and node files above.
+- `app.py`: every route (scan, AI tools, report download and email, subscribe, health, scan count, `/privacy`, `/share`, role landing pages, sitemap, admin, and the switched-off builder and payment routes). `_client_ip` and `_visitor_key` decide who a rate limit counts: `CF-Connecting-IP` only when the request came from Cloudflare, and IPv6 by its /64.
+- `backend/`: `resume_parser.py` (PDF, DOCX, text), `keyword_engine.py` (matching and the score), `ai_analyzer.py` (Claude calls), `ai_budget.py`, `ai_cache.py`, `ai_ratelimit.py`, `ai_metrics.py`, `report_generator.py` (PDF), `audit_log.py`, `funnel_metrics.py`, `role_content.py` (role pages), `site_copy.py` (the strapline and privacy line shared by the site, email and PDF), `log_safe.py` (error text that is safe to log). `cv_builder.py`, `cv_*_generator.py`, `bundle_credits.py`, `stripe_utils.py` and `paystack_utils.py` belong to the switched-off builder.
+- `templates/` (`privacy.html` is the privacy page), `static/js/` (`app.js`, `scan-utils.js`, `share.js`), `static/css/style.css`, `static/llms.txt`.
+- `tests/`: `qa_suite.py`, the `test_*.py` unittest files and `scan_utils.test.cjs`.
 - `.claude/skills/resumeradar-final-review/SKILL.md`: the review checklist. `.claude/settings.json` runs `qa_suite.py --quick` after edits to `app.py`, `index.html`, `app.js` or `style.css` on a local machine.
 
 ## Guards
 
 **No payments.** The paid CV builder is off. `_cv_builder_disabled` in `app.py` returns 404 for `/build`, `/build/*`, every `/api/build/*` route and `builder.js` and `builder.css`, unless `CV_BUILDER_ENABLED=true`. Only `/api/build/webhook/resend` stays open, because scan-report emails use it. Never set that variable, never add Stripe or Paystack keys, and never re-enable a paid feature. Any paid feature is Shola's decision.
 
-**CV privacy.** An uploaded file is deleted straight after parsing (`os.remove` in `scan_resume`). CV text goes only to Anthropic, to write the suggestions, and is not saved. AI results are cached in Redis for at most 1 hour (`_CACHE_TTL = 3600` in `backend/ai_cache.py`). Emails are kept only as HMAC hashes (`backend/audit_log.py`, 120-day TTL). Scan history lives in the browser's localStorage only. Never log CV text, never add a new place it is sent, and never lengthen what is kept. The privacy wording must match the code exactly, and any change to what it promises goes to Shola.
+**CV privacy.** An uploaded file is deleted straight after parsing (`os.remove` in `scan_resume`). CV text goes only to Anthropic, to write the suggestions and cover letters, and is not saved. AI suggestions and tool results are cached in Redis for at most 1 hour (`_CACHE_TTL = 3600` in `backend/ai_cache.py`). Logs on the scan, email, PDF and AI paths hold only the error type and status (`backend/log_safe.py`), never CV text or the AI reply. Emails are kept only as HMAC hashes (`backend/audit_log.py`, 120-day TTL). Scan history lives in the browser's localStorage only. Never log CV text or AI replies, never add a new place CV text is sent, and never lengthen what is kept. `PRIVACY_LINE` in `backend/site_copy.py` and `templates/privacy.html` must match the code exactly: change them in the same PR as the code, and any change to what they promise goes to Shola.
 
 **AI spend.** Every Claude call goes through `backend/ai_budget.py` (daily cost and call caps, which fail closed) plus Flask-Limiter rate limits on each route and, for the free tools, the per-IP daily limits in `backend/ai_ratelimit.py` (cover letter 3, bullet 10, summary 5). `AI_DAILY_COST_LIMIT_USD` is 5.00 on Render. If it is unset the code falls back to 50.00, so never remove it from Render. Don't raise it, don't add a call that skips the budget or the limits, and don't change a model in `ai_analyzer.py` (`MODEL_FREE`, `MODEL_FREE_ECONOMY`, `MODEL_PAID`) without saying what it costs. A new model also needs its price in `_PRICING` in `ai_budget.py`, or it is costed at the default rate.
 
@@ -52,6 +50,7 @@ There is no CI test job. The only workflow is the Claude review (below), so run 
 - The score is a keyword match estimate against the job description. Never call it an employer's ATS score or a hiring prediction.
 - Never promise interviews or jobs.
 - AI prompts must tell the model not to invent experience, metrics or skills.
+- The strapline is "Make your experience clear." (`STRAPLINE` in `backend/site_copy.py`). Change it there, not in a template.
 - UK spelling and "CV" in new text. "resume" stays where it is part of an existing page URL, title or the product name.
 - Never name WorkCrew on the site, in emails or in docs.
 - The public scan count (`/api/scan-count`) is also shown on sholaoladipupo.com. Don't change how it is counted or shown without Shola's OK.
