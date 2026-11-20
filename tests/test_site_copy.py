@@ -142,6 +142,10 @@ class SiteCopyTest(unittest.TestCase):
         self.assertIn(f'content="ResumeRadar — {STRAPLINE}"', home)
         self.assertIn(STRAPLINE, read('static', 'js', 'app.js'))
 
+    def test_role_guide_copy_has_no_em_dashes(self):
+        # House style: no em dashes in what visitors read.
+        self.assertNotIn('\u2014', read('backend', 'role_content.py'))
+
     def test_visible_faq_matches_structured_data(self):
         import html
         home = self.page('/')
