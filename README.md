@@ -133,7 +133,7 @@ with `may_quote: true` may be quoted on the site.
 ```bash
 git clone https://github.com/sholaola23/resumeradar.git
 cd resumeradar
-python3.11 -m venv venv && source venv/bin/activate
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # add your keys
 python app.py          # http://localhost:5001
