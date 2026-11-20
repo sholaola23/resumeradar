@@ -1017,7 +1017,7 @@ Nice to Have
                 showToast('Email service not set up yet. Opening email client...', true);
                 const reportText = generateShortReport(lastScanData);
                 const score = ResumeRadarScan.scoreText(lastScanData.match_score);
-                const subject = encodeURIComponent(`ResumeRadar Report: Match estimate: ${score}`);
+                const subject = encodeURIComponent(`ResumeRadar Report (match estimate: ${score})`);
                 const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(reportText)}`;
                 window.location.href = mailtoUrl;
                 closeModal();

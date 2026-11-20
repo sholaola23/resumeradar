@@ -1076,7 +1076,7 @@ def email_report():
         params = {
             "from": "ResumeRadar <reports@sholastechnotes.com>",
             "to": [email],
-            "subject": f"Your ResumeRadar Report: Match estimate: {score_label}",
+            "subject": f"Your ResumeRadar Report (match estimate: {score_label})",
             "html": html_body,
             "attachments": [
                 {
