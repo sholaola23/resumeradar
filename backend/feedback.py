@@ -32,7 +32,9 @@ MAX_COMMENTS_PER_DAY = 200  # bounds Redis memory if someone floods the form
 # (or a punycode "xn--" part). There are over a thousand top-level domains, so
 # no list is kept. Known tech names are the only exception. Over-removing a
 # missing space ("useful.Thanks") is harmless; keeping a personal site is not.
-_RUN = re.compile(r"[\w.-]+(/\S*)?")
+# Underscores count as breaks ("_janedoe.dev_"), so runs use [^\W_].
+_RUN = re.compile(r"(?:[^\W_]|[.-])+")
+_TRAILING = re.compile(r"[^\w/]*$")
 _DOMAIN = re.compile(r"[\w-]+(?:\.[\w-]+)+")
 _TOP_LEVEL = re.compile(r"[^\W\d_]{2,24}|xn--[\w-]+", re.IGNORECASE)
 # Tech names and degree abbreviations that look like domains.
@@ -53,25 +55,28 @@ def init(redis_client):
     _redis = redis_client
 
 
-def _strip_run(match):
-    run, path = match.group(0), match.group(1) or ""
-    core = run[:len(run) - len(path)]
-    domain = core.strip(".-")
+def _is_domain(run):
+    domain = run.strip(".-")
     if not _DOMAIN.fullmatch(domain):
-        return run
+        return False
     top = domain.rsplit(".", 1)[1]
     if not _TOP_LEVEL.fullmatch(top):
-        return run  # 3.11, v2.0, e.g
-    if top.lower() == "js" or (not path and domain.lower() in _TECH_NAMES):
-        return run  # Node.js, Node.js/Express, ASP.NET
-    start = core.index(domain)
-    return core[:start] + _REMOVED + core[start + len(domain):]
+        return False  # 3.11, v2.0, e.g
+    return not (top.lower() == "js" or domain.lower() in _TECH_NAMES)  # Node.js, ASP.NET
 
 
 def _clean_word(word):
     if "@" in word or "://" in word or word.lower().startswith("www."):
         return _REMOVED
-    return _RUN.sub(_strip_run, word)
+    # The first domain in a word removes it and the rest of the word, so a
+    # path (linkedin.com/in/jane) or a tail (janedoe.dev_thanks) goes too.
+    # Closing punctuation at the end of the word is kept.
+    for match in _RUN.finditer(word):
+        if _is_domain(match.group(0)):
+            lead = len(match.group(0)) - len(match.group(0).lstrip(".-"))
+            tail = _TRAILING.search(word[match.end():]).group(0)
+            return word[:match.start() + lead] + _REMOVED + tail
+    return word
 
 
 def clean_comment(text):

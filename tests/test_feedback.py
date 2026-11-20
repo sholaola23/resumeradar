@@ -108,6 +108,9 @@ class CleanCommentTests(unittest.TestCase):
             'ideographic jane\u3002dev': 'jane',
             '(see janedoe.dev).': 'janedoe',
             'site:jane.io': 'jane',
+            '_janedoe.dev_ and janedoe.dev_ and janedoe.dev_thanks': 'janedoe',
+            'Node.js/janedoe.dev': 'janedoe',
+            'next.js/linkedin.com/in/jane': 'jane',
         }
         for text, leaked in cases.items():
             with self.subTest(text=text):
@@ -123,7 +126,7 @@ class CleanCommentTests(unittest.TestCase):
         for text in ('Great for Node.js and Next.js roles.', 'Vue.js, Express.js and ASP.NET listed.',
                      'Node.js/Express was matched.', 'Scored 3.5 then 4.0, e.g. better.',
                      'Python 3.11 and v2.0 came up.', 'ASP.NET is great', 'VB.NET and .NET Core too.',
-                     'Socket.io was found.', 'My M.Sc and B.Eng were matched.',
+                     'Socket.io was found.', 'My M.Sc and B.Eng were matched.', 'snake_case and my_var.',
                      'e.g. it was quick, i.e. 18 seconds.', 'Release v1.2.3 noted.',
                      'Three.js, D3.js and Chart.JS matched.'):
             with self.subTest(text=text):
