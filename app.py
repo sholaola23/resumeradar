@@ -5,6 +5,7 @@ Built by Olushola Oladipupo
 """
 
 import os
+import time
 import posixpath
 import json
 import uuid
@@ -925,10 +926,12 @@ def _take_email_slot(key, limit, ttl):
     if not _redis_client:
         raise _EmailCountersUnavailable()
     try:
-        # Create the key with its expiry in one step, so a failure between
-        # two calls can never leave a counter (and its hash) with no TTL.
-        _redis_client.set(key, 0, ex=ttl, nx=True)
-        sends = _redis_client.incr(key)
+        # SET NX EX and INCR run as one MULTI/EXEC, so the key can't expire
+        # between them and come back from INCR with no TTL.
+        pipe = _redis_client.pipeline(transaction=True)
+        pipe.set(key, 0, ex=ttl, nx=True)
+        pipe.incr(key)
+        sends = pipe.execute()[1]
     except Exception as e:
         print(f"Report send counter unavailable: {type(e).__name__}")
         raise _EmailCountersUnavailable() from None
@@ -1251,18 +1254,21 @@ def confirm_email():
     mail scanners open links on their own, so the confirmation itself needs a
     press (a POST), not just a visit."""
     token = request.form.get('t') if request.method == 'POST' else request.args.get('t')
-    if report_signing.verify_confirm_token(token) is None:
+    confirmed_for = report_signing.verify_confirm_token(token)
+    if confirmed_for is None:
         return render_template('confirm_email.html', state='expired'), 410
     # Only a POST confirms. Flask also answers HEAD (and OPTIONS) here, and
     # link checkers send those, so every other method just shows the button.
     if request.method != 'POST':
         return render_template('confirm_email.html', state='ask', token=token)
-    scan_id, address_id = report_signing.verify_confirm_token(token)
+    scan_id, address_id, scan_expires_at = confirmed_for
     if not _redis_client:
         return render_template('confirm_email.html', state='unavailable', token=token), 503
     try:
         # nx: pressing an old link again must not restart the 24-hour clock.
-        _redis_client.set(_confirmed_key(scan_id, address_id), 1, ex=report_signing.MAX_AGE_SECONDS, nx=True)
+        # Keep it only as long as the scan's own signature lasts.
+        ttl = max(1, scan_expires_at - int(time.time()))
+        _redis_client.set(_confirmed_key(scan_id, address_id), 1, ex=ttl, nx=True)
     except Exception as e:
         print(f"Report confirmation store unavailable: {type(e).__name__}")
         return render_template('confirm_email.html', state='unavailable', token=token), 503

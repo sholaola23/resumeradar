@@ -60,6 +60,9 @@ class FakeRedis:
         self.values[key] = value
         return True
 
+    def pipeline(self, transaction=True):
+        return FakePipeline(self, transaction)
+
     def delete(self, key):
         self.counts.pop(key, None)
         self.values.pop(key, None)
@@ -143,6 +146,24 @@ class SignatureUnitTest(unittest.TestCase):
     def test_other_secret_is_rejected(self):
         with patch.dict(os.environ, {'FLASK_SECRET_KEY': 'a-different-secret'}):
             self.assertIsNone(report_signing.verify(self.data))
+
+
+class FakePipeline:
+    """Queues commands and runs them together on execute(), like MULTI/EXEC."""
+    def __init__(self, redis, transaction):
+        self.redis = redis
+        self.transaction = transaction
+        self.ops = []
+
+    def __getattr__(self, name):
+        def queue(*args, **kwargs):
+            self.ops.append((name, args, kwargs))
+            return self
+        return queue
+
+    def execute(self):
+        ops, self.ops = self.ops, []
+        return [getattr(self.redis, name)(*args, **kwargs) for name, args, kwargs in ops]
 
 
 def confirm_address(client, email, scan, send):

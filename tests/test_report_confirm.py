@@ -21,7 +21,7 @@ class BrokenRedis(FakeRedis):
     def exists(self, key):
         raise ConnectionError('redis down')
 
-    def set(self, key, value, ex=None):
+    def set(self, key, value, ex=None, nx=False):
         raise ConnectionError('redis down')
 
 
@@ -149,7 +149,7 @@ class ReportConfirmTest(unittest.TestCase):
         old = report_signing.confirm_token(self.scan, 'me@example.com', now=time.time() - 3700)
         tampered = token[:-1] + ('0' if token[-1] != '0' else '1')
         other_address = token.split('.')
-        other_address[3] = report_signing.email_id('victim@example.com')
+        other_address[4] = report_signing.email_id('victim@example.com')
         for bad in (old, tampered, '.'.join(other_address), '', 'nonsense'):
             self.assertEqual(self.client.get(f'/confirm-email?t={bad}').status_code, 410)
             self.assertEqual(self.client.post('/confirm-email', data={'t': bad}).status_code, 410)
@@ -183,24 +183,54 @@ class ReportConfirmTest(unittest.TestCase):
         self.assertNotEqual(report_signing.inbox_id('a.b@example.com'), report_signing.inbox_id('ab@example.com'))
         self.assertEqual(report_signing.inbox_id('a+x@example.com'), report_signing.inbox_id('a@example.com'))
 
-    def test_counters_get_their_expiry_before_counting(self):
-        calls = []
+    def test_counters_get_expiry_and_count_in_one_transaction(self):
+        pipelines = []
 
         class Recording(FakeRedis):
-            def set(self, key, value, ex=None, nx=False):
-                calls.append(('set', key, ex, nx))
-                return super().set(key, value, ex, nx)
+            def pipeline(self, transaction=True):
+                pipe = super().pipeline(transaction)
+                pipelines.append(pipe)
+                original = pipe.execute
+
+                def execute():
+                    pipe.ran = list(pipe.ops)
+                    return original()
+                pipe.execute = execute
+                return pipe
 
             def incr(self, key):
-                calls.append(('incr', key))
+                if not any(getattr(p, 'ran', None) for p in pipelines):
+                    raise AssertionError('INCR outside a transaction')
                 return super().incr(key)
         with patch.object(app_module, '_redis_client', Recording()):
-            self.ask()
-        for i, call in enumerate(calls):
-            if call[0] == 'incr':
-                self.assertEqual(calls[i - 1][:2], ('set', call[1]))
-                self.assertTrue(calls[i - 1][3])
-                self.assertGreater(calls[i - 1][2], 0)
+            self.assertEqual(self.ask().status_code, 200)
+        self.assertEqual(len(pipelines), 2)  # per-scan and per-inbox confirm counters
+        for pipe in pipelines:
+            self.assertTrue(pipe.transaction)
+            (op1, args1, kw1), (op2, args2, _) = pipe.ran
+            self.assertEqual((op1, op2), ('set', 'incr'))
+            self.assertEqual(args1[0], args2[0])
+            self.assertTrue(kw1['nx'])
+            self.assertGreater(kw1['ex'], 0)
+
+    def test_confirmation_never_outlives_its_scan(self):
+        # A scan signed 23 hours ago: the confirmation may last only the hour left.
+        old_scan = self.rescan(23 * 3600)
+        self.ask(scan=old_scan)
+        ttls = {}
+        original = self.redis.set
+
+        def spy(key, value, ex=None, nx=False):
+            ttls[key] = ex
+            return original(key, value, ex, nx)
+        with patch.object(self.redis, 'set', spy):
+            click_confirm(self.client, self.send.call_args[0][0])
+        (ttl,) = [v for k, v in ttls.items() if k.startswith('resumeradar:report_confirmed:')]
+        self.assertLessEqual(ttl, 3600)
+        self.assertGreater(ttl, 3500)
+        # And a link for a scan that has already expired is refused.
+        token = report_signing.confirm_token(old_scan, 'me@example.com')
+        self.assertIsNone(report_signing.verify_confirm_token(token, now=time.time() + 3601))
 
     def test_give_back_after_expiry_leaves_no_key(self):
         app_module._give_back_email_slot('resumeradar:report_sends:gone')

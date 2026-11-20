@@ -140,7 +140,9 @@ def signature_id(scan_data):
 # ---------------------------------------------------------------------------
 CONFIRM_MAX_AGE_SECONDS = 60 * 60
 _CONFIRM_VERSION = "c1"
-_CONFIRM_RE = re.compile(r"c1\.([1-9][0-9]{0,11})\.([0-9a-f]{32})\.([0-9a-f]{32})\.([0-9a-f]{64})", re.ASCII)
+_CONFIRM_RE = re.compile(
+    r"c1\.([1-9][0-9]{0,11})\.([1-9][0-9]{0,11})\.([0-9a-f]{32})\.([0-9a-f]{32})\.([0-9a-f]{64})", re.ASCII
+)
 
 
 def email_id(email):
@@ -165,22 +167,25 @@ def inbox_id(email):
     return email_id(f"{local}@{domain}")
 
 
-def _confirm_mac(issued_at, scan_id, address_id):
-    message = f"{_CONFIRM_VERSION}.{issued_at}.{scan_id}.{address_id}".encode("ascii")
+def _confirm_mac(issued_at, scan_issued_at, scan_id, address_id):
+    message = f"{_CONFIRM_VERSION}.{issued_at}.{scan_issued_at}.{scan_id}.{address_id}".encode("ascii")
     return hmac.new(_key(), b"confirm:" + message, hashlib.sha256).hexdigest()
 
 
 def confirm_token(scan_data, email, now=None):
     """Signed token for the confirm link. Call only after verify(scan_data)."""
     issued_at = int(now if now is not None else time.time())
+    # When the scan was signed, so a confirmation never outlives the scan.
+    scan_issued_at = int(_SIGNATURE_RE.fullmatch(scan_data[SIGNATURE_FIELD]).group(1))
     scan_id = signature_id(scan_data)
     address_id = email_id(email)
-    mac = _confirm_mac(issued_at, scan_id, address_id)
-    return f"{_CONFIRM_VERSION}.{issued_at}.{scan_id}.{address_id}.{mac}"
+    mac = _confirm_mac(issued_at, scan_issued_at, scan_id, address_id)
+    return f"{_CONFIRM_VERSION}.{issued_at}.{scan_issued_at}.{scan_id}.{address_id}.{mac}"
 
 
 def verify_confirm_token(token, now=None):
-    """Return (scan_id, address_id) for a valid, unexpired token, else None."""
+    """Return (scan_id, address_id, scan_expires_at) for a valid, unexpired
+    token whose scan has not expired either, else None."""
     if not isinstance(token, str):
         return None
     match = _CONFIRM_RE.fullmatch(token)
@@ -190,7 +195,11 @@ def verify_confirm_token(token, now=None):
     current = int(now if now is not None else time.time())
     if issued_at > current + 300 or current - issued_at > CONFIRM_MAX_AGE_SECONDS:
         return None
-    scan_id, address_id = match.group(2), match.group(3)
-    if not hmac.compare_digest(_confirm_mac(issued_at, scan_id, address_id), match.group(4)):
+    scan_issued_at = int(match.group(2))
+    scan_id, address_id = match.group(3), match.group(4)
+    if not hmac.compare_digest(_confirm_mac(issued_at, scan_issued_at, scan_id, address_id), match.group(5)):
         return None
-    return scan_id, address_id
+    scan_expires_at = scan_issued_at + MAX_AGE_SECONDS
+    if current >= scan_expires_at:
+        return None
+    return scan_id, address_id, scan_expires_at

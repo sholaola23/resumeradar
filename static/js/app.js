@@ -1010,6 +1010,12 @@ Nice to Have
         return Date.now() - wait.started < 5 * 60 * 1000 ? 5000 : 15000;
     }
 
+    // The server only needs the signed report fields, never the CV text.
+    function reportPayload(scan) {
+        const { resume_text, ...rest } = scan; // eslint-disable-line no-unused-vars
+        return rest;
+    }
+
     function stopConfirmWait() {
         if (emailConfirmWait && emailConfirmWait.timer) clearTimeout(emailConfirmWait.timer);
         emailConfirmWait = null;
@@ -1044,7 +1050,7 @@ Nice to Have
             const response = await fetch('/api/email-report/status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: wait.email, scan_data: wait.scan }),
+                body: JSON.stringify({ email: wait.email, scan_data: reportPayload(wait.scan) }),
             });
             if (response.ok) confirmed = (await response.json()).confirmed === true;
             wait.slow = response.status === 429;
@@ -1076,7 +1082,7 @@ Nice to Have
         const response = await fetch('/api/email-report', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, scan_data: scan }),
+            body: JSON.stringify({ email: email, scan_data: reportPayload(scan) }),
         }).catch(() => null);
         let result = {};
         try { result = response ? await response.json() : {}; } catch (e) { result = {}; }
