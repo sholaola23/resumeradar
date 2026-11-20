@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=17">
+    <link rel="stylesheet" href="/static/css/style.css?v=18">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -202,7 +202,8 @@
     <main>
     <!-- ============ HERO ============ -->
     <section class="hero">
-        <div class="container">
+        <div class="container hero-layout">
+            <div class="hero-text">
             {% if role %}
             <h1>{{ role.h1 }}</h1>
             <p class="hero-sub">Compare your {{ role.title }} CV with a job description to find relevant keywords and ways to make your experience clearer.</p>
@@ -218,53 +219,15 @@
             {% endif %}
             <a class="hero-scan-link" href="#scanForm">Scan my CV — free</a>
             <p class="hero-note">Full scan results. No account, payment or newsletter signup required.</p>
-        </div>
-    </section>
-
-    <!-- ============ SOCIAL PROOF ============ -->
-    <div class="social-proof" id="socialProof" style="display: none;">
-        <div class="container">
-            <p class="proof-text">
-                <span><strong id="scanCount">0</strong></span>
-                <span class="velocity-badge" id="scanVelocity" style="display: none;"></span>
-            </p>
-        </div>
-    </div>
-
-    <!-- ============ HOW IT WORKS ============ -->
-    <section class="how-it-works" id="how-it-works" aria-label="How it works">
-        <div class="container">
-            <div class="steps-grid">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h2>Upload your CV</h2>
-                        <p>PDF, DOCX, or paste text</p>
-                    </div>
-                </div>
-                <div class="step-arrow" aria-hidden="true">→</div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h2>Paste the job description</h2>
-                        <p>Copy from the job posting</p>
-                    </div>
-                </div>
-                <div class="step-arrow" aria-hidden="true">→</div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h2>Improve your CV</h2>
-                        <p>Review advice, edit and rescan free</p>
-                    </div>
-                </div>
+            <div class="social-proof" id="socialProof" style="display: none;">
+                <p class="proof-text">
+                    <span><strong id="scanCount">0</strong></span>
+                    <span class="velocity-badge" id="scanVelocity" style="display: none;"></span>
+                </p>
             </div>
-        </div>
-    </section>
+            </div>
 
-    <!-- ============ MAIN SCANNER ============ -->
-    <section class="scanner-section" aria-label="CV scanner">
-        <div class="container">
+            <!-- ============ MAIN SCANNER ============ -->
             <form id="scanForm" class="scan-form" enctype="multipart/form-data">
                 <p class="rescan-hint" id="rescanHint" role="status" hidden>Your job description is kept below. Upload your updated CV or edit your pasted text, then scan again to compare.</p>
                 <div class="scan-progress" id="scanProgress" role="status" hidden>
@@ -345,6 +308,11 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- ERROR MESSAGE -->
                 <div class="error-message" id="errorMessage" style="display: none;"></div>
             </form>
+        </div>
+    </section>
+
+    <section class="scanner-section" aria-label="CV scan results">
+        <div class="container">
 
             <!-- ============ RESULTS ============ -->
             <div class="results-section" id="results" style="display: none;">
@@ -626,6 +594,37 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
 
                 </div><!-- /deepResults -->
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ HOW IT WORKS ============ -->
+    <section class="how-it-works" id="how-it-works" aria-label="How it works">
+        <div class="container">
+            <div class="steps-grid">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h2>Upload your CV</h2>
+                        <p>PDF, DOCX, or paste text</p>
+                    </div>
+                </div>
+                <div class="step-arrow" aria-hidden="true">→</div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h2>Paste the job description</h2>
+                        <p>Copy from the job posting</p>
+                    </div>
+                </div>
+                <div class="step-arrow" aria-hidden="true">→</div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h2>Improve your CV</h2>
+                        <p>Review advice, edit and rescan free</p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
