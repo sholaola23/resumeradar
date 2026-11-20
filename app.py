@@ -28,6 +28,7 @@ from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
+from backend import report_signing
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.role_content import ROLE_CONTENT
 from backend.site_copy import STRAPLINE, PRIVACY_LINE
@@ -699,6 +700,9 @@ def scan_resume():
             "resume_word_count": parse_result["word_count"],
             "resume_text": extracted_resume_text,
         }
+        # Lets /api/email-report and /api/download-report prove this result
+        # came from us. Covers report fields only; stores nothing.
+        response[report_signing.SIGNATURE_FIELD] = report_signing.sign(response)
 
         return jsonify(response)
 
@@ -871,6 +875,38 @@ def generate_summary_endpoint():
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
+REPORT_EXPIRED_MESSAGE = "This report has expired. Please run the scan again, then download or email it."
+_REPORT_SENDS_PER_SCAN = 3
+
+
+def _allow_report_send(scan_data):
+    """Cap emails per signed scan, so one genuine result can't be replayed
+    to a list of addresses. Counts a hash of the signature, never the report.
+    Without Redis the per-IP limit on the route still applies."""
+    if not _redis_client:
+        return True
+    key = f"resumeradar:report_sends:{report_signing.signature_id(scan_data)}"
+    try:
+        sends = _redis_client.incr(key)
+        if sends == 1:
+            _redis_client.expire(key, report_signing.MAX_AGE_SECONDS)
+        return sends <= _REPORT_SENDS_PER_SCAN
+    except Exception as e:
+        print(f"Report send counter unavailable: {type(e).__name__}")
+        return True
+
+
+def _refund_report_send(scan_data):
+    """Give the send back when Resend fails, so a failed email doesn't use
+    up one of the scan's three."""
+    if not _redis_client:
+        return
+    try:
+        _redis_client.decr(f"resumeradar:report_sends:{report_signing.signature_id(scan_data)}")
+    except Exception as e:
+        print(f"Report send counter unavailable: {type(e).__name__}")
+
+
 @app.route('/api/download-report', methods=['POST'])
 @limiter.limit("20 per hour")
 def download_report():
@@ -884,11 +920,15 @@ def download_report():
         PDF file download.
     """
     try:
-        scan_data = request.get_json()
+        scan_data = request.get_json(silent=True)
         if not scan_data:
             return jsonify({"error": "No scan data provided."}), 400
 
-        pdf_bytes = bytes(generate_pdf_report(scan_data))
+        report_data = report_signing.verify(scan_data)
+        if report_data is None:
+            return jsonify({"error": REPORT_EXPIRED_MESSAGE}), 403
+
+        pdf_bytes = bytes(generate_pdf_report(report_data))
 
         return Response(
             pdf_bytes,
@@ -918,11 +958,11 @@ def email_report():
         JSON success/error response.
     """
     try:
-        data = request.get_json()
-        if not data:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
             return jsonify({"error": "No data provided."}), 400
 
-        email = data.get('email', '').strip()
+        email = str(data.get('email') or '').strip()
         scan_data = data.get('scan_data')
 
         if not email or '@' not in email:
@@ -931,10 +971,21 @@ def email_report():
         if not scan_data:
             return jsonify({"error": "No scan data provided."}), 400
 
-        # Check for Resend API key
+        # Only email results this server produced and signed, so the endpoint
+        # cannot be used to send someone else's text from our domain.
+        report_data = report_signing.verify(scan_data)
+        if report_data is None:
+            return jsonify({"error": REPORT_EXPIRED_MESSAGE}), 403
+
+        # Check for Resend API key before using up one of the scan's sends
         resend_key = os.getenv('RESEND_API_KEY')
         if not resend_key or resend_key == 'your-resend-api-key-here':
             return jsonify({"error": "Email service is not configured yet. Please download or copy your report instead."}), 503
+
+        if not _allow_report_send(scan_data):
+            return jsonify({"error": "This report has already been emailed a few times. Please download it instead."}), 429
+        signed_scan = scan_data
+        scan_data = report_data
 
         import resend
         resend.api_key = resend_key
@@ -1034,7 +1085,11 @@ def email_report():
             ],
         }
 
-        result = resend.Emails.send(params)
+        try:
+            resend.Emails.send(params)
+        except Exception:
+            _refund_report_send(signed_scan)
+            raise
 
         return jsonify({
             "success": True,
