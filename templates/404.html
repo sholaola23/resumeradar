@@ -6,16 +6,17 @@
     <title>404 | ResumeRadar</title>
     <meta name="robots" content="noindex, nofollow">
     <meta name="description" content="Page not found. Head back to ResumeRadar to scan your resume against any job description.">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📡</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22none%22 stroke=%22%230E5C4A%22 stroke-width=%228%22/><circle cx=%2250%22 cy=%2250%22 r=%227%22 fill=%22%230E5C4A%22/></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
     <style>
+        /* Paper and ink, matching style.css (this page stands alone so it renders even if the stylesheet fails). */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f8fafc;
-            color: #1f2937;
+            background: #FFFFFF;
+            color: #10161D;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -24,72 +25,62 @@
             text-align: center;
             padding: 24px;
         }
-        .error-container {
-            max-width: 480px;
-        }
-        .error-icon {
-            font-size: 72px;
-            margin-bottom: 16px;
-        }
+        .error-container { max-width: 480px; }
         .error-code {
+            font-family: 'Newsreader', Georgia, serif;
             font-size: 96px;
-            font-weight: 800;
-            color: #e5e7eb;
+            font-weight: 400;
+            color: #0E5C4A;
             line-height: 1;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
         }
         .error-title {
-            font-size: 24px;
-            font-weight: 700;
+            font-family: 'Newsreader', Georgia, serif;
+            font-size: 32px;
+            font-weight: 400;
             margin-bottom: 12px;
-            color: #1f2937;
+            color: #10161D;
         }
         .error-message {
             font-size: 16px;
-            color: #6b7280;
+            color: #55606B;
             line-height: 1.6;
             margin-bottom: 32px;
         }
         .error-btn {
-            display: inline-block;
-            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
-            color: white;
+            display: inline-flex;
+            align-items: center;
+            min-height: 52px;
+            background: #0E5C4A;
+            color: #FFFFFF;
             text-decoration: none;
-            padding: 14px 32px;
-            border-radius: 10px;
+            padding: 0 28px;
+            border-radius: 999px;
             font-size: 16px;
             font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .error-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
-        }
+        .error-btn:hover { background: #0A4638; }
+        a:focus-visible { outline: 3px solid #0E5C4A; outline-offset: 3px; }
         .logo {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 10px;
             margin-bottom: 40px;
+            color: #10161D;
+            text-decoration: none;
         }
-        .logo-icon { font-size: 28px; }
-        .logo-text {
-            font-size: 22px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #1e3a5f, #2563eb);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+        .logo-icon { display: flex; color: #0E5C4A; }
+        .logo-text { font-size: 19px; font-weight: 600; }
     </style>
 </head>
 <body>
-    <div class="error-container">
-        <div class="logo">
-            <span class="logo-icon">📡</span>
+    <main class="error-container">
+        <a class="logo" href="/" aria-label="ResumeRadar home">
+            <span class="logo-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" focusable="false"><circle cx="13" cy="13" r="11"/><path d="M13 7a6 6 0 0 1 6 6"/><circle cx="13" cy="13" r="1.6" fill="currentColor"/></svg></span>
             <span class="logo-text">ResumeRadar</span>
-        </div>
-        <div class="error-code">404</div>
+        </a>
+        <p class="error-code">404</p>
         {% if builder_closed %}
         <h1 class="error-title">The CV builder has closed</h1>
         <p class="error-message">
@@ -101,7 +92,7 @@
             This page doesn't exist. The free CV check is one click away.
         </p>
         {% endif %}
-        <a href="/" class="error-btn">📡 Go to the free CV check</a>
-    </div>
+        <a href="/" class="error-btn">Go to the free CV check</a>
+    </main>
 </body>
 </html>

@@ -1291,9 +1291,9 @@ Nice to Have
         // Color based on score
         let color;
         if (!Number.isFinite(score)) color = '#64748b';
-        else if (score >= 75) color = '#059669';
-        else if (score >= 50) color = '#d97706';
-        else color = '#dc2626';
+        else if (score >= 75) color = '#0E5C4A';
+        else if (score >= 50) color = '#B45309';
+        else color = '#B91C1C';
         scoreFill.style.stroke = color;
 
         // Summary text
@@ -1346,34 +1346,30 @@ Nice to Have
         if (!Number.isFinite(score)) { meter.style.display = 'none'; return; }
 
         // Determine fit tier and messaging
-        let tier, tierColor, tierText, tierBg, tierIcon, tierMsg;
+        let tier, tierColor, tierText, tierBg, tierMsg;
         if (score >= 75) {
             tier = 'High keyword coverage';
-            tierColor = '#059669';
-            tierText = '#065f46';
-            tierBg = '#d1fae5';
-            tierIcon = '🎯';
+            tierColor = '#0E5C4A';
+            tierText = '#0A4638';
+            tierBg = '#E6F1EC';
             tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else if (score >= 50) {
             tier = 'Moderate keyword coverage';
-            tierColor = '#d97706';
+            tierColor = '#B45309';
             tierText = '#92400e';
             tierBg = '#fef3c7';
-            tierIcon = '👍';
             tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else if (score >= 30) {
             tier = 'Some keyword coverage';
-            tierColor = '#ea580c';
+            tierColor = '#C2410C';
             tierText = '#9a3412';
             tierBg = '#fff7ed';
-            tierIcon = '🔄';
             tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         } else {
             tier = 'Low keyword coverage';
-            tierColor = '#dc2626';
-            tierText = '#b91c1c';
+            tierColor = '#B91C1C';
+            tierText = '#991B1B';
             tierBg = '#fee2e2';
-            tierIcon = '📈';
             tierMsg = 'This describes recognised terms, not your suitability for the role. Check required experience and qualifications separately.';
         }
 
@@ -1390,7 +1386,6 @@ Nice to Have
 
         verdict.innerHTML = `
             <div class="fit-verdict-badge" style="background: ${tierBg}; color: ${tierText};">
-                <span class="fit-icon">${tierIcon}</span>
                 <span class="fit-tier">${tier}</span>
             </div>
             <p class="fit-msg">${tierMsg}</p>
@@ -1420,11 +1415,11 @@ Nice to Have
         container.innerHTML = '';
 
         const labels = {
-            technical_skills: '💻 Technical Skills',
-            soft_skills: '🤝 Soft Skills',
-            certifications: '📜 Certifications',
-            education: '🎓 Education',
-            action_verbs: '⚡ Action Verbs',
+            technical_skills: 'Technical skills',
+            soft_skills: 'Soft skills',
+            certifications: 'Certifications',
+            education: 'Education',
+            action_verbs: 'Action verbs',
         };
 
         let leftOut = false;
@@ -1471,13 +1466,13 @@ Nice to Have
         // Formatting score bar
         const ats = data.ats_formatting;
         if (ats && typeof ats.formatting_score === 'number') {
-            renderSubScoreBar(container, '📋 ATS Formatting', ats.formatting_score, ats.checklist, null);
+            renderSubScoreBar(container, 'ATS formatting', ats.formatting_score, ats.checklist, null);
         }
 
         // Recruiter Tips bar
         const rt = data.recruiter_tips;
         if (rt && typeof rt.score === 'number') {
-            renderSubScoreBar(container, '🎯 Recruiter Tips', rt.score, rt.checklist, rt.quantification);
+            renderSubScoreBar(container, 'Recruiter tips', rt.score, rt.checklist, rt.quantification);
         }
     }
 
@@ -1505,7 +1500,7 @@ Nice to Have
         if (quantification && quantification.flagged_bullets && quantification.flagged_bullets.length > 0) {
             const bullets = quantification.flagged_bullets.slice(0, 5).map(b => {
                 const truncated = b.length > 100 ? b.substring(0, 100) + '...' : b;
-                return `<div class="flagged-bullet">💡 <span>${escapeHtml(truncated)}</span></div>`;
+                return `<div class="flagged-bullet"><span>${escapeHtml(truncated)}</span></div>`;
             }).join('');
             flaggedHTML = `<div class="flagged-bullets" style="display:none;">
                 <div class="flagged-header">Bullets that could use metrics:</div>
@@ -1663,10 +1658,10 @@ Nice to Have
         container.innerHTML = '';
 
         if (suggestions.ai_powered) {
-            badge.textContent = '✨ AI-powered analysis';
+            badge.textContent = 'AI-powered analysis';
             badge.className = 'ai-badge powered';
         } else {
-            badge.textContent = '📊 Rule-based analysis';
+            badge.textContent = 'Rule-based analysis';
             badge.className = 'ai-badge fallback';
         }
 
@@ -1682,7 +1677,7 @@ Nice to Have
             const section = document.createElement('div');
             section.className = 'ai-section';
             section.innerHTML = `
-                <h3>💪 Your strengths</h3>
+                <h3>Your strengths</h3>
                 ${suggestions.strengths.map(s => `<div class="strength-item">${escapeHtml(s)}</div>`).join('')}
             `;
             container.appendChild(section);
@@ -1692,7 +1687,7 @@ Nice to Have
         if (suggestions.critical_improvements && suggestions.critical_improvements.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>🎯 Key improvements</h3>`;
+            section.innerHTML = `<h3>Key improvements</h3>`;
             suggestions.critical_improvements.forEach(item => {
                 const priority = item.priority || 'medium';
                 const div = document.createElement('div');
@@ -1710,7 +1705,7 @@ Nice to Have
         if (suggestions.keyword_suggestions && suggestions.keyword_suggestions.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>🔑 How to add these keywords to your CV</h3>`;
+            section.innerHTML = `<h3>How to add these keywords to your CV</h3>`;
             suggestions.keyword_suggestions.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'ai-item';
@@ -1727,7 +1722,7 @@ Nice to Have
         if (suggestions.rewrite_suggestions && suggestions.rewrite_suggestions.length > 0) {
             const section = document.createElement('div');
             section.className = 'ai-section';
-            section.innerHTML = `<h3>✏️ Section rewrite suggestions</h3>`;
+            section.innerHTML = `<h3>Section rewrite suggestions</h3>`;
             suggestions.rewrite_suggestions.forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'ai-item';
@@ -1924,7 +1919,7 @@ Nice to Have
             const tipsDiv = document.createElement('div');
             tipsDiv.className = 'ats-tips';
             tipsDiv.innerHTML = `
-                <h3>💡 Tips</h3>
+                <h3>Tips</h3>
                 ${ats.tips.map(t => `<div class="ats-tip">${escapeHtml(t)}</div>`).join('')}
             `;
             container.appendChild(tipsDiv);
@@ -2054,9 +2049,9 @@ Nice to Have
         const first = chartData[0].score;
         const last = chartData[chartData.length - 1].score;
         const diff = last - first;
-        if (diff > 5) return `<div class="history-trend positive">📈 Up ${diff} points across revisions for this job.</div>`;
-        if (diff < -5) return `<div class="history-trend negative">📉 Down ${Math.abs(diff)} points for this job. Review the changes before adding any claims.</div>`;
-        return `<div class="history-trend neutral">➡️ Score is holding steady. Check the missing keywords for your next edit.</div>`;
+        if (diff > 5) return `<div class="history-trend positive">Up ${diff} points across revisions for this job.</div>`;
+        if (diff < -5) return `<div class="history-trend negative">Down ${Math.abs(diff)} points for this job. Review the changes before adding any claims.</div>`;
+        return `<div class="history-trend neutral">Score is holding steady. Check the missing keywords for your next edit.</div>`;
     }
 
     // ============================================================

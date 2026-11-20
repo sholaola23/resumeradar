@@ -172,8 +172,8 @@ class PageTests(unittest.TestCase):
         self.assertIn('Scan my CV', self.html)
         self.assertNotIn('Scan My Resume', self.html)
         # "resume" stays in the page title and structured data for search (B1); not in the form.
-        self.assertIn('<h2>📄 Your CV</h2>', self.html)
-        self.assertNotIn('<h2>📄 Your Resume</h2>', self.html)
+        self.assertIn('<h2>Your CV</h2>', self.html)
+        self.assertNotIn('Your Resume</h2>', self.html)
 
     def test_header_and_footer_have_a_job(self):
         self.assertIn('href="/" aria-label="ResumeRadar home"', self.html)
