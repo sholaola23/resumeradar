@@ -2923,3 +2923,26 @@ button.keyword-tag:hover { text-decoration-style:solid; }
 .privacy-page li { margin-bottom: 8px; }
 .privacy-page a { color: var(--primary); text-decoration: underline; }
 .privacy-lede { font-size: 18px; }
+
+/* ---- Scan form beside the hero (desktop only) ---- */
+.scanner-section { padding: 0; }
+@media (min-width: 601px) {
+    .results-section { padding-top: 8px; padding-bottom: 60px; }
+}
+.hero .scan-form { margin: 32px 0 0; }
+.hero .social-proof { padding: 16px 0 0; }
+.hero .role-keywords { justify-content: flex-start; }
+.how-it-works { padding-top: 32px; padding-bottom: 48px; }
+@media (min-width: 1100px) {
+    .hero-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: start; }
+    .hero:has(> .hero-layout) { padding-top: 48px; }
+    .hero-text { padding-top: 24px; }
+    .hero-layout h1 { font-size: clamp(2.4rem, 4vw, 3.4rem); }
+    .hero .hero-scan-link { display: none; }
+    .hero .scan-form { margin-top: 0; padding: 28px; }
+    .hero .form-grid { grid-template-columns: 1fr; gap: 20px; }
+    .hero .form-panel h2 { font-size: 1.2rem; margin-bottom: 12px; }
+    .hero .file-upload-area { padding-top: 24px; padding-bottom: 24px; }
+    .hero #resumeText { height: 180px; }
+    .hero #jobDescription { height: 150px; }
+}
