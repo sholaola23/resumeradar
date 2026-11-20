@@ -1,14 +1,12 @@
 """PDF parsing stops early on files far heavier than a CV (QA on PR 34)."""
 import os
 import tempfile
-import threading
 import zlib
-import time
 import unittest
 from unittest.mock import patch
 
 from fpdf import FPDF
-from pypdf import PdfReader
+from pypdf import PageObject, PdfReader
 
 from backend import resume_parser
 
@@ -93,12 +91,20 @@ class PdfBudgetTests(unittest.TestCase):
         self.paths.append(path)
         return path
 
+    # These assert the expensive work was skipped or cut short, not wall-clock
+    # time, so a slow CI runner cannot make them flaky (Claude review, PR 34).
+    def _extract_counting_pages(self, path):
+        real = PageObject.extract_text
+        with patch.object(PageObject, "extract_text", autospec=True,
+                          side_effect=real) as calls:
+            text, err = resume_parser.extract_text_from_pdf(path)
+        return text, err, calls.call_count
+
     def test_qa_repro_rejected_quickly(self):
         # 400 lines x 50 pages: ~0.13MB file, ~7.6MB of page content.
         path = self._path(_dense_pdf(400, 50))
-        start = time.time()
-        text, err = resume_parser.extract_text_from_pdf(path)
-        self.assertLess(time.time() - start, 2)
+        text, err, pages_read = self._extract_counting_pages(path)
+        self.assertEqual(pages_read, 0)  # rejected before extraction
         self.assertIsNone(text)
         self.assertIn("more complex than we can process", err)
 
@@ -106,9 +112,8 @@ class PdfBudgetTests(unittest.TestCase):
         # Content check lifted, so the running text count must catch it.
         path = self._path(_dense_pdf(400, 50))
         with patch.object(resume_parser, "MAX_PDF_CONTENT_BYTES", 10**9):
-            start = time.time()
-            text, err = resume_parser.extract_text_from_pdf(path)
-        self.assertLess(time.time() - start, 2)
+            text, err, pages_read = self._extract_counting_pages(path)
+        self.assertLess(pages_read, 50)  # stopped part way through
         self.assertIsNone(text)
         self.assertIn("more text than a CV", err)
 
@@ -122,9 +127,8 @@ class PdfBudgetTests(unittest.TestCase):
     def test_nested_form_counted_against_content_cap(self):
         path = self._path(_nested_form_pdf(40))
         self.assertLess(os.path.getsize(path), 1024 * 1024)
-        start = time.time()
-        text, err = resume_parser.extract_text_from_pdf(path)
-        self.assertLess(time.time() - start, 2)
+        text, err, pages_read = self._extract_counting_pages(path)
+        self.assertEqual(pages_read, 0)  # rejected before extraction
         self.assertIsNone(text)
         self.assertIn("more complex than we can process", err)
 
@@ -137,24 +141,25 @@ class PdfBudgetTests(unittest.TestCase):
         self.assertIn("empty", err)
 
     def test_time_budget_ignores_other_threads(self):
-        # Other threads burning CPU must not use up this request's budget.
-        stop = threading.Event()
+        # Under gunicorn's threads, wall-clock time keeps running while other
+        # requests hold the GIL. Make the wall clock leap an hour on every
+        # read: a wall-clock budget would trip, a CPU-time budget must not.
+        real_time = resume_parser.time
+        leaps = iter(range(0, 10**9, 3600))
 
-        def burn():
-            while not stop.is_set():
-                sum(range(10_000))
+        class LeapingClock:
+            def __getattr__(self, name):
+                return getattr(real_time, name)
 
-        burners = [threading.Thread(target=burn) for _ in range(3)]
-        for t in burners:
-            t.start()
-        try:
-            path = self._path(_normal_cv_pdf())
-            with patch.object(resume_parser, "PDF_EXTRACT_SECONDS", 0.5):
-                text, err = resume_parser.extract_text_from_pdf(path)
-        finally:
-            stop.set()
-            for t in burners:
-                t.join()
+            @staticmethod
+            def monotonic():
+                return float(next(leaps))
+
+            time = perf_counter = monotonic
+
+        path = self._path(_normal_cv_pdf())
+        with patch.object(resume_parser, "time", LeapingClock()):
+            text, err = resume_parser.extract_text_from_pdf(path)
         self.assertIsNone(err)
         self.assertTrue(text)
 
