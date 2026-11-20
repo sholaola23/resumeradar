@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ATS Resume Checkers by Role — Free | ResumeRadar</title>
-    <meta name="description" content="Free ATS resume checkers for 15 roles — software engineer, data analyst, cloud engineer, product manager, and more. Role-specific keyword guides plus an instant match score against any job description.">
+    <title>ATS Resume Checkers by Role: Free | ResumeRadar</title>
+    <meta name="description" content="Free ATS resume checkers for 15 roles, including software engineer, data analyst, cloud engineer, product manager, and more. Role-specific keyword guides plus an instant match score against any job description.">
     <link rel="canonical" href="https://resumeradar.sholastechnotes.com/ats-resume-checker/">
 
     <meta property="og:title" content="ATS Resume Checkers by Role | ResumeRadar">
@@ -16,8 +16,8 @@
     <link rel="icon" href="/static/favicon.ico" sizes="any">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=16">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=19">
 
     <script type="application/ld+json">
     {
@@ -39,7 +39,7 @@
         <div class="container">
             <div class="header-inner">
                 <div class="logo">
-                    <span class="logo-icon">📡</span>
+                    <span class="logo-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" focusable="false"><circle cx="13" cy="13" r="11"/><path d="M13 7a6 6 0 0 1 6 6"/><circle cx="13" cy="13" r="1.6" fill="currentColor"/></svg></span>
                     <span class="logo-text">ResumeRadar</span>
                 </div>
                 <nav class="nav-links">
@@ -49,6 +49,7 @@
         </div>
     </header>
 
+    <main>
     <section class="hero">
         <div class="container">
             <h1>ATS resume checkers, <span class="highlight">by role</span>.</h1>
@@ -68,15 +69,16 @@
                 {% endfor %}
             </div>
             <div class="role-hub-home">
-                <p>Not in the list? The <a href="/">free scanner</a> works for any role — paste any job description and see your match score in 30 seconds.</p>
+                <p>Not in the list? The <a href="/">free scanner</a> works for any role. Paste any job description and see your match score in 30 seconds.</p>
             </div>
         </div>
     </section>
+    </main>
 
     <footer class="footer">
         <div class="container">
             <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
-            <p class="footer-privacy">🔒 {{ privacy_line }} <a href="/privacy">Privacy</a></p>
+            <p class="footer-privacy">{{ privacy_line }} <a href="/privacy">Privacy</a></p>
         </div>
     </footer>
 </body>
