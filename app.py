@@ -382,7 +382,7 @@ ROLE_PAGES = {
     "project-manager": {
         "title": "Project Manager",
         "h1": "Does your project manager resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles — Agile, Scrum, stakeholder management, and more.",
+        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles, such as Agile, Scrum, stakeholder management, and more.",
         "keywords": ["Agile", "Scrum", "PMP", "PRINCE2", "stakeholder management", "Jira", "Confluence", "risk management", "budgeting", "Kanban", "sprint planning", "cross-functional", "roadmap"],
     },
     "product-manager": {
@@ -400,7 +400,7 @@ ROLE_PAGES = {
     "devops-engineer": {
         "title": "DevOps Engineer",
         "h1": "Does your DevOps resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords — CI/CD, Kubernetes, Terraform, Docker, and more.",
+        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords, such as CI/CD, Kubernetes, Terraform, Docker, and more.",
         "keywords": ["CI/CD", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions", "AWS", "Linux", "monitoring", "Prometheus", "Grafana", "infrastructure as code", "Python", "Bash"],
     },
     "data-scientist": {
@@ -412,7 +412,7 @@ ROLE_PAGES = {
     "ux-designer": {
         "title": "UX Designer",
         "h1": "Does your UX design resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords — user research, Figma, wireframing, prototyping, and more.",
+        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords, such as user research, Figma, wireframing, prototyping, and more.",
         "keywords": ["user research", "Figma", "wireframing", "prototyping", "usability testing", "design thinking", "information architecture", "user flows", "accessibility", "Sketch", "Adobe XD", "responsive design"],
     },
     "cybersecurity-analyst": {
@@ -1076,7 +1076,7 @@ def email_report():
         params = {
             "from": "ResumeRadar <reports@sholastechnotes.com>",
             "to": [email],
-            "subject": f"Your ResumeRadar Report — Match estimate: {score_label}",
+            "subject": f"Your ResumeRadar Report: Match estimate: {score_label}",
             "html": html_body,
             "attachments": [
                 {
