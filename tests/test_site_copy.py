@@ -4,6 +4,7 @@ Each check here comes from the November 2026 UX audit (section A): promise
 wording, unverifiable testimonials, contradicting privacy lines, the forced
 newsletter pop-up, developer error text and keyboard access.
 """
+import ast
 import os
 import re
 import sys
@@ -34,6 +35,42 @@ BANNED = [
 def read(*parts):
     with open(os.path.join(ROOT, *parts), encoding='utf-8') as handle:
         return handle.read()
+
+
+def _leaky_log_lines(scope):
+    """Lines where a print or logging call shows an exception or a response body.
+
+    Inside an except block, the caught exception may only appear as
+    log_safe.describe(e) or type(e).__name__. Anywhere, a `.text` attribute
+    (an HTTP response body) may not be logged.
+    """
+    def is_log_call(node):
+        f = node.func
+        return (isinstance(f, ast.Name) and f.id == 'print') or (
+            isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name)
+            and f.value.id in ('logging', 'logger', 'log'))
+
+    def safe_use(parent, name):
+        if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute) and parent.func.attr == 'describe':
+            return True
+        return isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name) and parent.func.id == 'type'
+
+    lines = []
+    for handler in ast.walk(scope):
+        if not isinstance(handler, ast.ExceptHandler) or not handler.name:
+            continue
+        for call in (n for stmt in handler.body for n in ast.walk(stmt)):
+            if not (isinstance(call, ast.Call) and is_log_call(call)):
+                continue
+            parents = {child: node for node in ast.walk(call) for child in ast.iter_child_nodes(node)}
+            for node in ast.walk(call):
+                if isinstance(node, ast.Name) and node.id == handler.name and not safe_use(parents.get(node), node.id):
+                    lines.append(call.lineno)
+    for call in ast.walk(scope):
+        if isinstance(call, ast.Call) and is_log_call(call):
+            if any(isinstance(n, ast.Attribute) and n.attr == 'text' for n in ast.walk(call)):
+                lines.append(call.lineno)
+    return sorted(set(lines))
 
 
 class SiteCopyTest(unittest.TestCase):
@@ -106,26 +143,28 @@ class SiteCopyTest(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_scan_path_logs_error_types_not_messages(self):
-        # An exception message can quote the CV or job text that caused it, so
-        # the free scan, AI, PDF and email handlers log log_safe.describe(e).
+        # An exception message can quote the CV, job text or email address that
+        # caused it, so the free handlers log log_safe.describe(e) instead.
         from backend import log_safe
         self.assertEqual(log_safe.describe(KeyError('Jane Doe, Acme Ltd')), 'KeyError')
         err = RuntimeError('quoted prompt text')
         err.status_code = 429
         self.assertEqual(log_safe.describe(err), 'RuntimeError (status 429)')
-        leaky = re.compile(r'print\(.*(str\(e\)|\{e\}|\{error_msg\})')
-        scan_path = {
-            'app.py': ('def scan_resume', 'def email_report'),
-            'backend/ai_analyzer.py': (None, None),
-            'backend/resume_parser.py': (None, None),
-        }
-        for path, (start, end) in scan_path.items():
-            source = read(*path.split('/'))
-            if start:
-                begin = source.index(start)
-                source = source[begin:source.index('\n@app.', source.index(end))]
-            offenders = [line.strip() for line in source.splitlines() if leaky.search(line)]
-            self.assertEqual(offenders, [], path)
+
+        free_routes = {'scan_resume', 'generate_cover_letter_endpoint', 'enhance_bullet_endpoint',
+                       'generate_summary_endpoint', 'download_report', 'email_report',
+                       'subscribe_newsletter'}
+        offenders = []
+        for path in ('app.py', 'backend/ai_analyzer.py', 'backend/resume_parser.py'):
+            tree = ast.parse(read(*path.split('/')))
+            if path == 'app.py':
+                scopes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in free_routes]
+                self.assertEqual({n.name for n in scopes}, free_routes)
+            else:
+                scopes = [tree]
+            for scope in scopes:
+                offenders += [f'{path}:{line}' for line in _leaky_log_lines(scope)]
+        self.assertEqual(offenders, [])
 
     def test_privacy_page_lists_what_the_browser_keeps(self):
         page = self.page('/privacy')

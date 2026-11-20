@@ -1087,9 +1087,9 @@ def subscribe_newsletter():
                     timeout=10,
                 )
                 if resp.status_code not in [200, 201]:
-                    print(f"Beehiiv API error: {resp.status_code} - {resp.text[:200]}")
+                    print(f"Beehiiv API error: status {resp.status_code}")
             except Exception as exc:
-                print(f"Beehiiv background error: {exc}")
+                print(f"Beehiiv background error: {log_safe.describe(exc)}")
             finally:
                 _beehiiv_semaphore.release()
 
@@ -1106,7 +1106,7 @@ def subscribe_newsletter():
         })
 
     except Exception as e:
-        print(f"Newsletter subscription error: {str(e)}")
+        print(f"Newsletter subscription error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
