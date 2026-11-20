@@ -28,13 +28,6 @@ function escapeHtml(text) {
 
 document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
-    // MODE RESOLVER — single place for feature flags
-    // ============================================================
-    const _rrMode = {
-        gate: new URLSearchParams(location.search).get('gate') === 'modal' ? 'modal' : 'inline',
-    };
-
-    // ============================================================
     // FUNNEL ANALYTICS (fire-and-forget via sendBeacon)
     // ============================================================
     let journeyId = '';
@@ -132,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailInput = document.getElementById('emailInput');
 
     // Store the last scan data for report generation
-    // Exposed on window for cross-page use (CV Builder cross-sell)
     let lastScanData = null;
     let comparisonBaseline = null;
     // Job description segments for "View in job description". Kept apart from
@@ -142,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Keep the optional newsletter after the complete report and free rescan action.
     resultsSection.appendChild(document.getElementById('inlineGateCard'));
     document.getElementById('topMissingKeywords').before(document.getElementById('quickWins'));
-    window._resumeradar_getLastScanData = function () { return lastScanData; };
 
     // Show a recognised term the way people write it (CDN, not cdn). The
     // server sends the display names with each scan; matching stays lower-case.
@@ -157,213 +148,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const socialProof = document.getElementById('socialProof');
     const scanCountEl = document.getElementById('scanCount');
 
-    (async function loadScanCount() {
+    function scanCountText(count) {
+        const num = count.toLocaleString();
+        if (count >= 1000) return `${num}+ CVs scanned. Join the movement`;
+        if (count >= 750) return `${num}+ job seekers have scanned their CVs`;
+        if (count >= 500) return `${num}+ CVs scanned and counting`;
+        if (count >= 250) return `${num}+ CVs scanned. Are you next?`;
+        return `${num}+ CVs scanned`;
+    }
+
+    // Used on first load and again after each scan, so the banner keeps its words.
+    async function refreshScanCount() {
+        if (!socialProof || !scanCountEl) return;
         try {
             const resp = await fetch('/api/scan-count');
             const data = await resp.json();
             const count = data.count || 0;
             const velocity = data.velocity || 0;
-            if (count >= 10 && socialProof && scanCountEl) {
-                // Milestone-aware copy
-                const num = count.toLocaleString();
-                let text = `${num}+ CVs scanned`;
-                if (count >= 1000) text = `${num}+ CVs scanned. Join the movement`;
-                else if (count >= 750) text = `${num}+ job seekers have scanned their CVs`;
-                else if (count >= 500) text = `${num}+ CVs scanned and counting`;
-                else if (count >= 250) text = `${num}+ CVs scanned. Are you next?`;
+            if (count < 10) return;
+            scanCountEl.textContent = scanCountText(count);
 
-                scanCountEl.textContent = text;
-
-                // Show velocity badge when traffic is active
-                const velocityEl = document.getElementById('scanVelocity');
-                if (velocity >= 5 && velocityEl) {
-                    velocityEl.textContent = `${velocity} scans this hour`;
-                    velocityEl.style.display = 'inline';
-                }
-
-                socialProof.style.display = 'block';
+            // Show velocity badge when traffic is active
+            const velocityEl = document.getElementById('scanVelocity');
+            if (velocity >= 5 && velocityEl) {
+                velocityEl.textContent = `${velocity} scans this hour`;
+                velocityEl.style.display = 'inline';
             }
+
+            socialProof.style.display = 'block';
         } catch (e) {
             // Silently fail — social proof is non-critical
         }
-    })();
-
-    // Newsletter popup elements
-    const newsletterPopup = document.getElementById('newsletterPopup');
-    const newsletterForm = document.getElementById('newsletterForm');
-    const newsletterEmail = document.getElementById('newsletterEmail');
-    const newsletterFirstName = document.getElementById('newsletterFirstName');
-
-    // hasSubscribed replaced by isSubscribed() — see cross-cutting section above
-
-    // ============================================================
-    // NEWSLETTER POPUP (MANDATORY)
-    // ============================================================
-
-    function showNewsletterPopup(data) {
-        if (!newsletterPopup) {
-            renderResults(data);
-            return;
-        }
-
-        // Show score preview in the popup header
-        const score = data.match_score;
-        const scorePreview = document.getElementById('scorePreview');
-        const scorePreviewNumber = document.getElementById('scorePreviewNumber');
-        const scorePreviewFill = document.getElementById('scorePreviewFill');
-
-        if (scorePreview && scorePreviewNumber && scorePreviewFill) {
-            // Set score text
-            scorePreviewNumber.textContent = Number.isFinite(score) ? ResumeRadarScan.scoreText(score) : '—';
-
-            // Animate the circle fill
-            const circumference = 226.195; // 2 * π * 36
-            const offset = circumference - ((Number.isFinite(score) ? score : 0) / 100) * circumference;
-            scorePreviewFill.style.strokeDashoffset = circumference; // reset
-            scorePreview.style.display = 'block';
-
-            // Color based on score
-            let color = '#dc2626';
-            if (!Number.isFinite(score)) color = '#64748b';
-        else if (score >= 75) color = '#059669';
-            else if (score >= 50) color = '#d97706';
-            scorePreviewFill.style.stroke = color;
-
-            // Animate after a brief delay
-            setTimeout(() => {
-                scorePreviewFill.style.strokeDashoffset = offset;
-            }, 300);
-        }
-
-        // Update heading to include score context
-        if (newsletterHeading) {
-            newsletterHeading.textContent = `Your estimate: ${ResumeRadarScan.scoreText(score)}`;
-        }
-        if (newsletterSubtitle) {
-            newsletterSubtitle.textContent = 'Subscribe to Shola\'s Tech Notes to unlock your full report — missing keywords, AI suggestions, and ATS fixes. Plus get weekly tech career tips in just 3 minutes.';
-        }
-
-        newsletterPopup.style.display = 'flex';
-        // gate_shown event fired by the scan handler, not here (prevents duplicates)
-        if (newsletterFirstName) newsletterFirstName.focus();
     }
-
-    // Post-subscribe confirmation elements
-    const newsletterFormWrapper = document.getElementById('newsletterFormWrapper');
-    const newsletterConfirmation = document.getElementById('newsletterConfirmation');
-    const confirmName = document.getElementById('confirmName');
-    const viewResultsBtn = document.getElementById('viewResultsBtn');
-    const newsletterHeading = document.getElementById('newsletterHeading');
-    const newsletterSubtitle = document.getElementById('newsletterSubtitle');
-
-    function showNewsletterConfirmation(firstName) {
-        // Hide the form, show the confirmation
-        if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'none';
-        if (newsletterConfirmation) {
-            newsletterConfirmation.style.display = 'block';
-            if (confirmName) confirmName.textContent = firstName;
-        }
-        // Update header text to post-subscribe message
-        if (newsletterHeading) newsletterHeading.textContent = "You're subscribed! 🎉";
-        if (newsletterSubtitle) newsletterSubtitle.textContent = "Welcome to Shola's Tech Notes — you'll get practical tech career tips, certification guides, and AI fundamentals in just 3 minutes a week.";
-
-        markSubscribed();
-    }
-
-    function closeNewsletterAfterSubscribe() {
-        if (newsletterPopup) newsletterPopup.style.display = 'none';
-
-        // Reset the popup to form state for next time (shouldn't happen since we track session)
-        if (newsletterFormWrapper) newsletterFormWrapper.style.display = 'block';
-        if (newsletterConfirmation) newsletterConfirmation.style.display = 'none';
-
-        // Now show the results
-        if (lastScanData) {
-            renderResults(lastScanData);
-        }
-    }
-
-    // "View My Results" button on confirmation screen
-    if (viewResultsBtn) {
-        viewResultsBtn.addEventListener('click', () => {
-            closeNewsletterAfterSubscribe();
-        });
-    }
-
-    // NO backdrop close — subscription is mandatory
-    // NO skip button — subscription is mandatory
-    // NO close button — subscription is mandatory
-
-    // Newsletter form submission
-    if (newsletterForm) {
-        newsletterForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const firstName = newsletterFirstName ? newsletterFirstName.value.trim() : '';
-            const email = newsletterEmail ? newsletterEmail.value.trim() : '';
-
-            // Validate first name
-            if (!firstName) {
-                if (newsletterFirstName) {
-                    newsletterFirstName.style.borderColor = '#dc2626';
-                    newsletterFirstName.focus();
-                }
-                return;
-            }
-
-            // Validate email
-            if (!email || !email.includes('@')) {
-                if (newsletterEmail) {
-                    newsletterEmail.style.borderColor = '#dc2626';
-                    newsletterEmail.focus();
-                }
-                return;
-            }
-
-            // Reset border colors
-            if (newsletterFirstName) newsletterFirstName.style.borderColor = '';
-            if (newsletterEmail) newsletterEmail.style.borderColor = '';
-
-            const submitBtn = newsletterForm.querySelector('.newsletter-submit-btn');
-            const btnText = submitBtn ? submitBtn.querySelector('.nl-btn-text') : null;
-            const btnLoading = submitBtn ? submitBtn.querySelector('.nl-btn-loading') : null;
-
-            if (btnText) btnText.style.display = 'none';
-            if (btnLoading) btnLoading.style.display = 'inline';
-            if (submitBtn) submitBtn.disabled = true;
-
-            try {
-                // Subscribe via our backend (which calls Beehiiv API)
-                // Thread incoming UTM source so Beehiiv tracks where this subscriber came from
-                const incomingUtm = new URLSearchParams(window.location.search).get('utm_source') || 'resumeradar';
-                const response = await fetch('/api/subscribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, first_name: firstName, utm_source: incomingUtm }),
-                });
-
-                const result = await response.json();
-
-                if (!response.ok || result.error) {
-                    throw new Error(result.error || 'Subscription failed');
-                }
-
-                // Show the confirmation screen with email tip
-                showNewsletterConfirmation(firstName);
-
-            } catch (err) {
-                console.error('Newsletter signup error:', err);
-                // Fallback: open the newsletter page directly
-                window.open('https://www.sholastechnotes.com/', '_blank');
-                showToast('Opening newsletter page — subscribe there to see results.');
-                closeNewsletterAfterSubscribe();
-            } finally {
-                if (btnText) btnText.style.display = 'inline';
-                if (btnLoading) btnLoading.style.display = 'none';
-                if (submitBtn) submitBtn.disabled = false;
-            }
-        });
-    }
+    refreshScanCount();
 
     // ============================================================
     // INLINE GATE HANDLERS
@@ -460,6 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHidden = content.style.display === 'none';
         content.style.display = isHidden ? 'block' : 'none';
         if (icon) icon.textContent = isHidden ? '−' : '+';
+        toggle.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
 
         // Fire section expand event (once per scan)
         if (isHidden && section) {
@@ -659,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
 
             let response;
             try {
@@ -672,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
                     trackEvent('scan_failed');
-                    showError('The scan is taking too long. Please try again in a moment.');
+                    showError('The scan is taking longer than usual. Please try again in a moment. Your text is still here.');
                     setLoading(false);
                     return;
                 }
@@ -698,18 +516,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Set scan ID for event deduplication
             currentScanId = data.scan_id || data.request_id || String(Date.now());
 
-            // Update social proof counter after successful scan
-            if (socialProof && scanCountEl) {
-                try {
-                    const countResp = await fetch('/api/scan-count');
-                    const countData = await countResp.json();
-                    const newCount = countData.count || 0;
-                    if (newCount >= 10) {
-                        scanCountEl.textContent = newCount.toLocaleString() + '+';
-                        socialProof.style.display = 'block';
-                    }
-                } catch (e) { /* non-critical */ }
-            }
+            // Update social proof counter after successful scan (not awaited: non-critical)
+            refreshScanCount();
 
             // Every scan includes the complete free report; signup is optional.
             renderResults(data);
@@ -717,7 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Scan error:', err);
             trackEvent('scan_failed');
-            showError('Could not connect to the server. Please make sure the app is running and try again.');
+            showError('We could not reach ResumeRadar. Check your connection and try again. Your text is still here.');
         } finally {
             setLoading(false);
         }
@@ -897,7 +705,7 @@ Nice to Have
 
         report.push('═══════════════════════════════════════════');
         report.push('  RESUMERADAR — ATS SCAN REPORT');
-        report.push('  Beat the scan. Land the interview.');
+        report.push('  Make your experience clear.');
         report.push('═══════════════════════════════════════════');
         report.push(`  Generated: ${now}`);
         report.push('');
@@ -1108,7 +916,9 @@ Nice to Have
     // ============================================================
     // EMAIL REPORT (via mailto)
     // ============================================================
+    let modalReturnFocus = null;
     emailReportBtn.addEventListener('click', () => {
+        modalReturnFocus = document.activeElement;
         emailModal.style.display = 'flex';
         emailInput.value = '';
         emailInput.focus();
@@ -1122,15 +932,35 @@ Nice to Have
         if (e.target === emailModal) closeModal();
     });
 
-    // Close modal on Escape key
+    // Close modal on Escape key, and keep Tab focus inside the dialog
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && emailModal.style.display === 'flex') {
+        if (emailModal.style.display !== 'flex') return;
+        if (e.key === 'Escape') {
             closeModal();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        const focusable = Array.from(emailModal.querySelectorAll('button, input, a[href]'))
+            .filter(el => !el.disabled && el.offsetParent !== null);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!emailModal.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
         }
     });
 
     function closeModal() {
         emailModal.style.display = 'none';
+        if (modalReturnFocus && document.contains(modalReturnFocus)) modalReturnFocus.focus();
+        modalReturnFocus = null;
     }
 
     sendEmailBtn.addEventListener('click', async () => {
@@ -1381,7 +1211,12 @@ Nice to Have
         if (!card || !list) return;
 
         const suggestions = data.ai_suggestions;
-        if (!suggestions) {
+        // Without AI, the rule-based "quick wins" repeat the "Priorities for
+        // this job" card word for word, so hide this card and say why.
+        const aiResting = !!suggestions && typeof suggestions === 'object' && !suggestions.ai_powered;
+        const restNote = document.getElementById('aiRestNote');
+        if (restNote) restNote.hidden = !aiResting;
+        if (!suggestions || aiResting) {
             card.style.display = 'none';
             return;
         }

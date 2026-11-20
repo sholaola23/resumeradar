@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy | ResumeRadar</title>
+    <meta name="description" content="What ResumeRadar does with your CV, your job description and your email address, in plain language.">
+    <link rel="canonical" href="https://resumeradar.sholastechnotes.com/privacy">
+
+    <link rel="icon" href="/static/favicon.ico" sizes="any">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=16">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="header-inner">
+                <div class="logo">
+                    <span class="logo-icon" aria-hidden="true">📡</span>
+                    <span class="logo-text">ResumeRadar</span>
+                </div>
+                <nav class="nav-links">
+                    <a href="/" class="nav-link">Scan Resume</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="privacy-page">
+        <div class="container">
+            <h1>Privacy</h1>
+            <p class="privacy-lede">{{ privacy_line }}</p>
+
+            <h2>Your CV and the job description</h2>
+            <ul>
+                <li>If you upload a file, it is read once and deleted straight away. If you paste text, no file is created.</li>
+                <li>Your CV text and the job description are sent to our AI provider, Anthropic, to write your suggestions and, if you ask for one, your cover letter.</li>
+                <li>ResumeRadar does not save your CV text or add it to a database. The AI suggestions and cover letters are cached for up to one hour, so a repeat of the same request does not have to be written again. Our server logs never include your CV text or the AI reply.</li>
+                <li>Nothing is sold.</li>
+            </ul>
+
+            <h2>Your email address</h2>
+            <ul>
+                <li><strong>Emailed report.</strong> If you ask for your report by email, your address is used only to send it, through our email provider, Resend. ResumeRadar does not keep it or add you to a mailing list.</li>
+                <li><strong>Newsletter.</strong> Signing up to Shola's Tech Notes is optional. If you do, your first name and email address go to our newsletter provider, Beehiiv. You can unsubscribe from any issue.</li>
+            </ul>
+
+            <h2>What stays on your device</h2>
+            <p>Your scan history is kept in your browser, not on our servers. Each entry holds the date, your score, the keyword counts, the first line of the job description (up to 60 characters) and a short code made from the job description, which lets ResumeRadar compare rescans for the same job. The code cannot be turned back into the job description. The "Clear history" button removes it all.</p>
+            <p>Your browser also remembers whether you have visited before, whether you signed up to the newsletter, and a random ID and a few settings for the current visit, which are cleared when you close the tab.</p>
+
+            <h2>Feedback on a report</h2>
+            <p>Under each report you can say whether it was useful and, if you like, add a comment. A Yes or No on its own is only added to a daily count. If you send a comment, we save only your comment, your Yes or No answer, whether you allow quoting and today's date, with nothing that links it to you or your scan, and delete it after 90 days. Web addresses, email addresses and phone numbers are removed before it is saved. A comment is only quoted on the site if you ticked the box to allow it, and never with your name.</p>
+            <h2>Usage counts and limits</h2>
+            <ul>
+                <li>We count events such as scans started and completed, using a random ID for each visit. The counts are kept for up to 90 days and are not linked to your name, email address or CV.</li>
+                <li>To keep the tool free and stop abuse, your IP address is used to apply daily limits. Those counters expire within 24 hours.</li>
+            </ul>
+
+            <h2>Who runs ResumeRadar</h2>
+            <p>ResumeRadar is a free personal project built and run by Olushola Oladipupo. For any privacy question, message him on <a href="https://www.linkedin.com/in/olushola-oladipupo/" rel="noopener">LinkedIn</a>.</p>
+
+            <p><a href="/">Back to the free CV check</a></p>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
+        </div>
+    </footer>
+</body>
+</html>

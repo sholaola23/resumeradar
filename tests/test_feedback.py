@@ -260,6 +260,12 @@ class FeedbackAdminTests(FeedbackTestCase):
 
 
 class FeedbackPageTests(FeedbackTestCase):
+    def test_privacy_page_describes_feedback(self):
+        page = self.client.get('/privacy').data.decode()
+        self.assertIn('Feedback on a report', page)
+        self.assertIn('your comment, your Yes or No answer, whether you allow quoting and today', page)
+        self.assertIn('delete it after 90 days', page)
+
     def test_card_and_script_are_on_the_scan_page(self):
         home = self.client.get('/').data.decode()
         # The privacy sentence names every field backend/feedback.py stores.

@@ -23,12 +23,14 @@ from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from backend import log_safe
 from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.role_content import ROLE_CONTENT
+from backend.site_copy import STRAPLINE, PRIVACY_LINE
 from backend.cv_pdf_generator import generate_cv_pdf
 from backend.cv_docx_generator import generate_cv_docx
 import stripe
@@ -333,6 +335,12 @@ def _cv_builder_disabled():
                 and posixpath.basename(posixpath.normpath(path)) in ('builder.js', 'builder.css'))):
         abort(404)
 
+@app.context_processor
+def _site_copy():
+    """Make the shared wording available to every template."""
+    return {"strapline": STRAPLINE, "privacy_line": PRIVACY_LINE}
+
+
 @app.route('/')
 @limiter.exempt
 def index():
@@ -351,91 +359,91 @@ def index():
 ROLE_PAGES = {
     "software-engineer": {
         "title": "Software Engineer",
-        "h1": "Is your software engineering resume getting past ATS filters?",
+        "h1": "Does your software engineering resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Software Engineers. Scan your resume against any software engineering job description and see your keyword match score instantly.",
         "keywords": ["Python", "Java", "JavaScript", "TypeScript", "React", "Node.js", "AWS", "Docker", "Kubernetes", "CI/CD", "Git", "SQL", "REST APIs", "Agile", "microservices"],
     },
     "data-analyst": {
         "title": "Data Analyst",
-        "h1": "Is your data analyst resume making it past ATS screening?",
+        "h1": "Does your data analyst resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Data Analysts. Upload your resume and a job description to instantly see missing keywords like SQL, Tableau, and Python.",
         "keywords": ["SQL", "Python", "Tableau", "Power BI", "Excel", "data visualization", "ETL", "statistics", "A/B testing", "data modeling", "R", "Looker", "BigQuery", "stakeholder management"],
     },
     "project-manager": {
         "title": "Project Manager",
-        "h1": "Is your project manager resume optimized for ATS systems?",
+        "h1": "Does your project manager resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles — Agile, Scrum, stakeholder management, and more.",
         "keywords": ["Agile", "Scrum", "PMP", "PRINCE2", "stakeholder management", "Jira", "Confluence", "risk management", "budgeting", "Kanban", "sprint planning", "cross-functional", "roadmap"],
     },
     "product-manager": {
         "title": "Product Manager",
-        "h1": "Does your product manager resume pass ATS keyword checks?",
+        "h1": "Does your product manager resume show what the job description asks for?",
         "desc": "Free ATS resume scanner for Product Managers. Check if your resume includes the keywords recruiters and ATS systems look for in PM roles.",
         "keywords": ["product strategy", "roadmap", "user research", "A/B testing", "Agile", "Scrum", "Jira", "data-driven", "stakeholder management", "OKRs", "KPIs", "market research", "PRD"],
     },
     "cloud-engineer": {
         "title": "Cloud Engineer",
-        "h1": "Is your cloud engineer resume getting filtered out by ATS?",
+        "h1": "Does your cloud engineer resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Cloud Engineers. Scan your resume for critical keywords like AWS, Azure, Terraform, and Kubernetes that ATS systems look for.",
         "keywords": ["AWS", "Azure", "GCP", "Terraform", "Kubernetes", "Docker", "CI/CD", "CloudFormation", "Linux", "networking", "IAM", "serverless", "Lambda", "EC2", "S3"],
     },
     "devops-engineer": {
         "title": "DevOps Engineer",
-        "h1": "Is your DevOps resume making it past applicant tracking systems?",
+        "h1": "Does your DevOps resume show what the job description asks for?",
         "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords — CI/CD, Kubernetes, Terraform, Docker, and more.",
         "keywords": ["CI/CD", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions", "AWS", "Linux", "monitoring", "Prometheus", "Grafana", "infrastructure as code", "Python", "Bash"],
     },
     "data-scientist": {
         "title": "Data Scientist",
-        "h1": "Is your data science resume optimized for ATS filters?",
+        "h1": "Does your data science resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Data Scientists. Upload your resume and see if it includes key terms like machine learning, Python, TensorFlow, and NLP.",
         "keywords": ["Python", "machine learning", "deep learning", "TensorFlow", "PyTorch", "NLP", "SQL", "statistics", "scikit-learn", "data visualization", "A/B testing", "R", "Spark", "pandas"],
     },
     "ux-designer": {
         "title": "UX Designer",
-        "h1": "Is your UX design resume getting past ATS screening?",
+        "h1": "Does your UX design resume show what the job description asks for?",
         "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords — user research, Figma, wireframing, prototyping, and more.",
         "keywords": ["user research", "Figma", "wireframing", "prototyping", "usability testing", "design thinking", "information architecture", "user flows", "accessibility", "Sketch", "Adobe XD", "responsive design"],
     },
     "cybersecurity-analyst": {
         "title": "Cybersecurity Analyst",
-        "h1": "Is your cybersecurity resume making it through ATS systems?",
+        "h1": "Does your cybersecurity resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Cybersecurity professionals. Scan for critical keywords like SIEM, penetration testing, incident response, and compliance.",
         "keywords": ["SIEM", "penetration testing", "incident response", "vulnerability assessment", "firewall", "IDS/IPS", "SOC", "compliance", "NIST", "ISO 27001", "risk assessment", "threat intelligence", "encryption"],
     },
     "business-analyst": {
         "title": "Business Analyst",
-        "h1": "Is your business analyst resume ATS-optimized?",
+        "h1": "Does your business analyst resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Business Analysts. See if your resume includes requirements gathering, stakeholder management, SQL, and other key BA terms.",
         "keywords": ["requirements gathering", "stakeholder management", "SQL", "data analysis", "process mapping", "Jira", "Confluence", "user stories", "UAT", "business intelligence", "Power BI", "Agile"],
     },
     "solutions-architect": {
         "title": "Solutions Architect",
-        "h1": "Is your solutions architect resume passing ATS filters?",
+        "h1": "Does your solutions architect resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Solutions Architects. Check for critical keywords like AWS, Azure, microservices, and system design.",
         "keywords": ["AWS", "Azure", "GCP", "microservices", "system design", "cloud architecture", "Terraform", "Kubernetes", "API design", "security", "networking", "high availability", "scalability", "serverless"],
     },
     "frontend-developer": {
         "title": "Frontend Developer",
-        "h1": "Is your frontend developer resume getting past ATS?",
+        "h1": "Does your frontend developer resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Frontend Developers. See if your resume includes React, TypeScript, CSS, and other key frontend keywords.",
         "keywords": ["React", "TypeScript", "JavaScript", "HTML", "CSS", "Next.js", "Vue", "Angular", "Tailwind", "responsive design", "accessibility", "Git", "REST APIs", "testing", "webpack"],
     },
     "backend-developer": {
         "title": "Backend Developer",
-        "h1": "Is your backend developer resume optimized for ATS?",
+        "h1": "Does your backend developer resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Backend Developers. Scan for keywords like Python, Java, Node.js, microservices, and SQL.",
         "keywords": ["Python", "Java", "Node.js", "Go", "SQL", "PostgreSQL", "MongoDB", "REST APIs", "microservices", "Docker", "AWS", "Redis", "message queues", "CI/CD", "testing"],
     },
     "scrum-master": {
         "title": "Scrum Master",
-        "h1": "Is your Scrum Master resume making it past ATS?",
+        "h1": "Does your Scrum Master resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Scrum Masters. Check for Agile, sprint planning, retrospectives, and other key Scrum terms.",
         "keywords": ["Scrum", "Agile", "sprint planning", "retrospectives", "Jira", "Confluence", "Kanban", "SAFe", "coaching", "facilitation", "user stories", "velocity", "burndown", "cross-functional teams"],
     },
     "machine-learning-engineer": {
         "title": "Machine Learning Engineer",
-        "h1": "Is your ML engineer resume getting filtered by ATS?",
+        "h1": "Does your ML engineer resume show what the job description asks for?",
         "desc": "Free ATS resume checker for Machine Learning Engineers. Scan for PyTorch, TensorFlow, MLOps, and other critical ML keywords.",
         "keywords": ["Python", "PyTorch", "TensorFlow", "MLOps", "deep learning", "NLP", "computer vision", "Kubernetes", "Docker", "AWS SageMaker", "model deployment", "feature engineering", "scikit-learn", "LLM"],
     },
@@ -474,6 +482,13 @@ def role_hub():
     """Hub page for the role-specific checker cluster (internal-link anchor)."""
     roles = [{"slug": slug, "title": r["title"], "desc": r["desc"]} for slug, r in ROLE_PAGES.items()]
     return render_template('role_hub.html', roles=roles)
+
+
+@app.route('/privacy')
+@limiter.exempt
+def privacy():
+    """Plain-language privacy page. Its claims mirror backend/site_copy.py."""
+    return render_template('privacy.html')
 
 
 @app.route('/share')
@@ -515,8 +530,8 @@ def llms_txt():
 # Honest lastmod dates — update ONLY when the page's content actually changes.
 # (Previously datetime.now() on every request, which teaches Google to
 # distrust the field entirely.)
-LASTMOD_CORE = '2026-09-05'   # / and /build (hero reframe, tier picker)
-LASTMOD_ROLES = '2026-08-27'  # role pages + hub (rich content shipped)
+LASTMOD_CORE = '2026-11-19'   # / and /privacy (wording pass, privacy page)
+LASTMOD_ROLES = '2026-11-19'  # role pages + hub (headline and guide wording pass)
 
 
 @app.route('/sitemap.xml')
@@ -528,6 +543,7 @@ def sitemap_xml():
         {'loc': f'{base}/', 'priority': '1.0', 'changefreq': 'weekly', 'lastmod': LASTMOD_CORE},
         {'loc': f'{base}/ats-resume-checker/', 'priority': '0.8', 'changefreq': 'monthly', 'lastmod': LASTMOD_ROLES},
     ]
+    pages.append({'loc': f'{base}/privacy', 'priority': '0.3', 'changefreq': 'yearly', 'lastmod': LASTMOD_CORE})
     # Add programmatic SEO role pages
     for slug in ROLE_PAGES:
         pages.append({'loc': f'{base}/ats-resume-checker/{slug}', 'priority': '0.7', 'changefreq': 'monthly', 'lastmod': LASTMOD_ROLES})
@@ -672,7 +688,7 @@ def scan_resume():
         if 'file_path' in locals() and file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-        print(f"Scan error: {str(e)}")
+        print(f"Scan error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong during the analysis. Please try again."}), 500
 
 
@@ -736,7 +752,7 @@ def generate_cover_letter_endpoint():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Cover letter endpoint error: {str(e)}")
+        print(f"Cover letter endpoint error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -784,7 +800,7 @@ def enhance_bullet_endpoint():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Bullet enhance endpoint error: {str(e)}")
+        print(f"Bullet enhance endpoint error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -832,7 +848,7 @@ def generate_summary_endpoint():
         return jsonify(result)
 
     except Exception as e:
-        print(f"Summary generation endpoint error: {str(e)}")
+        print(f"Summary generation endpoint error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -866,7 +882,7 @@ def download_report():
         )
 
     except Exception as e:
-        print(f"PDF generation error: {str(e)}")
+        print(f"PDF generation error: {log_safe.describe(e)}")
         return jsonify({"error": "Failed to generate PDF report."}), 500
 
 
@@ -939,7 +955,7 @@ def email_report():
         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1f2937;">
             <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0; font-size: 24px;">ResumeRadar</h1>
-                <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 14px;">Beat the scan. Land the interview.</p>
+                <p style="color: rgba(255,255,255,0.8); margin: 4px 0 0; font-size: 14px;">{STRAPLINE}</p>
             </div>
 
             <div style="background: white; padding: 32px 24px; border: 1px solid #e5e7eb; border-top: none;">
@@ -977,7 +993,7 @@ def email_report():
             <div style="background: #1f2937; padding: 24px; border-radius: 0 0 12px 12px; text-align: center;">
                 <p style="color: #9ca3af; margin: 0 0 4px; font-size: 13px;">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" style="color: #93c5fd; text-decoration: none;">Olushola Oladipupo</a></p>
                 <p style="color: #9ca3af; margin: 0 0 4px; font-size: 13px;">Check your own CV free at <a href="https://resumeradar.sholastechnotes.com/?utm_source=report_email&amp;utm_medium=email" style="color: #93c5fd; text-decoration: none;">resumeradar.sholastechnotes.com</a></p>
-                <p style="color: #6b7280; margin: 0; font-size: 11px;">Your resume is analyzed in real time and is never sold or shared.</p>
+                                <p style="color: #6b7280; margin: 0; font-size: 11px;">{PRIVACY_LINE}</p>
             </div>
         </div>
         """
@@ -1007,7 +1023,7 @@ def email_report():
         })
 
     except Exception as e:
-        print(f"Email sending error: {str(e)}")
+        print(f"Email sending error: {log_safe.describe(e)}")
         return jsonify({"error": f"Failed to send email. Please try downloading the report instead."}), 500
 
 
@@ -3525,7 +3541,9 @@ def not_found(e):
     """Serve branded 404 page for browser requests, JSON for API requests."""
     if request.path.startswith('/api/'):
         return jsonify({"error": "Not found."}), 404
-    return render_template('404.html'), 404
+    # Old links to the closed CV builder get their own short explanation.
+    builder_closed = request.path == '/build' or request.path.startswith('/build/')
+    return render_template('404.html', builder_closed=builder_closed), 404
 
 
 @app.errorhandler(405)
