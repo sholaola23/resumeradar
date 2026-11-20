@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 
@@ -36,6 +37,7 @@ SIGNED_FIELDS = (
 SIGNATURE_FIELD = "report_signature"
 MAX_AGE_SECONDS = 24 * 60 * 60
 _VERSION = "v1"
+_SIGNATURE_RE = re.compile(r"v1\.([1-9][0-9]{0,11})\.([0-9a-f]{64})", re.ASCII)
 
 _process_key = None
 
@@ -100,10 +102,13 @@ def verify(scan_data, now=None):
     signature = scan_data.get(SIGNATURE_FIELD)
     if not isinstance(signature, str):
         return None
-    parts = signature.split(".")
-    if len(parts) != 3 or parts[0] != _VERSION or not parts[1].isdigit():
+    # Accept only the exact form sign() makes: ASCII digits with no leading
+    # zero and a lowercase hex MAC. Otherwise "0123" or non-ASCII digits would
+    # verify as new strings and each get a fresh send counter.
+    match = _SIGNATURE_RE.fullmatch(signature)
+    if not match:
         return None
-    issued_at = int(parts[1])
+    issued_at = int(match.group(1))
     current = int(now if now is not None else time.time())
     if issued_at > current + 300 or current - issued_at > MAX_AGE_SECONDS:
         return None
@@ -111,12 +116,15 @@ def verify(scan_data, now=None):
         expected = _mac(issued_at, scan_data)
     except (TypeError, ValueError):
         return None
-    if not hmac.compare_digest(expected, parts[2]):
+    if not hmac.compare_digest(expected, match.group(2)):
         return None
     return report_fields(scan_data)
 
 
 def signature_id(scan_data):
-    """Short hash of the signature, for counting sends without storing it."""
+    """Short hash of the signature, for counting sends without storing it.
+
+    Only call after verify(): it accepts one spelling per signature, so this
+    key is the same for every request that replays it."""
     signature = str(scan_data.get(SIGNATURE_FIELD, ""))
     return hashlib.sha256(signature.encode("utf-8")).hexdigest()[:32]

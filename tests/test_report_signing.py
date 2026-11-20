@@ -87,6 +87,23 @@ class SignatureUnitTest(unittest.TestCase):
                 self.assertIsNone(report_signing.verify(dict(self.data, report_signature=sig)))
         self.assertIsNone(report_signing.verify(['not', 'a', 'dict']))
 
+    def test_only_the_exact_signature_spelling_verifies(self):
+        _, issued, mac = self.data['report_signature'].split('.')
+        arabic = issued.translate(str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩'))
+        variants = [
+            f'v1.0{issued}.{mac}',            # leading zero
+            f'v1.00{issued}.{mac}',
+            f'v1.{arabic}.{mac}',             # non-ASCII digits int() accepts
+            f'v1.{issued}.{mac.upper()}',     # upper-case hex
+            f'v1.+{issued}.{mac}',
+            f'v1. {issued}.{mac}',
+            f'v1.{issued}.{mac}\n',
+            f'v1.{issued}².{mac}',            # isdigit() but int() raises
+        ]
+        for sig in variants:
+            with self.subTest(sig=sig):
+                self.assertIsNone(report_signing.verify(dict(self.data, report_signature=sig)))
+
     def test_expired_is_rejected(self):
         old = dict(self.data)
         old['report_signature'] = report_signing.sign(old, now=1_000_000)
@@ -149,6 +166,21 @@ class ReportRoutesTest(unittest.TestCase):
             ]
         self.assertEqual(codes, [200, 200, 200, 429])
         self.assertEqual(send.call_count, 3)
+
+    def test_respelled_signature_gets_no_fresh_counter(self):
+        _, issued, mac = self.scan['report_signature'].split('.')
+        spellings = [self.scan['report_signature'], f'v1.0{issued}.{mac}',
+                     f'v1.00{issued}.{mac}', f'v1.{issued}.{mac.upper()}']
+        with patch.dict(os.environ, {'RESEND_API_KEY': 'test'}), \
+                patch('resend.Emails.send') as send, \
+                patch.object(app_module, '_redis_client', FakeRedis()):
+            codes = []
+            for sig in spellings * 2:
+                body = {'email': 'a@example.com', 'scan_data': dict(self.scan, report_signature=sig)}
+                codes.append(self.client.post('/api/email-report', json=body).status_code)
+        # Only the real spelling sends; every respelling is refused outright.
+        self.assertEqual(codes, [200, 403, 403, 403] * 2)
+        self.assertEqual(send.call_count, 2)
         self.assertNotIn('bad.example', send.call_args[0][0]['html'])
 
 
