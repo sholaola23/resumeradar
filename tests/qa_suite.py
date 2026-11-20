@@ -614,9 +614,11 @@ def run_tests():
           app_source.count('"30 per hour"') >= 2)
     check("ProxyFix wraps WSGI app with x_for=1 (single Render proxy)",
           'ProxyFix(app.wsgi_app' in app_source and 'x_for=1' in app_source)
-    check("Limiter uses Flask-Limiter's get_remote_address",
-          'from flask_limiter.util import get_remote_address' in app_source
-          and 'key_func=get_remote_address' in app_source)
+    check("Limiter keys on the real visitor IP (_client_ip), not the Cloudflare edge",
+          'key_func=_client_ip' in app_source
+          and 'key_func=get_remote_address' not in app_source)
+    check("CF-Connecting-IP trusted only from Cloudflare ranges",
+          '_CLOUDFLARE_NETWORKS' in app_source and '_is_cloudflare_ip(remote)' in app_source)
 
     # --- Startup logging (module-level, visible under Gunicorn) ---
     check("Startup logs Stripe Checkout status",
