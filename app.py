@@ -28,6 +28,7 @@ from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
+from backend.score_format import whole_percent
 from backend import report_signing
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.role_content import ROLE_CONTENT
@@ -381,7 +382,7 @@ ROLE_PAGES = {
     "project-manager": {
         "title": "Project Manager",
         "h1": "Does your project manager resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles — Agile, Scrum, stakeholder management, and more.",
+        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles, such as Agile, Scrum, stakeholder management, and more.",
         "keywords": ["Agile", "Scrum", "PMP", "PRINCE2", "stakeholder management", "Jira", "Confluence", "risk management", "budgeting", "Kanban", "sprint planning", "cross-functional", "roadmap"],
     },
     "product-manager": {
@@ -399,7 +400,7 @@ ROLE_PAGES = {
     "devops-engineer": {
         "title": "DevOps Engineer",
         "h1": "Does your DevOps resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords — CI/CD, Kubernetes, Terraform, Docker, and more.",
+        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords, such as CI/CD, Kubernetes, Terraform, Docker, and more.",
         "keywords": ["CI/CD", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions", "AWS", "Linux", "monitoring", "Prometheus", "Grafana", "infrastructure as code", "Python", "Bash"],
     },
     "data-scientist": {
@@ -411,7 +412,7 @@ ROLE_PAGES = {
     "ux-designer": {
         "title": "UX Designer",
         "h1": "Does your UX design resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords — user research, Figma, wireframing, prototyping, and more.",
+        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords, such as user research, Figma, wireframing, prototyping, and more.",
         "keywords": ["user research", "Figma", "wireframing", "prototyping", "usability testing", "design thinking", "information architecture", "user flows", "accessibility", "Sketch", "Adobe XD", "responsive design"],
     },
     "cybersecurity-analyst": {
@@ -1003,7 +1004,7 @@ def email_report():
             except (TypeError, ValueError):
                 return 0
 
-        score = _as_int(scan_data.get('match_score', 0))
+        score = whole_percent(scan_data.get('match_score', 0))
         score_label = 'Not scored' if scan_data.get('match_score') is None else f'{score}%'
         total_matched = _as_int(scan_data.get('total_matched', 0))
         total_missing = _as_int(scan_data.get('total_missing', 0))
@@ -1075,7 +1076,7 @@ def email_report():
         params = {
             "from": "ResumeRadar <reports@sholastechnotes.com>",
             "to": [email],
-            "subject": f"Your ResumeRadar Report — Match estimate: {score_label}",
+            "subject": f"Your ResumeRadar Report (match estimate: {score_label})",
             "html": html_body,
             "attachments": [
                 {

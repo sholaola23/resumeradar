@@ -5,6 +5,8 @@ Generates a branded, formatted PDF report from scan data using fpdf2.
 
 from fpdf import FPDF
 from datetime import datetime
+
+from backend.score_format import whole_percent
 import io
 
 from backend.site_copy import STRAPLINE, PRIVACY_LINE
@@ -182,7 +184,7 @@ def generate_pdf_report(scan_data):
     # Big score display
     pdf.set_font('Helvetica', 'B', 18 if score is None else 42)
     pdf.set_text_color(*score_color)
-    pdf.cell(50, 20, 'Not scored' if score is None else f'{round(score)}%')
+    pdf.cell(50, 20, 'Not scored' if score is None else f'{whole_percent(score)}%')
     pdf.set_font('Helvetica', 'B', 14)
     pdf.set_text_color(31, 41, 55)
     pdf.cell(0, 20, _safe(f'Match estimate -- {score_label}'), new_x='LMARGIN', new_y='NEXT')
@@ -212,7 +214,7 @@ def generate_pdf_report(scan_data):
         if info.get('total', 0) < MIN_TERMS_FOR_CATEGORY_SCORE:
             continue
 
-        cat_score = round(info.get('score', 0))
+        cat_score = whole_percent(info.get('score', 0))
         matched = info.get('matched', 0)
         total = info.get('total', 0)
         label = cat_labels.get(key, key)

@@ -704,7 +704,7 @@ Nice to Have
         let report = [];
 
         report.push('═══════════════════════════════════════════');
-        report.push('  RESUMERADAR — ATS SCAN REPORT');
+        report.push('  RESUMERADAR: ATS SCAN REPORT');
         report.push('  Make your experience clear.');
         report.push('═══════════════════════════════════════════');
         report.push(`  Generated: ${now}`);
@@ -1017,7 +1017,7 @@ Nice to Have
                 showToast('Email service not set up yet. Opening email client...', true);
                 const reportText = generateShortReport(lastScanData);
                 const score = ResumeRadarScan.scoreText(lastScanData.match_score);
-                const subject = encodeURIComponent(`ResumeRadar Report — Match estimate: ${score}`);
+                const subject = encodeURIComponent(`ResumeRadar Report (match estimate: ${score})`);
                 const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${encodeURIComponent(reportText)}`;
                 window.location.href = mailtoUrl;
                 closeModal();
@@ -1038,7 +1038,7 @@ Nice to Have
         const ai = data.ai_suggestions || {};
         let report = [];
 
-        report.push('RESUMERADAR — ATS SCAN REPORT');
+        report.push('RESUMERADAR: ATS SCAN REPORT');
         report.push(`Generated: ${new Date().toLocaleDateString()}`);
         report.push('');
         report.push(`JOB-DESCRIPTION MATCH ESTIMATE: ${ResumeRadarScan.scoreText(data.match_score)}`);
@@ -1494,7 +1494,7 @@ Nice to Have
         if (checklist && checklist.length > 0) {
             const items = checklist.map(item => {
                 const icon = item.passed ? '✅' : '❌';
-                const detail = item.detail ? ` — ${escapeHtml(item.detail)}` : '';
+                const detail = item.detail ? `: ${escapeHtml(item.detail)}` : '';
                 return `<div class="subscore-item"><span class="subscore-icon">${icon}</span><span class="subscore-label">${escapeHtml(item.label)}${detail}</span><span class="subscore-pts">${escapeHtml(String(item.points))} pts</span></div>`;
             }).join('');
             detailsHTML = `<div class="subscore-details" style="display:none;">${items}</div>`;
@@ -1775,7 +1775,7 @@ Nice to Have
                 navigator.clipboard.writeText(fullText).then(() => {
                     showToast('Cover letter points copied!');
                 }).catch(() => {
-                    showToast('Could not copy — try selecting the text manually', true);
+                    showToast('Could not copy. Try selecting the text manually', true);
                 });
             };
         }
@@ -1843,7 +1843,7 @@ Nice to Have
                     navigator.clipboard.writeText(text).then(() => {
                         showToast('Cover letter copied!');
                     }).catch(() => {
-                        showToast('Could not copy — try selecting the text manually', true);
+                        showToast('Could not copy. Try selecting the text manually', true);
                     });
                 };
 
@@ -2004,7 +2004,7 @@ Nice to Have
                     let barColor = entry.score >= 75 ? 'var(--success)' : entry.score >= 50 ? 'var(--warning)' : 'var(--danger)';
                     const isLatest = i === chartData.length - 1;
                     return `
-                        <div class="history-bar-wrap ${isLatest ? 'latest' : ''}" title="${entry.score}% — ${new Date(entry.date).toLocaleDateString()}">
+                        <div class="history-bar-wrap ${isLatest ? 'latest' : ''}" title="${entry.score}%, ${new Date(entry.date).toLocaleDateString()}">
                             <span class="history-bar-score">${entry.score}%</span>
                             <div class="history-bar" style="height: ${height}%; background: ${barColor};"></div>
                         </div>
