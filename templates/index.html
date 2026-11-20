@@ -258,6 +258,7 @@
                                 <span class="upload-subtext pointer-fine">or click to browse</span>
                                 <span class="upload-formats" id="uploadFormats">PDF or DOCX • Max 5MB</span>
                             </button>
+                            <p class="error-message upload-error" id="uploadError" role="alert" hidden></p>
                             <input type="file" id="resumeFile" name="resume_file" accept=".pdf,.docx" hidden>
                             <div class="file-selected" id="fileSelected" style="display: none;">
                                 <span class="file-icon">📄</span>
@@ -306,7 +307,7 @@ Include the job title, requirements, responsibilities, qualifications and everyt
                 </div>
 
                 <!-- ERROR MESSAGE -->
-                <div class="error-message" id="errorMessage" style="display: none;"></div>
+                <div class="error-message" id="errorMessage" role="alert" tabindex="-1" style="display: none;"></div>
             </form>
         </div>
     </section>
@@ -342,7 +343,7 @@ Include the job title, requirements, responsibilities, qualifications and everyt
 
                 <!-- Score Card -->
                 <div class="result-card score-card" id="scoreCard">
-                    <h2>Your keyword coverage</h2>
+                    <h2 id="scoreHeading" tabindex="-1">Your keyword coverage<span class="sr-only" id="scoreHeadingValue"></span></h2>
                     <div class="score-display">
                         <div class="score-circle" id="scoreCircle">
                             <svg viewBox="0 0 120 120">
@@ -676,6 +677,9 @@ Include the job title, requirements, responsibilities, qualifications and everyt
         </div>
     </section>
 
+    <!-- Screen readers hear each toast through this; the toast itself is visual only. -->
+    <div class="sr-only" id="toastLive" role="status" aria-live="polite"></div>
+
     <!-- ============ EMAIL MODAL ============ -->
     <div class="modal-overlay" id="emailModal" style="display: none;">
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="emailModalTitle">
@@ -688,7 +692,7 @@ Include the job title, requirements, responsibilities, qualifications and everyt
                     <p class="modal-desc">We'll format your full ATS analysis into a clean email you can reference later or forward to a career coach. First we'll email you a link to confirm the address.</p>
                     <div class="modal-field">
                         <label for="emailInput">Email address</label>
-                        <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email" required>
+                        <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email" enterkeyhint="send" required>
                     </div>
                     <p class="modal-privacy">We use your address only to confirm it and send this report, through our email provider Resend. ResumeRadar keeps only a scrambled form of it for up to 24 hours, never the address itself, and does not add you to a mailing list. <a href="/privacy">Privacy</a></p>
                     <div class="modal-actions">

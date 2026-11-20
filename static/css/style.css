@@ -1886,10 +1886,11 @@ textarea::placeholder {
 /* ---- EMAIL MODAL ---- */
 .modal-overlay {
     position: fixed;
-    top: 0;
+    /* app.js sets these to the visible area, which the on-screen keyboard shrinks. */
+    top: var(--modal-top, 0);
     left: 0;
     right: 0;
-    bottom: 0;
+    height: var(--modal-height, 100%);
     background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
@@ -1912,7 +1913,7 @@ textarea::placeholder {
     box-shadow: var(--shadow-lg);
     width: 100%;
     max-width: 460px;
-    max-height: calc(100vh - 40px);
+    max-height: 100%;
     overflow-y: auto;
     animation: scaleIn 0.2s ease;
 }
@@ -2951,3 +2952,22 @@ button.keyword-tag:hover { text-decoration-style:solid; }
 .score-side { flex: 1; min-width: 0; }
 .score-email-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; padding: 0; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--primary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .score-email-link:hover { color: var(--primary-dark); }
+
+/* Text only screen readers hear, such as the score read out with its heading. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Where focus is moved to after a scan or an error. */
+#scoreHeading:focus-visible, .error-message:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.upload-error { margin-top: 12px; }
+
+/* ---- Phones ---- */
+@media (max-width: 600px) {
+    /* iOS Safari zooms the page into any field under 16px when it gets focus. */
+    textarea,
+    .modal-field input,
+    .inline-gate-fields input { font-size: 16px; }
+
+    /* Keep the email dialog's Send button in view above the on-screen keyboard. */
+    .modal-overlay { align-items: flex-start; padding: 12px; }
+    #emailFormStep .modal-actions { position: sticky; bottom: 0; background: white; padding-top: 12px; padding-bottom: 16px; }
+}
