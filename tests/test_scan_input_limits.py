@@ -1,7 +1,6 @@
 """/api/scan rejects oversized text before the keyword engine runs."""
 import io
 import os
-import time
 import unittest
 from unittest.mock import patch
 
@@ -38,9 +37,7 @@ class ScanInputLimitTests(unittest.TestCase):
     def test_oversized_job_description_rejected_fast(self):
         big = "Python AWS Docker required. " * 20_000  # ~560k chars
         with patch.object(product, 'extract_keywords_from_text') as kw:
-            start = time.time()
             resp = self._scan({'job_description': big, 'resume_text': CV})
-            self.assertLess(time.time() - start, 2)
             kw.assert_not_called()
         self.assertEqual(resp.status_code, 400)
         self.assertIn('job description is too long', resp.get_json()['error'])

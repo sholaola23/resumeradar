@@ -28,6 +28,7 @@ from backend.resume_parser import parse_resume
 from backend.keyword_engine import extract_keywords_from_text, calculate_match, analyze_ats_formatting, calculate_recruiter_tips_score, analyze_requirements, locate_job_terms, keyword_display_map
 from backend.ai_analyzer import get_ai_suggestions, generate_cover_letter, enhance_bullet_point, generate_resume_summary
 from backend.report_generator import generate_pdf_report
+from backend.score_format import whole_percent
 from backend import report_signing
 from backend.cv_builder import polish_cv_sections, extract_and_polish
 from backend.role_content import ROLE_CONTENT
@@ -381,7 +382,7 @@ ROLE_PAGES = {
     "project-manager": {
         "title": "Project Manager",
         "h1": "Does your project manager resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles — Agile, Scrum, stakeholder management, and more.",
+        "desc": "Free ATS resume checker for Project Managers. See if your resume has the right keywords for PM roles, such as Agile, Scrum, stakeholder management, and more.",
         "keywords": ["Agile", "Scrum", "PMP", "PRINCE2", "stakeholder management", "Jira", "Confluence", "risk management", "budgeting", "Kanban", "sprint planning", "cross-functional", "roadmap"],
     },
     "product-manager": {
@@ -399,7 +400,7 @@ ROLE_PAGES = {
     "devops-engineer": {
         "title": "DevOps Engineer",
         "h1": "Does your DevOps resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords — CI/CD, Kubernetes, Terraform, Docker, and more.",
+        "desc": "Free ATS resume checker for DevOps Engineers. See if your resume has the right keywords, such as CI/CD, Kubernetes, Terraform, Docker, and more.",
         "keywords": ["CI/CD", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "GitHub Actions", "AWS", "Linux", "monitoring", "Prometheus", "Grafana", "infrastructure as code", "Python", "Bash"],
     },
     "data-scientist": {
@@ -411,7 +412,7 @@ ROLE_PAGES = {
     "ux-designer": {
         "title": "UX Designer",
         "h1": "Does your UX design resume show what the job description asks for?",
-        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords — user research, Figma, wireframing, prototyping, and more.",
+        "desc": "Free ATS resume checker for UX Designers. See if your resume has the right keywords, such as user research, Figma, wireframing, prototyping, and more.",
         "keywords": ["user research", "Figma", "wireframing", "prototyping", "usability testing", "design thinking", "information architecture", "user flows", "accessibility", "Sketch", "Adobe XD", "responsive design"],
     },
     "cybersecurity-analyst": {
@@ -1003,7 +1004,7 @@ def email_report():
             except (TypeError, ValueError):
                 return 0
 
-        score = _as_int(scan_data.get('match_score', 0))
+        score = whole_percent(scan_data.get('match_score', 0))
         score_label = 'Not scored' if scan_data.get('match_score') is None else f'{score}%'
         total_matched = _as_int(scan_data.get('total_matched', 0))
         total_missing = _as_int(scan_data.get('total_missing', 0))
@@ -1075,7 +1076,7 @@ def email_report():
         params = {
             "from": "ResumeRadar <reports@sholastechnotes.com>",
             "to": [email],
-            "subject": f"Your ResumeRadar Report — Match estimate: {score_label}",
+            "subject": f"Your ResumeRadar Report (match estimate: {score_label})",
             "html": html_body,
             "attachments": [
                 {
@@ -1163,9 +1164,9 @@ def subscribe_newsletter():
                     timeout=10,
                 )
                 if resp.status_code not in [200, 201]:
-                    print(f"Beehiiv API error: {resp.status_code} - {resp.text[:200]}")
+                    print(f"Beehiiv API error: status {resp.status_code}")
             except Exception as exc:
-                print(f"Beehiiv background error: {exc}")
+                print(f"Beehiiv background error: {log_safe.describe(exc)}")
             finally:
                 _beehiiv_semaphore.release()
 
@@ -1182,7 +1183,7 @@ def subscribe_newsletter():
         })
 
     except Exception as e:
-        print(f"Newsletter subscription error: {str(e)}")
+        print(f"Newsletter subscription error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -1324,7 +1325,7 @@ def build_generate():
                 if tier == "pro":
                     _redis_client.setex(f"resumeradar:cv_tier:{token}", 259200, "pro")
             except Exception as redis_err:
-                print(f"Redis store error: {redis_err}")
+                print(f"Redis store error: {log_safe.describe(redis_err)}")
                 # Fallback: return data to frontend to store in sessionStorage
                 return jsonify({
                     "success": True,
@@ -1349,7 +1350,7 @@ def build_generate():
         })
 
     except Exception as e:
-        print(f"CV Builder generate error: {str(e)}")
+        print(f"CV Builder generate error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong generating your CV. Please try again."}), 500
 
 
@@ -1408,7 +1409,7 @@ def build_generate_from_scan():
                 if tier == "pro":
                     _redis_client.setex(f"resumeradar:cv_tier:{token}", 259200, "pro")
             except Exception as redis_err:
-                print(f"Redis store error: {redis_err}")
+                print(f"Redis store error: {log_safe.describe(redis_err)}")
                 return jsonify({
                     "success": True,
                     "token": token,
@@ -1431,7 +1432,7 @@ def build_generate_from_scan():
         })
 
     except Exception as e:
-        print(f"CV Builder scan-generate error: {str(e)}")
+        print(f"CV Builder scan-generate error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -1525,7 +1526,7 @@ def build_generate_from_upload():
                     "storage": "server",
                 })
             except Exception as redis_err:
-                print(f"Redis store error (upload): {redis_err}")
+                print(f"Redis store error (upload): {log_safe.describe(redis_err)}")
 
         # Fallback: client-side storage
         return jsonify({
@@ -1539,7 +1540,7 @@ def build_generate_from_upload():
         # Clean up file on unexpected error
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
-        print(f"CV Builder upload-generate error: {str(e)}")
+        print(f"CV Builder upload-generate error: {log_safe.describe(e)}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
 
 
@@ -2225,7 +2226,7 @@ def build_download(token):
 
                     # The existing expiry bounds access; repeats cost nothing.
             except Exception as redis_err:
-                print(f"Redis retrieve error: {redis_err}")
+                print(f"Redis retrieve error: {log_safe.describe(redis_err)}")
         else:
             # storage:client mode only: server has no Redis, so the client's
             # sessionStorage copy is the only available source.
@@ -2334,7 +2335,7 @@ def build_download(token):
         return response
 
     except Exception as e:
-        print(f"CV Builder download error: {str(e)}")
+        print(f"CV Builder download error: {log_safe.describe(e)}")
         # AUDIT: download error (error class name only — no raw exception text)
         try:
             audit_log.log_event(
@@ -2571,7 +2572,7 @@ def _send_cv_email(email, token, template, event_id):
             pass
 
     except Exception as e:
-        print(f"CV email error (best-effort): {e}")
+        print(f"CV email error (best-effort): {log_safe.describe(e)}")
         # AUDIT: email send failure (error class name only)
         try:
             audit_log.log_event(
