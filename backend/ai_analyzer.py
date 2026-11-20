@@ -9,6 +9,8 @@ import json
 from anthropic import Anthropic
 
 from backend import ai_cache
+from backend import log_safe
+from backend.keyword_engine import display_keyword
 from backend import ai_budget
 from backend import ai_metrics
 
@@ -28,6 +30,28 @@ FREE_ECONOMY_THRESHOLD = 0.60
 # so keep thinking off for deterministic cost and latency. Passed via
 # extra_body because the pinned SDK (0.43) predates the thinking param.
 NO_THINKING = {"thinking": {"type": "disabled"}}
+
+# Cache name for scan suggestions. Change the suffix whenever the scan prompt
+# changes, so answers written for the old prompt are not reused. The prompt
+# includes analyze_requirements output (priorities, excluded terms) from
+# keyword_engine, so a change there needs a new suffix too.
+SCAN_CACHE_TOOL = "scan_suggestions:v1"
+_SCAN_KEYS = {"summary", "strengths", "critical_improvements", "keyword_suggestions",
+              "rewrite_suggestions", "quick_wins", "cover_letter_points"}
+
+
+def _scan_cache_inputs(resume_text, job_description):
+    """Cache inputs for scan suggestions.
+
+    The shared cache lower-cases and collapses spacing, which suits the writing
+    tools but would hand back stale advice after a capitalisation-only edit
+    ("cdn" to "CDN"). Hashing the exact text first keeps those edits distinct.
+    The month is included because the prompt states today's date.
+    """
+    import hashlib
+    from datetime import datetime
+    exact = lambda text: hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+    return exact(resume_text), exact(job_description), datetime.now().strftime("%Y-%m")
 
 
 def make_client(api_key):
@@ -87,6 +111,14 @@ def get_ai_suggestions(resume_text, job_description, keyword_results):
     if not api_key or api_key == "your-anthropic-api-key-here":
         return _get_fallback_suggestions(keyword_results)
 
+    # An identical CV and job description within the hour reuses the earlier
+    # answer (same 1-hour cache as the writing tools). This is what keeps the
+    # one-click example scan from costing an AI call on every click.
+    cache_inputs = _scan_cache_inputs(resume_text, job_description)
+    cached = ai_cache.cache_get(SCAN_CACHE_TOOL, *cache_inputs)
+    if cached is not None:
+        return cached
+
     # Free tier degrades in tiers: past the hard cap, no AI spend at all
     # (rule-based suggestions); past FREE_ECONOMY_THRESHOLD of the daily
     # cost budget, drop from Sonnet to the economy model.
@@ -140,6 +172,7 @@ SCORE RULE: {score_rule} This is not an employer score or a prediction of suitab
 PRIORITIZED REQUIREMENTS: {json.dumps(priorities[:8])}
 Use these source-grounded priorities instead of alphabetically choosing tools. Respect required versus preferred criteria and alternative tools. Do not recommend a missing alternative when an accepted tool is already demonstrated.
 EXCLUDED TERMS: {json.dumps(excluded_terms)}. These are satisfied alternatives or lack actionable requirement evidence. Do not describe them as required gaps anywhere, including the summary, quick wins, or keyword suggestions.
+WORDING: Call the document a "CV", not a "resume", and use UK spelling. Write tool and product names with their usual capitalisation (CDN, PostgreSQL).
 TRUTHFULNESS: Never add skills, metrics, or years of experience. Ask the user to supply real evidence; any suggested claim must be conditional on their actual experience. Do not suggest "seniority framing" to conceal an experience shortfall.
 
 IMPORTANT: Keep your response concise. Each string value should be 1-2 sentences max. Respond with ONLY valid JSON, no other text:
@@ -222,9 +255,11 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
                     clean_text = clean_text[json_start:]
 
             clean_text = clean_text.strip()
+            repaired = False
 
             # If JSON is truncated (no closing brace), try to repair it
             if clean_text.startswith("{") and not clean_text.endswith("}"):
+                repaired = True
                 # Count braces to find how many we need to close
                 open_braces = clean_text.count("{") - clean_text.count("}")
                 open_brackets = clean_text.count("[") - clean_text.count("]")
@@ -247,11 +282,15 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
 
             suggestions = json.loads(clean_text)
             suggestions["ai_powered"] = True
+            # Only a complete answer is reused; a cut-off one is retried next time.
+            if not repaired and _SCAN_KEYS <= suggestions.keys():
+                ai_cache.cache_set(SCAN_CACHE_TOOL, suggestions, *cache_inputs)
             return suggestions
 
         except (json.JSONDecodeError, ValueError) as parse_error:
-            print(f"JSON parse error: {parse_error}")
-            print(f"Raw response (first 300 chars): {response_text[:300]}")
+            # Log only the error type and length: the reply is written from
+            # the user's CV, so its text must never reach the logs.
+            print(f"AI reply could not be parsed ({type(parse_error).__name__}, {len(response_text)} chars)")
 
             # Last resort: try to extract just the summary from raw text
             summary = response_text
@@ -280,8 +319,7 @@ Limit: max 3 strengths, max 3 critical_improvements, max 4 keyword_suggestions, 
             }
 
     except Exception as e:
-        error_msg = str(e)
-        print(f"Claude API error: {error_msg}")
+        print(f"Claude API error: {log_safe.describe(e)}")
 
         # Return fallback suggestions if API fails
         fallback = _get_fallback_suggestions(keyword_results)
@@ -390,7 +428,7 @@ Write the cover letter body now:"""
 
     except Exception as e:
         ai_metrics.record_error(tool)
-        print(f"Cover letter generation error: {str(e)}")
+        print(f"Cover letter generation error: {log_safe.describe(e)}")
         return {"error": "Could not generate cover letter. Please try again."}
 
 
@@ -464,7 +502,7 @@ Rewritten bullet:"""
 
     except Exception as e:
         ai_metrics.record_error(tool)
-        print(f"Bullet enhance error: {str(e)}")
+        print(f"Bullet enhance error: {log_safe.describe(e)}")
         return {"error": "Could not enhance bullet point. Please try again."}
 
 
@@ -537,7 +575,7 @@ Professional Summary:"""
 
     except Exception as e:
         ai_metrics.record_error(tool)
-        print(f"Summary generation error: {str(e)}")
+        print(f"Summary generation error: {log_safe.describe(e)}")
         return {"error": "Could not generate summary. Please try again."}
 
 
@@ -558,9 +596,9 @@ def _get_fallback_suggestions(keyword_results):
     }
 
     score = keyword_results.get("overall_score", 0)
-    missing_tech = keyword_results.get("missing_keywords", {}).get("technical_skills", [])
-    missing_soft = keyword_results.get("missing_keywords", {}).get("soft_skills", [])
-    missing_certs = keyword_results.get("missing_keywords", {}).get("certifications", [])
+    missing_tech = [display_keyword(k) for k in keyword_results.get("missing_keywords", {}).get("technical_skills", [])]
+    missing_soft = [display_keyword(k) for k in keyword_results.get("missing_keywords", {}).get("soft_skills", [])]
+    missing_certs = [display_keyword(k) for k in keyword_results.get("missing_keywords", {}).get("certifications", [])]
 
     # Describe coverage, not suitability or interview prospects.
     if score is None:
@@ -584,13 +622,13 @@ def _get_fallback_suggestions(keyword_results):
         quick_wins.append(f"If supported by your experience, give examples of: {', '.join(missing_soft[:3])}")
     if missing_certs:
         quick_wins.append(f"If you hold any of these certifications, add them prominently: {', '.join(missing_certs[:3])}")
-    quick_wins.append("Ensure your resume summary/objective mirrors the language of the job description.")
+    quick_wins.append("Ensure your CV summary mirrors the language of the job description.")
     quick_wins.append("Start each experience bullet point with a strong action verb (Led, Built, Improved, Designed).")
 
     priorities = keyword_results.get('priority_recommendations')
     if priorities is not None:
         suggestions['keyword_suggestions'] = [
-            {'keyword': item['keyword'], 'where_to_add': 'Relevant experience or qualifications', 'how_to_add': item['suggestion']}
+            {'keyword': item.get('display', item['keyword']), 'where_to_add': 'Relevant experience or qualifications', 'how_to_add': item['suggestion']}
             for item in priorities[:5]
         ]
         quick_wins = [item['suggestion'] for item in priorities[:3]] + [
@@ -601,7 +639,7 @@ def _get_fallback_suggestions(keyword_results):
 
     # Generate basic cover letter points from available data
     cl_points = []
-    matched_tech = keyword_results.get("matched_keywords", {}).get("technical_skills", [])
+    matched_tech = [display_keyword(k) for k in keyword_results.get("matched_keywords", {}).get("technical_skills", [])]
     if matched_tech:
         top_skills = ', '.join(matched_tech[:3])
         cl_points.append(f"Highlight your experience with {top_skills}, which directly aligns with the role's technical requirements.")

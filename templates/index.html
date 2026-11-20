@@ -7,7 +7,7 @@
     <title>ATS Resume Checker for {{ role.title }}s — Free Scan | ResumeRadar</title>
     <meta name="description" content="{{ role.desc }}">
     {% else %}
-    <title>Free ATS Resume Checker — Scan & Score Your Resume | ResumeRadar</title>
+    <title>Free ATS Resume Checker — Check Your CV Against a Job | ResumeRadar</title>
     <meta name="description" content="Free ATS resume scanner — upload your resume, paste a job description, and see your job-description match estimate, missing skills, and AI-powered fixes. No signup required.">
     {% endif %}
 
@@ -16,8 +16,8 @@
     <meta property="og:title" content="ATS Resume Checker for {{ role.title }}s | ResumeRadar">
     <meta property="og:description" content="{{ role.desc }}">
     {% else %}
-    <meta property="og:title" content="ResumeRadar — Beat the Scan. Land the Interview.">
-    <meta property="og:description" content="Free tool: upload your resume + paste a job description = instant ATS match score, missing keywords, and actionable fixes. Stop applying blind.">
+    <meta property="og:title" content="ResumeRadar — Make your experience clear.">
+    <meta property="og:description" content="Free tool: upload your resume + paste a job description = a keyword match estimate, missing keywords, and practical fixes.">
     {% endif %}
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_US">
@@ -28,8 +28,8 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="ResumeRadar — Beat the Scan. Land the Interview.">
-    <meta name="twitter:description" content="Free tool: See exactly why your resume gets filtered out by ATS systems — and how to fix it in minutes.">
+    <meta name="twitter:title" content="ResumeRadar — Make your experience clear.">
+    <meta name="twitter:description" content="Free tool: compare your CV with a job description and see which keywords are missing and how to make your experience clearer.">
     <meta name="twitter:image" content="https://resumeradar.sholastechnotes.com/static/images/{{ og_image }}">
 
     <!-- Google Search Console verification -->
@@ -50,7 +50,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=13">
+    <link rel="stylesheet" href="/static/css/style.css?v=15">
 
     <!-- JSON-LD Structured Data (SEO + GEO for AI model discoverability) -->
     <script type="application/ld+json">
@@ -109,7 +109,7 @@
                 "name": "What is an ATS and why does it matter?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "An Applicant Tracking System (ATS) helps employers organize applications. Screening rules vary by employer. ResumeRadar checks recognized keywords and readable text; it cannot predict an employer’s decision."
+                    "text": "An Applicant Tracking System (ATS) helps employers organise applications. Screening rules vary by employer. ResumeRadar checks recognised keywords and readable text; it cannot predict an employer’s decision."
                 }
             },
             {
@@ -117,7 +117,7 @@
                 "name": "How does ResumeRadar work?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Upload your resume (PDF or DOCX) and paste the job description. ResumeRadar extracts keywords from both, calculates your match score, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to improve your chances — with results usually ready within a minute."
+                    "text": "Upload your CV (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, estimates your keyword match, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to make your experience clearer — with results usually ready within a minute."
                 }
             },
             {
@@ -125,15 +125,15 @@
                 "name": "Is ResumeRadar free?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Yes. The ATS resume scan is completely free with no signup required. You get your match score, missing keywords, formatting check, and AI suggestions at no cost."
+                    "text": "Yes. The CV scan is completely free with no signup required. You get your keyword match estimate, missing keywords, formatting check, and AI suggestions at no cost."
                 }
             },
             {
                 "@type": "Question",
-                "name": "Is my resume stored or shared?",
+                "name": "Is my CV stored or shared?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Your uploaded file is deleted after parsing. Temporary analysis results are cached for up to one hour. AI providers process the text to generate suggestions."
+                    "text": "{{ privacy_line }}"
                 }
             },
             {
@@ -141,7 +141,7 @@
                 "name": "What file formats are supported?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "ResumeRadar supports PDF and DOCX files. For best ATS compatibility, we recommend submitting your resume as a PDF."
+                    "text": "ResumeRadar supports PDF and DOCX files. For best ATS compatibility, we recommend submitting your CV as a PDF."
                 }
             }
         ]
@@ -155,7 +155,7 @@
         "@context": "https://schema.org",
         "@type": "HowTo",
         "name": "How to Check if Your Resume is ATS-Friendly",
-        "description": "Use ResumeRadar to scan your resume against a job description and get your ATS match score in 30 seconds.",
+        "description": "Use ResumeRadar to scan your resume against a job description and get a keyword match estimate in under a minute.",
         "step": [
             {
                 "@type": "HowToStep",
@@ -169,8 +169,8 @@
             },
             {
                 "@type": "HowToStep",
-                "name": "Get your ATS score",
-                "text": "Click Scan and get your keyword match score, missing keywords, formatting issues, and AI-powered improvement suggestions."
+                "name": "Get your keyword match estimate",
+                "text": "Click Scan and get your keyword match estimate, missing keywords, formatting issues, and AI-powered improvement suggestions."
             }
         ],
         "tool": {
@@ -185,18 +185,21 @@
     <header class="header">
         <div class="container">
             <div class="header-inner">
-                <div class="logo">
-                    <span class="logo-icon">📡</span>
+                <a class="logo" href="/" aria-label="ResumeRadar home">
+                    <span class="logo-icon" aria-hidden="true">📡</span>
                     <span class="logo-text">ResumeRadar</span>
-                </div>
-                <nav class="nav-links">
-                    <a href="/" class="nav-link nav-link-active">Scan Resume</a>
+                </a>
+                <nav class="nav-links" aria-label="Main">
+                    <a href="#how-it-works" class="nav-link">How it works</a>
+                    <a href="#privacy" class="nav-link">Privacy</a>
+                    <a href="/share" class="nav-link nav-share" id="headerShareBtn">Share</a>
                 </nav>
             </div>
             <p class="tagline">Make your experience clear.</p>
         </div>
     </header>
 
+    <main>
     <!-- ============ HERO ============ -->
     <section class="hero">
         <div class="container">
@@ -204,7 +207,7 @@
             <h1>{{ role.h1 }}</h1>
             <p class="hero-sub">Compare your {{ role.title }} CV with a job description to find relevant keywords and ways to make your experience clearer.</p>
             <div class="role-keywords">
-                <span class="role-keywords-label">Top keywords ATS looks for:</span>
+                <span class="role-keywords-label">Common keywords in {{ role.title }} job descriptions:</span>
                 {% for kw in role.keywords[:10] %}
                 <span class="role-keyword-tag">{{ kw }}</span>
                 {% endfor %}
@@ -230,30 +233,30 @@
     </div>
 
     <!-- ============ HOW IT WORKS ============ -->
-    <section class="how-it-works">
+    <section class="how-it-works" id="how-it-works" aria-label="How it works">
         <div class="container">
             <div class="steps-grid">
                 <div class="step">
                     <div class="step-number">1</div>
                     <div class="step-content">
-                        <h3>Upload Resume</h3>
+                        <h2>Upload your CV</h2>
                         <p>PDF, DOCX, or paste text</p>
                     </div>
                 </div>
-                <div class="step-arrow">→</div>
+                <div class="step-arrow" aria-hidden="true">→</div>
                 <div class="step">
                     <div class="step-number">2</div>
                     <div class="step-content">
-                        <h3>Paste Job Description</h3>
+                        <h2>Paste the job description</h2>
                         <p>Copy from the job posting</p>
                     </div>
                 </div>
-                <div class="step-arrow">→</div>
+                <div class="step-arrow" aria-hidden="true">→</div>
                 <div class="step">
                     <div class="step-number">3</div>
                     <div class="step-content">
-                        <h3>Improve Your CV</h3>
-                        <p>Review advice, edit & rescan free</p>
+                        <h2>Improve your CV</h2>
+                        <p>Review advice, edit and rescan free</p>
                     </div>
                 </div>
             </div>
@@ -261,33 +264,43 @@
     </section>
 
     <!-- ============ MAIN SCANNER ============ -->
-    <main class="scanner-section">
+    <section class="scanner-section" aria-label="CV scanner">
         <div class="container">
             <form id="scanForm" class="scan-form" enctype="multipart/form-data">
                 <p class="rescan-hint" id="rescanHint" role="status" hidden>Your job description is kept below. Upload your updated CV or edit your pasted text, then scan again to compare.</p>
+                <div class="scan-progress" id="scanProgress" role="status" hidden>
+                    <h2>Checking your CV</h2>
+                    <ol class="scan-progress-steps">
+                        <li>Reading your CV</li>
+                        <li>Comparing it with the job description</li>
+                        <li>Writing your suggestions</li>
+                    </ol>
+                    <p class="scan-progress-note" id="scanProgressNote">Usually about 20 seconds.</p>
+                    <p class="scan-progress-privacy">🔒 Your uploaded file is deleted after parsing.</p>
+                </div>
                 <p class="rescan-hint" id="jobLinkNotice" role="status" hidden>A friend sent you this job description. Add your CV to see how it compares. Your CV is never part of a shared link.</p>
                 <div class="form-grid">
                     <!-- LEFT: Resume Input -->
                     <div class="form-panel">
-                        <h2>📄 Your Resume</h2>
+                        <h2>📄 Your CV</h2>
                         <div class="input-tabs">
-                            <button type="button" class="tab-btn active" data-tab="upload">Upload File</button>
-                            <button type="button" class="tab-btn" data-tab="paste">Paste Text</button>
+                            <button type="button" class="tab-btn active" data-tab="upload">Upload file</button>
+                            <button type="button" class="tab-btn" data-tab="paste">Paste text</button>
                         </div>
 
                         <!-- Upload Tab -->
                         <div class="tab-content active" id="tab-upload">
-                            <div class="file-upload-area" id="dropZone">
-                                <div class="upload-icon">📎</div>
-                                <p class="upload-text">Drag & drop your resume here</p>
-                                <p class="upload-subtext">or click to browse</p>
-                                <p class="upload-formats">PDF or DOCX • Max 5MB</p>
-                                <input type="file" id="resumeFile" name="resume_file" accept=".pdf,.docx" hidden>
-                            </div>
+                            <button type="button" class="file-upload-area" id="dropZone" aria-describedby="uploadFormats">
+                                <span class="upload-icon" aria-hidden="true">📎</span>
+                                <span class="upload-text"><span class="pointer-fine">Drag and drop your CV here</span><span class="pointer-coarse">Tap to choose your CV</span></span>
+                                <span class="upload-subtext pointer-fine">or click to browse</span>
+                                <span class="upload-formats" id="uploadFormats">PDF or DOCX • Max 5MB</span>
+                            </button>
+                            <input type="file" id="resumeFile" name="resume_file" accept=".pdf,.docx" hidden>
                             <div class="file-selected" id="fileSelected" style="display: none;">
                                 <span class="file-icon">📄</span>
                                 <span class="file-name" id="fileName"></span>
-                                <button type="button" class="file-remove" id="removeFile">✕</button>
+                                <button type="button" class="file-remove" id="removeFile" aria-label="Remove file">✕</button>
                             </div>
                         </div>
 
@@ -296,7 +309,7 @@
                             <textarea
                                 id="resumeText"
                                 name="resume_text"
-                                placeholder="Paste your full resume text here...
+                                placeholder="Paste your full CV text here...
 
 Include everything: contact info, summary, experience, education, skills, certifications..."
                                 rows="12"
@@ -306,7 +319,7 @@ Include everything: contact info, summary, experience, education, skills, certif
 
                     <!-- RIGHT: Job Description -->
                     <div class="form-panel">
-                        <h2>📋 Job Description</h2>
+                        <h2>📋 Job description</h2>
                         <textarea
                             id="jobDescription"
                             name="job_description"
@@ -322,14 +335,10 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <!-- SCAN BUTTON -->
                 <div class="scan-button-wrapper">
                     <button type="submit" class="scan-btn" id="scanBtn">
-                        <span class="scan-btn-text">📡 Scan My Resume</span>
-                        <span class="scan-btn-loading" style="display: none;">
-                            <span class="spinner"></span>
-                            <span id="loadingStageText">Analyzing resume structure...</span>
-                        </span>
+                        <span class="scan-btn-text">📡 Scan my CV</span>
                     </button>
                     <p class="demo-link-wrapper">
-                        No resume handy? <a href="#" class="demo-link" id="demoScanBtn">Try a demo scan →</a>
+                        No CV to hand? <button type="button" class="demo-link" id="demoScanBtn">See an example report →</button>
                     </p>
 
                 </div>
@@ -354,8 +363,18 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <span class="toast-message" id="toastMessage"></span>
                 </div>
 
+                <!-- Jump menu (links to hidden sections are hidden by JS) -->
+                <nav class="results-jump" id="resultsJump" aria-label="Report sections">
+                    <a href="#scoreCard">Score</a>
+                    <a href="#quickWins" data-fallback="#topMissingKeywords">Fixes</a>
+                    <a href="#aiCard">AI advice</a>
+                    <a href="#keywordsCard">Keywords</a>
+                    <a href="#coverLetterCard">Cover letter</a>
+                    <a href="#saveCard">Save</a>
+                </nav>
+
                 <!-- Score Card -->
-                <div class="result-card score-card">
+                <div class="result-card score-card" id="scoreCard">
                     <h2>Your keyword coverage</h2>
                     <div class="score-display">
                         <div class="score-circle" id="scoreCircle">
@@ -367,8 +386,12 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         </div>
                         <div class="score-summary" id="scoreSummary"></div>
                     </div>
-                    <p class="score-explanation" id="scoreExplanation">A custom estimate of recognized keyword coverage. This is not an employer’s ATS score, applicant ranking, or interview prediction.</p>
+                    <p class="score-explanation" id="scoreExplanation">A custom estimate of recognised keyword coverage. This is not an employer’s ATS score, applicant ranking, or interview prediction.</p>
                     <div class="score-stats" id="scoreStats"></div>
+                    <details class="score-method" id="scoreMethod">
+                        <summary>How this is worked out</summary>
+                        <p>The percentage is weighted, so it will not equal matched divided by total. Technical skills count most (40 parts), then certifications (20), soft skills (15) and education (10). Only the groups this job mentions are counted, long lists of technical skills are marked on a curve, and action verbs do not count.</p>
+                    </details>
                     <div class="role-fit-meter" id="roleFitMeter" style="display: none;">
                         <div class="fit-meter-track">
                             <div class="fit-meter-fill" id="fitMeterFill"></div>
@@ -383,6 +406,8 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         <div class="fit-verdict" id="fitVerdict"></div>
                     </div>
                 </div>
+
+                <p class="ai-rest-note" id="aiRestNote" role="status" hidden>AI suggestions are unavailable right now. Your keyword report is complete. Try again later for rewrite advice.</p>
 
                 <!-- ===== FREE TIER (always visible after scan) ===== -->
 
@@ -431,40 +456,58 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 <div id="deepResults" style="display: none;">
 
                     <!-- Free report actions are available immediately. -->
-                    <div class="result-card">
-                        <div class="card-header-toggle" data-target="reportActionsContent" data-section="report_actions">
-                            <h2>📄 Save or Share Your Report</h2>
-                            <span class="toggle-icon">−</span>
-                        </div>
+                    <div class="result-card" id="saveCard">
+                        <h2 class="card-toggle-heading">
+                            <button type="button" class="card-header-toggle" data-target="reportActionsContent" data-section="report_actions" aria-expanded="true" aria-controls="reportActionsContent">
+                                <span>📄 Save or share your report</span>
+                                <span class="toggle-icon" aria-hidden="true">−</span>
+                            </button>
+                        </h2>
                         <div id="reportActionsContent">
                             <div class="report-actions">
                                 <button type="button" class="report-btn" id="copyReportBtn">
-                                    <span class="report-btn-icon">📋</span> Copy Report
+                                    <span class="report-btn-icon">📋</span> Copy report
                                 </button>
                                 <button type="button" class="report-btn" id="downloadReportBtn">
-                                    <span class="report-btn-icon">📥</span> Download Report
+                                    <span class="report-btn-icon">📥</span> Download report
                                 </button>
                                 <button type="button" class="report-btn" id="emailReportBtn">
-                                    <span class="report-btn-icon">📧</span> Email Report
+                                    <span class="report-btn-icon">📧</span> Email report
                                 </button>
                             </div>
                         </div>
                     </div>
 
+                    <!-- AI Suggestions (open by default, above the keyword lists) -->
+                    <div class="result-card ai-card" id="aiCard">
+                        <h2 class="card-toggle-heading">
+                            <button type="button" class="card-header-toggle" data-target="aiContent" data-section="ai" aria-expanded="true" aria-controls="aiContent">
+                                <span>🤖 Smart suggestions</span>
+                                <span class="toggle-icon" aria-hidden="true">−</span>
+                            </button>
+                        </h2>
+                        <div id="aiContent">
+                            <div class="ai-badge" id="aiBadge"></div>
+                            <div id="aiSuggestions"></div>
+                        </div>
+                    </div>
+
                     <!-- Category Breakdown (collapsed by default) -->
                     <div class="result-card">
-                        <div class="card-header-toggle" data-target="categoryContent" data-section="categories">
-                            <h2>📊 Category Breakdown</h2>
-                            <span class="toggle-icon">+</span>
-                        </div>
+                        <h2 class="card-toggle-heading">
+                            <button type="button" class="card-header-toggle" data-target="categoryContent" data-section="categories" aria-expanded="false" aria-controls="categoryContent">
+                                <span>📊 Category breakdown</span>
+                                <span class="toggle-icon" aria-hidden="true">+</span>
+                            </button>
+                        </h2>
                         <div id="categoryContent" style="display: none;">
                             <div class="category-bars" id="categoryBars"></div>
                         </div>
                     </div>
 
                     <!-- Missing Keywords -->
-                    <div class="result-card keywords-card">
-                        <h2>⚠️ Keywords Not Found on Your Resume</h2>
+                    <div class="result-card keywords-card" id="keywordsCard">
+                        <h2>⚠️ Keywords not found in your CV</h2>
                         <p class="card-subtitle">These terms were found in the job description but not in your CV. Some may be optional or alternatives to tools you already use.</p>
                         <div class="missing-keywords-tip">
                             <span class="tip-icon-inline">💡</span>
@@ -475,10 +518,18 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                     <!-- Matched Keywords -->
                     <div class="result-card matched-card">
-                        <h2>✅ Matched Keywords</h2>
-                        <p class="card-subtitle">Great news — your resume already includes these job-relevant keywords.</p>
-                        <div class="keywords-grid" id="matchedKeywords"></div>
+                        <h2 class="card-toggle-heading">
+                            <button type="button" class="card-header-toggle" data-target="matchedContent" data-section="matched" aria-expanded="false" aria-controls="matchedContent">
+                                <span>✅ Matched keywords</span>
+                                <span class="toggle-icon" aria-hidden="true">+</span>
+                            </button>
+                        </h2>
+                        <div id="matchedContent" style="display: none;">
+                            <p class="card-subtitle">Your CV already includes these keywords from the job description.</p>
+                            <div class="keywords-grid" id="matchedKeywords"></div>
+                        </div>
                     </div>
+
 
                     <!-- Job description with matched and missing terms marked -->
                     <div class="result-card jd-view-card" id="jobViewCard" hidden>
@@ -494,52 +545,39 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                         </details>
                     </div>
 
-                    <!-- AI Suggestions (collapsed by default) -->
-                    <div class="result-card ai-card">
-                        <div class="card-header-toggle" data-target="aiContent" data-section="ai">
-                            <h2>🤖 Smart Suggestions</h2>
-                            <span class="toggle-icon">+</span>
-                        </div>
-                        <div id="aiContent" style="display: none;">
-                            <div class="ai-badge" id="aiBadge"></div>
-                            <div id="aiSuggestions"></div>
-                        </div>
-                    </div>
-
-
                     <!-- Cover Letter Key Points -->
                     <div class="result-card cover-letter-card" id="coverLetterCard" style="display: none;">
-                        <h2>✉️ Cover Letter Key Points</h2>
+                        <h2>✉️ Cover letter key points</h2>
                         <p class="card-subtitle">Talking points for your cover letter — check each against your actual experience.</p>
                         <div class="cover-letter-points" id="coverLetterPoints"></div>
                         <div class="cover-letter-footer">
-                            <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">📋 Copy Points</button>
+                            <button type="button" class="cover-letter-copy-btn" id="copyCoverLetterBtn">📋 Copy points</button>
                             <span class="cover-letter-note">Use examples you can confidently discuss in an interview.</span>
                         </div>
 
                         <!-- Full Cover Letter Generator -->
                         <div class="cl-generator">
                             <div class="cl-generator-cta">
-                                <p class="cl-generator-text">Want a complete, ready-to-send cover letter? Our AI writes one tailored to this job.</p>
+                                <p class="cl-generator-text">Want a full cover letter? Get a first draft to edit, written for this job.</p>
                                 <button type="button" class="cl-generate-btn" id="generateCoverLetterBtn">
-                                    <span class="cl-btn-text">Generate Full Cover Letter</span>
+                                    <span class="cl-btn-text">Write a first draft</span>
                                     <span class="cl-btn-free">Free — 3/day</span>
                                 </button>
                             </div>
                             <div class="cl-output" id="coverLetterOutput" style="display: none;">
                                 <div class="cl-output-header">
-                                    <span class="cl-output-title">Your Cover Letter</span>
+                                    <span class="cl-output-title">Your first draft</span>
                                     <div class="cl-output-actions">
                                         <button type="button" class="cl-action-btn" id="copyCoverLetterFull">📋 Copy</button>
                                         <button type="button" class="cl-action-btn" id="downloadCoverLetterTxt">💾 Download .txt</button>
                                     </div>
                                 </div>
                                 <div class="cl-output-body" id="coverLetterBody" contenteditable="true"></div>
-                                <p class="cl-output-note">You can edit the text above before copying or downloading.</p>
+                                <p class="cl-output-note">This is a first draft. Edit the text above and check every claim before you send it.</p>
                             </div>
                             <div class="cl-loading" id="coverLetterLoading" style="display: none;">
                                 <div class="cl-spinner"></div>
-                                <span>Writing your cover letter...</span>
+                                <span>Writing your first draft...</span>
                             </div>
                             <div class="cl-error" id="coverLetterError" style="display: none;"></div>
                         </div>
@@ -547,10 +585,12 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                     <!-- ATS Formatting (collapsed by default) -->
                     <div class="result-card ats-card">
-                        <div class="card-header-toggle" data-target="atsContent" data-section="ats">
-                            <h2>📋 ATS Formatting Check</h2>
-                            <span class="toggle-icon">+</span>
-                        </div>
+                        <h2 class="card-toggle-heading">
+                            <button type="button" class="card-header-toggle" data-target="atsContent" data-section="ats" aria-expanded="false" aria-controls="atsContent">
+                                <span>📋 ATS formatting check</span>
+                                <span class="toggle-icon" aria-hidden="true">+</span>
+                            </button>
+                        </h2>
                         <div id="atsContent" style="display: none;">
                             <div id="atsFormatting"></div>
                         </div>
@@ -558,11 +598,11 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
                     <!-- Scan History -->
                     <div class="result-card history-card" id="scanHistoryCard" style="display: none;">
-                        <h2>📈 Your Scan History</h2>
-                        <p class="card-subtitle">Compare revisions for the same job description. History stays on this device; different jobs and scoring versions are not compared.</p>
+                        <h2>📈 Your scan history</h2>
+                        <p class="card-subtitle">Compare revisions for the same job description. History stays on this device; the chart only shows scans of this job.</p>
                         <div class="history-chart" id="historyChart"></div>
                         <div class="history-list" id="historyList"></div>
-                        <button type="button" class="history-clear-btn" id="clearHistoryBtn">Clear History</button>
+                        <button type="button" class="history-clear-btn" id="clearHistoryBtn">Clear history</button>
                     </div>
 
                     <!-- Referral: open by default, message is about the friend, never the score -->
@@ -590,26 +630,18 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 </div><!-- /deepResults -->
             </div>
         </div>
-    </main>
+    </section>
 
     <!-- ============ TESTIMONIALS ============ -->
     <section class="testimonials">
         <div class="container">
-            <div class="testimonials-grid">
+            <div class="testimonials-grid testimonials-grid-two">
                 <div class="testimonial-card">
                     <div class="testimonial-quote">"</div>
-                    <p class="testimonial-text">Your platform helped me secure more than 10 interviews within a short period of time. I got a job offer after passing 2 technical interviews. The role is AWS Senior Cloud Engineer.</p>
-                    <div class="testimonial-author">
-                        <div class="testimonial-avatar">D</div>
-                        <span class="testimonial-name">Verified User</span>
-                    </div>
-                </div>
-                <div class="testimonial-card">
-                    <div class="testimonial-quote">"</div>
-                    <p class="testimonial-text">I got 4 interviews and 2 assessments within two weeks of using ResumeRadar. The keyword matching showed me exactly what I was missing.</p>
+                    <p class="testimonial-text">The keyword matching showed me exactly what I was missing.</p>
                     <div class="testimonial-author">
                         <div class="testimonial-avatar">S</div>
-                        <span class="testimonial-name">Verified User</span>
+                        <span class="testimonial-name">ResumeRadar user</span>
                     </div>
                 </div>
                 <div class="testimonial-card">
@@ -617,7 +649,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <p class="testimonial-text">Changed my mindset from 'I'm not good enough' to 'I just need to add three keywords'. Game changer.</p>
                     <div class="testimonial-author">
                         <div class="testimonial-avatar">R</div>
-                        <span class="testimonial-name">Verified User</span>
+                        <span class="testimonial-name">ResumeRadar user</span>
                     </div>
                 </div>
             </div>
@@ -626,86 +658,25 @@ Include the job title, requirements, responsibilities, qualifications — everyt
 
     <!-- ============ EMAIL MODAL ============ -->
     <div class="modal-overlay" id="emailModal" style="display: none;">
-        <div class="modal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="emailModalTitle">
             <div class="modal-header">
-                <h3>📧 Email Your Report</h3>
-                <button type="button" class="modal-close" id="closeModal">✕</button>
+                <h3 id="emailModalTitle">📧 Email your report</h3>
+                <button type="button" class="modal-close" id="closeModal" aria-label="Close">✕</button>
             </div>
             <div class="modal-body">
                 <p class="modal-desc">We'll format your full ATS analysis into a clean email you can reference later or forward to a career coach.</p>
                 <div class="modal-field">
-                    <label for="emailInput">Email Address</label>
-                    <input type="email" id="emailInput" placeholder="your@email.com" required>
+                    <label for="emailInput">Email address</label>
+                    <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email" required>
                 </div>
+                <p class="modal-privacy">We use your address only to send this report, through our email provider Resend. ResumeRadar does not keep it or add you to a mailing list. <a href="/privacy">Privacy</a></p>
                 <div class="modal-actions">
                     <button type="button" class="modal-btn-secondary" id="cancelModal">Cancel</button>
                     <button type="button" class="modal-btn-primary" id="sendEmailBtn">
-                        <span class="send-text">Send Report</span>
+                        <span class="send-text">Send report</span>
                         <span class="send-loading" style="display: none;">
                             <span class="spinner spinner-sm"></span> Sending...
                         </span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ============ NEWSLETTER POPUP (MANDATORY) ============ -->
-    <div class="modal-overlay newsletter-overlay" id="newsletterPopup" style="display: none;">
-        <div class="newsletter-modal">
-
-            <div class="newsletter-header">
-                <!-- Score Preview (populated by JS) -->
-                <div class="score-preview" id="scorePreview" style="display: none;">
-                    <div class="score-preview-circle">
-                        <svg viewBox="0 0 80 80">
-                            <circle class="score-preview-bg" cx="40" cy="40" r="36" />
-                            <circle class="score-preview-fill" cx="40" cy="40" r="36" id="scorePreviewFill" />
-                        </svg>
-                        <div class="score-preview-number" id="scorePreviewNumber">0%</div>
-                    </div>
-                </div>
-
-                <div class="newsletter-icon">
-                    <img src="{{ url_for('static', filename='images/sholas-tech-notes-logo.png') }}" alt="Shola's Tech Notes" class="newsletter-logo">
-                </div>
-                <h3 id="newsletterHeading">Your results are ready!</h3>
-                <p class="newsletter-subtitle" id="newsletterSubtitle">Subscribe to Shola's Tech Notes Newsletter to get your ATS scan results — plus practical tech career tips, certification guides, and AI fundamentals in just 3 minutes a week.</p>
-            </div>
-
-            <div class="newsletter-body">
-                <!-- Subscribe Form -->
-                <div id="newsletterFormWrapper">
-                    <form id="newsletterForm" class="newsletter-form">
-                        <div class="newsletter-input-stack">
-                            <input type="text" id="newsletterFirstName" placeholder="First name" class="newsletter-input" required>
-                            <input type="email" id="newsletterEmail" placeholder="Email address" class="newsletter-input" required>
-                            <button type="submit" class="newsletter-submit-btn newsletter-submit-full">
-                                <span class="nl-btn-text">Subscribe & View My Results</span>
-                                <span class="nl-btn-loading" style="display: none;">
-                                    <span class="spinner spinner-sm"></span> Subscribing...
-                                </span>
-                            </button>
-                        </div>
-                    </form>
-
-                    <p class="newsletter-trust">Join other tech professionals on Shola's Tech Notes.</p>
-                    <p class="newsletter-privacy">Free forever. Unsubscribe anytime. We respect your inbox.</p>
-                </div>
-
-                <!-- Post-Subscribe Confirmation (hidden by default) -->
-                <div id="newsletterConfirmation" style="display: none;">
-                    <div class="confirm-icon">🎉</div>
-                    <h3 class="confirm-title">You're in, <span id="confirmName"></span>!</h3>
-                    <p class="confirm-message">A welcome email + a free gift is on its way from <strong>Shola's Tech Notes</strong>.</p>
-                    <div class="confirm-email-tip">
-                        <span class="tip-icon">📬</span>
-                        <div class="tip-content">
-                            <strong>Don't see it?</strong> Check your <strong>Promotions</strong> or <strong>Spam</strong> folder and move it to your Primary inbox so you never miss an issue.
-                        </div>
-                    </div>
-                    <button type="button" class="newsletter-submit-btn newsletter-submit-full" id="viewResultsBtn">
-                        View My Results →
                     </button>
                 </div>
             </div>
@@ -716,7 +687,7 @@ Include the job title, requirements, responsibilities, qualifications — everyt
     <!-- ============ ROLE GUIDE (programmatic SEO content) ============ -->
     <section class="role-guide" id="role-guide">
         <div class="container">
-            <h2 class="role-guide-title">How {{ role.title }} resumes get ranked in 2026</h2>
+            <h2 class="role-guide-title">How {{ role.title }} resumes are screened in 2026</h2>
             {% for para in role_content.intro %}
             <p class="role-guide-intro">{{ para }}</p>
             {% endfor %}
@@ -732,9 +703,9 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                 </div>
                 {% endfor %}
             </div>
-            <p class="role-guide-note">Keywords only rank you when they honestly describe your experience — the scanner below shows which ones from a real posting you can truthfully add.</p>
+            <p class="role-guide-note">Keywords only help when they honestly describe your experience — the scanner below shows which ones from a real posting you can truthfully add.</p>
 
-            <h3 class="role-guide-subtitle">Three fixes that move {{ role.title }} resumes up the ranking</h3>
+            <h3 class="role-guide-subtitle">Three fixes that make {{ role.title }} resumes clearer</h3>
             <ol class="role-guide-tips">
                 {% for tip in role_content.tips %}
                 <li>{{ tip }}</li>
@@ -769,35 +740,37 @@ Include the job title, requirements, responsibilities, qualifications — everyt
     <!-- ============ FAQ ============ -->
     <section class="faq-section" id="faq">
         <div class="container">
-            <h2 class="faq-title">Frequently Asked Questions</h2>
+            <h2 class="faq-title">Frequently asked questions</h2>
             <div class="faq-list">
                 <details class="faq-item">
                     <summary>What is an ATS and why does it matter?</summary>
-                    <p>An Applicant Tracking System (ATS) is software employers use to manage, search, and rank applications — over 90% of large companies use one, and AI-powered screening on top of it is now common. The ATS rarely auto-rejects you, but recruiters facing hundreds of applications per role rely on its ranking and keyword search to decide whose resume they actually read. If your resume doesn't reflect the job description's language, a human may never scroll to it — even if you're perfectly qualified.</p>
+                    <p>An Applicant Tracking System (ATS) helps employers organise applications. Screening rules vary by employer. ResumeRadar checks recognised keywords and readable text; it cannot predict an employer’s decision.</p>
                 </details>
                 <details class="faq-item">
                     <summary>How does ResumeRadar work?</summary>
-                    <p>Upload your resume (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, calculates your match score, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to improve your chances — with results usually ready within a minute.</p>
+                    <p>Upload your CV (PDF or DOCX) and paste the job description you're applying to. ResumeRadar extracts keywords from both, estimates your keyword match, identifies missing keywords, checks ATS formatting, and gives AI-powered suggestions to make your experience clearer — with results usually ready within a minute.</p>
                 </details>
                 <details class="faq-item">
                     <summary>Is ResumeRadar free?</summary>
-                    <p>Yes. The ATS resume scan is completely free with no signup required. You get your match score, missing keywords, formatting check, and AI suggestions at no cost.</p>
+                    <p>Yes. The CV scan is completely free with no signup required. You get your keyword match estimate, missing keywords, formatting check, and AI suggestions at no cost.</p>
                 </details>
-                <details class="faq-item">
-                    <summary>Is my resume stored or shared?</summary>
-                    <p>Your uploaded file is deleted after parsing. Temporary analysis results are cached for up to one hour. AI providers process the text to generate suggestions.</p>
+                <details class="faq-item" id="privacy">
+                    <summary>Is my CV stored or shared?</summary>
+                    <p>{{ privacy_line }} Read the <a href="/privacy">privacy page</a> for the detail.</p>
                 </details>
                 <details class="faq-item">
                     <summary>What file formats are supported?</summary>
-                    <p>ResumeRadar supports PDF and DOCX files. For best ATS compatibility, we recommend submitting your resume as a PDF.</p>
+                    <p>ResumeRadar supports PDF and DOCX files. For best ATS compatibility, we recommend submitting your CV as a PDF.</p>
                 </details>
                 <details class="faq-item">
-                    <summary>How do I improve my ATS score?</summary>
-                    <p>After scanning, look at the "Keywords Not Found" section — these are terms the job description mentions that aren't on your resume. Add the relevant ones to your skills section or experience bullets. Also check the AI suggestions for specific rewording tips.</p>
+                    <summary>How do I improve my keyword match?</summary>
+                    <p>After scanning, look at the "Keywords Not Found" section — these are terms the job description mentions that aren't in your CV. Where you have that experience, add it to your skills section or experience bullets with a real example. Also check the AI suggestions for specific rewording tips.</p>
                 </details>
             </div>
         </div>
     </section>
+
+    </main>
 
     <!-- ============ FOOTER ============ -->
     <footer class="footer">
@@ -815,18 +788,24 @@ Include the job title, requirements, responsibilities, qualifications — everyt
                     <a href="/ats-resume-checker/">all 15 roles →</a>
                 </p>
             </div>
-            <p class="footer-mission">Helping people break into tech & cloud, one resume at a time.</p>
-            <p class="footer-privacy">🔒 Your resume is analyzed in real time, never sold or shared, and auto-deletes within hours. Your data stays yours.</p>
+            <p class="footer-mission">Helping people break into tech and cloud, one CV at a time.</p>
+            <p class="footer-built">Built by <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Olushola Oladipupo</a></p>
+            <p class="footer-links">
+                <a href="https://www.sholastechnotes.com/" target="_blank" rel="noopener">Newsletter</a>
+                <a href="/privacy">Privacy</a>
+                <a href="https://www.linkedin.com/in/olushola-oladipupo/" target="_blank" rel="noopener">Contact</a>
+            </p>
+            <p class="footer-privacy">🔒 {{ privacy_line }}</p>
         </div>
     </footer>
 
     <!-- Mobile Sticky CTA (visible in results viewport on mobile) -->
-    <div class="sticky-cta-bar" id="stickyCta" style="display: none;">
+    <div class="sticky-cta-bar" id="stickyCta" role="region" aria-label="Rescan" style="display: none;">
         <button type="button" id="stickyRescanBtn">Rescan my updated CV — free</button>
     </div>
 
-    <script src="/static/js/scan-utils.js?v=4"></script>
-    <script src="/static/js/app.js?v=14"></script>
+    <script src="/static/js/scan-utils.js?v=5"></script>
+    <script src="/static/js/app.js?v=16"></script>
     <script src="/static/js/share.js?v=1"></script>
 </body>
 </html>

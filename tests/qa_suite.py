@@ -132,11 +132,12 @@ def run_tests():
             ('copyReportBtn', 'Copy report button'),
             ('downloadReportBtn', 'Download PDF button'),
             ('shareCard', 'Share card'),
-            ('newsletterPopup', 'Newsletter popup'),
             ('errorMessage', 'Error message div'),
         ]
         for elem_id, label in key_elements:
             check(f"HTML has #{elem_id}", f'id="{elem_id}"' in html, label)
+        # The forced newsletter pop-up was removed in Nov 2026 and must not return.
+        check("HTML has no #newsletterPopup", 'id="newsletterPopup"' not in html, "Forced newsletter popup removed")
 
         # ---- SECTION 5: META TAGS ----
         check("OG title meta tag", 'og:title' in html)
@@ -608,9 +609,11 @@ def run_tests():
           app_source.count('"30 per hour"') >= 2)
     check("ProxyFix wraps WSGI app with x_for=1 (single Render proxy)",
           'ProxyFix(app.wsgi_app' in app_source and 'x_for=1' in app_source)
-    check("Limiter uses Flask-Limiter's get_remote_address",
-          'from flask_limiter.util import get_remote_address' in app_source
-          and 'key_func=get_remote_address' in app_source)
+    check("Limiter keys on the real visitor IP (_client_ip), not the Cloudflare edge",
+          'key_func=_client_ip' in app_source
+          and 'key_func=get_remote_address' not in app_source)
+    check("CF-Connecting-IP trusted only from Cloudflare ranges",
+          '_CLOUDFLARE_NETWORKS' in app_source and '_is_cloudflare_ip(remote)' in app_source)
 
     # --- Startup logging (module-level, visible under Gunicorn) ---
     check("Startup logs Stripe Checkout status",
