@@ -23,16 +23,23 @@ MAX_COMMENT_CHARS = 500
 MAX_COMMENTS_PER_DAY = 200  # bounds Redis memory if someone floods the form
 
 _EMAIL = re.compile(r"\S+@\S+")
-# Links: any scheme (https, ftp, ...), www., a domain followed by a path
-# (linkedin.com/in/x), or a bare domain on a common top-level domain
-# (janedoe.dev). Tech names such as Node.js, Next.js and ASP.NET are kept.
+# Links: any scheme (https, ftp, ...), www., or a domain followed by a path
+# (linkedin.com/in/x).
 _URL = re.compile(
     r"(?:\b[a-z][a-z0-9+.-]*://|\bwww\.)\S+"
-    r"|\b(?:[a-z0-9-]+\.)+(?!js\b)[a-z]{2,}/\S*"
-    r"|\b(?:[a-z0-9-]+\.)+(?:com|co|uk|org|io|dev|me|app|ai|info|biz|xyz|tech|site|online|"
-    r"page|blog|link|ly|gl|so|sh|cc|tv|eu|us|ca|au|de|fr|ng|in|za|ie|nz)\b(?![\w-]|\.\w)",
+    r"|\b(?:[a-z0-9-]+\.)+(?!js\b)[a-z]{2,}/\S*",
     re.IGNORECASE,
 )
+# Bare domains (janedoe.dev, JANEDOE.NET, jane.design). There are over a
+# thousand top-level domains, so any word.letters token counts, unless the
+# last part is Capitalised and not a common TLD (a missing space, as in
+# "useful.Thanks" or "React.Native") or the whole token is a known tech name.
+_BARE_DOMAIN = re.compile(r"\b(?:[a-z0-9-]+\.)+([a-z]{2,24})\b(?![\w-]|\.\w)", re.IGNORECASE)
+_TECH_NAMES = frozenset({"asp.net", "vb.net", "ado.net", "socket.io"})
+# Common top-level domains that are not everyday words: removed even when
+# Capitalised (Jane.Net, JaneDoe.Com).
+_COMMON_TLDS = frozenset({"com", "net", "org", "io", "dev", "co", "uk", "app", "ai", "info",
+                          "biz", "xyz", "tech", "site", "online", "pro", "design"})
 # Nine or more digits, so dates (2026-11-19) and scores are left alone.
 _PHONE = re.compile(r"\+?\(?\d(?:[\s().-]{0,2}\d){8,}")
 _REMOVED = "[removed]"
@@ -46,6 +53,15 @@ def init(redis_client):
     _redis = redis_client
 
 
+def _strip_bare_domain(match):
+    token, last = match.group(0), match.group(1)
+    if last.lower() == "js" or token.lower() in _TECH_NAMES:
+        return token
+    if last[0].isupper() and last[1:].islower() and last.lower() not in _COMMON_TLDS:
+        return token  # "useful.Thanks": a missing space, not a domain
+    return _REMOVED
+
+
 def clean_comment(text):
     """Return a storable comment: one line, contact details removed, capped."""
     if not isinstance(text, str):
@@ -53,6 +69,7 @@ def clean_comment(text):
     text = text[:MAX_COMMENT_CHARS * 4]  # bound the work before the regexes run
     text = "".join(ch if ch.isprintable() else " " for ch in text)
     text = _URL.sub(_REMOVED, text)
+    text = _BARE_DOMAIN.sub(_strip_bare_domain, text)
     text = _EMAIL.sub(_REMOVED, text)
     text = _PHONE.sub(_REMOVED, text)
     return " ".join(text.split())[:MAX_COMMENT_CHARS].strip()

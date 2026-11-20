@@ -119,8 +119,9 @@ add an optional comment, which goes to `POST /api/feedback` and is read back at
 the authenticated `GET /api/admin/feedback?days=30`.
 
 A stored comment holds four fields only: the cleaned text (500 characters at
-most, with email addresses, links (including bare domains such as `janedoe.dev`
-and `linkedin.com/in/...`) and phone numbers replaced by `[removed]`),
+most, with email addresses, links (including bare domains on any top-level domain,
+such as `janedoe.dev`, `JANEDOE.NET` and `linkedin.com/in/...`; tech names
+such as Node.js and ASP.NET are kept) and phone numbers replaced by `[removed]`),
 the UTC date, the vote, and whether the visitor ticked "may quote". No IP,
 journey ID, score, email or CV text is stored with it, and it is never logged.
 Comments expire after 90 days, with at most 200 kept per day. Only comments
