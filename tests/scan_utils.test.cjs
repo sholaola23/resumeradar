@@ -4,7 +4,7 @@ let utils;
 try { utils = require('../static/js/scan-utils.js'); } catch { utils = {}; }
 test('unknown score is never represented as zero percent', () => {
   assert.equal(utils.scoreText?.(null), 'Not scored');
-  assert.equal(utils.scoreText?.(0), '0%');
+  assert.equal(utils.scoreText?.(0), 'probe-should-fail');
 });
 test('only same job and scoring version produce a progress delta', () => {
   const current = {score: 70, jobKey:'job-a', scoreVersion:'2'};
