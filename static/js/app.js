@@ -98,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scanBtn = document.getElementById('scanBtn');
     const scanProgress = document.getElementById('scanProgress');
     const errorMessage = document.getElementById('errorMessage');
+    const uploadError = document.getElementById('uploadError');
     const resultsSection = document.getElementById('results');
     const scanAgainBtn = document.getElementById('scanAgainBtn');
 
@@ -360,6 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             btn.classList.add('active');
             document.getElementById(`tab-${targetTab}`).classList.add('active');
+            uploadError.hidden = true; // an old file error no longer applies
         });
     });
 
@@ -412,12 +414,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const ext = '.' + file.name.split('.').pop().toLowerCase();
 
         if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(ext)) {
-            showError('Please upload a PDF or DOCX file.');
+            showUploadError('Please upload a PDF or DOCX file.');
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            showError('File too large. Maximum size is 5MB.');
+            showUploadError('File too large. Maximum size is 5MB.');
             return;
         }
 
@@ -447,17 +449,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
 
         if (!jobDescription) {
-            showError('Please paste a job description.');
+            showError('Please paste a job description.', document.getElementById('jobDescription'));
             return;
         }
 
         if (activeTab === 'upload' && !hasFile) {
-            showError('Please upload your CV, or switch to the "Paste text" tab.');
+            showUploadError('Please upload your CV, or switch to the "Paste text" tab.', dropZone);
             return;
         }
 
         if (activeTab === 'paste' && !resumeText) {
-            showError('Please paste your CV text.');
+            showError('Please paste your CV text.', document.getElementById('resumeText'));
             return;
         }
 
@@ -493,8 +495,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
                     trackEvent('scan_failed');
+                    setLoading(false); // bring the form back first, so the error is not pushed off screen
                     showError('The scan is taking longer than usual. Please try again in a moment. Your text is still here.');
-                    setLoading(false);
                     return;
                 }
                 throw err;
@@ -505,8 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok || data.error) {
                 trackEvent('scan_failed');
-                showError(data.error || 'Something went wrong. Please try again.');
                 setLoading(false);
+                showError(data.error || 'Something went wrong. Please try again.');
                 return;
             }
 
@@ -528,6 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Scan error:', err);
             trackEvent('scan_failed');
+            setLoading(false);
             showError('We could not reach ResumeRadar. Check your connection and try again. Your text is still here.');
         } finally {
             setLoading(false);
@@ -931,6 +934,7 @@ Nice to Have
     function openEmailModal() {
         modalReturnFocus = document.activeElement;
         emailModal.style.display = 'flex';
+        fitModalToViewport();
         if (emailConfirmWait) {
             // Still waiting for a click on the confirm link: show that, not a blank form.
             showEmailStep('wait');
@@ -990,8 +994,42 @@ Nice to Have
         }
     });
 
+    // On a phone the on-screen keyboard shrinks the visible area but not the layout
+    // viewport the fixed overlay is sized to, so Send ended up behind the keyboard.
+    // Size the overlay to the visible area instead (the CSS keeps Send pinned).
+    const visualViewport = window.visualViewport;
+    function fitModalToViewport() {
+        if (!visualViewport || emailModal.style.display !== 'flex') return;
+        if (Math.abs(visualViewport.scale - 1) > 0.01) {
+            // Pinch-zoomed: leave the overlay at full size rather than squash the dialog.
+            emailModal.style.removeProperty('--modal-top');
+            emailModal.style.removeProperty('--modal-height');
+            return;
+        }
+        emailModal.style.setProperty('--modal-top', `${visualViewport.offsetTop}px`);
+        emailModal.style.setProperty('--modal-height', `${visualViewport.height}px`);
+        // The keyboard has just shrunk the dialog: keep the field being typed in on screen.
+        if (emailModal.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') {
+            document.activeElement.scrollIntoView({ block: 'nearest' });
+        }
+    }
+    if (visualViewport) {
+        visualViewport.addEventListener('resize', fitModalToViewport);
+        visualViewport.addEventListener('scroll', fitModalToViewport);
+    }
+
+    // Return in the email field sends, as it would in a form.
+    emailInput.addEventListener('keydown', (e) => {
+        // keyCode 229: Safari's Return that confirms an input-method word.
+        if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+        e.preventDefault();
+        if (!sendEmailBtn.disabled) sendEmailBtn.click();
+    });
+
     function closeModal() {
         emailModal.style.display = 'none';
+        emailModal.style.removeProperty('--modal-top');
+        emailModal.style.removeProperty('--modal-height');
         if (modalReturnFocus && document.contains(modalReturnFocus)) modalReturnFocus.focus();
         modalReturnFocus = null;
     }
@@ -1196,10 +1234,14 @@ Nice to Have
         toastIcon.textContent = isError ? '⚠️' : '✅';
         toast.className = isError ? 'toast toast-error' : 'toast';
         toast.style.display = 'flex';
+        announce(document.getElementById('toastLive'), message);
 
         // Auto-hide after 3 seconds
         setTimeout(() => {
             toast.style.display = 'none';
+            // Don't leave the message (which can hold an email address) in the page.
+            const live = document.getElementById('toastLive');
+            if (live && live.textContent === message) live.textContent = '';
         }, 3000);
     }
 
@@ -1249,9 +1291,12 @@ Nice to Have
 
         updateJumpMenu();
 
-        // Scroll to results
+        // Scroll to results, and move keyboard and screen reader focus there too, so the
+        // reader says "Your keyword coverage, 59%" and the next Tab starts in the report.
         setTimeout(() => {
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const heading = document.getElementById('scoreHeading');
+            if (heading) heading.focus({ preventScroll: true });
         }, 100);
     }
 
@@ -1387,6 +1432,9 @@ Nice to Have
         scoreNumber.classList.toggle('unscored', !scored);
         if (scored) animateNumber(scoreNumber, score);
         else scoreNumber.textContent = 'Not scored';
+        // The visible number counts up; screen readers get the final figure with the heading.
+        const headingValue = document.getElementById('scoreHeadingValue');
+        if (headingValue) headingValue.textContent = scored ? `, ${Math.round(score)}%` : ', not scored';
         const explanation = document.getElementById('scoreExplanation');
         const method = document.getElementById('scoreMethod');
         if (method) method.hidden = !scored;
@@ -2198,16 +2246,50 @@ Nice to Have
         loadingTimers.push(setTimeout(() => {
             note.textContent = 'This is taking longer than usual. Still working on it.';
         }, SLOW_SCAN_AFTER));
-        scanProgress.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // A short wait, so a scan that fails at once never starts this smooth scroll:
+        // it would carry on after the error message has been focused and scroll it away.
+        loadingTimers.push(setTimeout(() => {
+            scanProgress.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150));
     }
 
-    function showError(msg) {
-        errorMessage.textContent = msg;
+    // Put text into a live region a moment after it is shown, so screen readers
+    // notice the change even when the region has just been unhidden.
+    function announce(region, msg) {
+        if (!region) return;
+        region.textContent = '';
+        setTimeout(() => { region.textContent = msg; }, 50);
+    }
+
+    // focusEl: the field the error is about. Without one, focus moves to the message
+    // itself, because a disabled Scan button has usually dropped focus to the page.
+    function showError(msg, focusEl) {
+        uploadError.hidden = true;
         errorMessage.style.display = 'block';
+        if (focusEl) {
+            announce(errorMessage, msg);
+            focusEl.focus();
+        } else {
+            // Moving focus to the message reads it, so fill it in before focusing.
+            errorMessage.textContent = msg;
+            // An instant scroll first, so a smooth scroll still running from the
+            // progress panel can't carry the message off screen after it is focused.
+            errorMessage.scrollIntoView({ block: 'center', behavior: 'instant' });
+            errorMessage.focus({ preventScroll: true });
+        }
+    }
+
+    // Errors about the CV file sit beside the upload box, not below the Scan button.
+    function showUploadError(msg, focusEl) {
+        errorMessage.style.display = 'none';
+        uploadError.hidden = false;
+        announce(uploadError, msg);
+        if (focusEl) focusEl.focus();
     }
 
     function hideError() {
         errorMessage.style.display = 'none';
+        uploadError.hidden = true;
     }
 });
 
