@@ -180,6 +180,15 @@ class PageTests(unittest.TestCase):
         for text in ('How it works', 'id="headerShareBtn"', 'Built by', 'Newsletter', 'Contact', 'id="privacy"'):
             self.assertIn(text, self.html)
 
+    def test_every_page_logo_links_home(self):
+        # The header logo was a plain <div> on /share, /privacy and the role hub, so tapping it did nothing.
+        client = product.app.test_client()
+        for path in ('/', '/share', '/privacy', '/ats-resume-checker', '/no-such-page'):
+            page = client.get(path).data.decode()
+            header = page.split('</header>')[0] if '</header>' in page else page
+            self.assertIn('<a class="logo" href="/" aria-label="ResumeRadar home">', header, path)
+            self.assertNotIn('<div class="logo">', page, path)
+
     def test_score_method_and_example_report(self):
         self.assertIn('How this is worked out', self.html)
         self.assertIn('See an example report', self.html)
