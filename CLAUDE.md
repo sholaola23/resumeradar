@@ -19,22 +19,23 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python tests/qa_suite.py          # expect "STATUS: ALL CLEAR"
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'   # expect "OK"
 node --test tests/scan_utils.test.cjs        # expect "fail 0"
+cd tests/user-check && bun install && bun run typecheck && bun x playwright test   # user check, expect "N passed"
 
 PORT=5011 FLASK_ENV=production .venv/bin/python app.py
 ```
 
-After a local run, scan a sample CV on `/` and check `/build` returns 404. Tests need no API keys and no Redis service, but `tests/test_repeat_downloads.py` starts its own `redis-server`, so the binary must be installed.
+After a local run, scan a sample CV on `/` and check `/build` returns 404. The user check does this and more: the `resumeradar-verify` skill says how to run it, and `docs/feature-map.md` lists every flow and the test that covers it. Its launcher, `tests/user-check/serve.py`, fakes Claude, Resend and Beehiiv, runs a private Redis and refuses any connection off the machine; production never imports it. Tests need no API keys and no Redis service, but `tests/test_repeat_downloads.py` starts its own `redis-server`, so the binary must be installed.
 
-CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a gitleaks secret scan over the commit's history (confirmed-dead findings go in `.gitleaksignore`, each with how it was confirmed) and the three test commands above, with no keys.
+CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a gitleaks secret scan over the commit's history (confirmed-dead findings go in `.gitleaksignore`, each with how it was confirmed) the first three test commands above, and the user check (Playwright at 375px and 1280px with axe), all with no keys.
 
 ## Structure
 
 - `app.py`: every route (scan, AI tools, report download and email, subscribe, health, scan count, `/api/feedback`, `/privacy`, `/share`, role landing pages, sitemap, admin, and the switched-off builder and payment routes). `_client_ip` and `_visitor_key` decide who a Flask-Limiter rate limit counts: `CF-Connecting-IP` only when the request came from Cloudflare, and IPv6 by its /64.
 - `backend/`: `resume_parser.py` (PDF, DOCX, text), `keyword_engine.py` (matching and the score), `ai_analyzer.py` (Claude calls), `ai_budget.py`, `ai_cache.py`, `ai_ratelimit.py`, `ai_metrics.py`, `report_generator.py` (PDF), `audit_log.py`, `funnel_metrics.py`, `role_content.py` (role pages), `site_copy.py` (the strapline and privacy line shared by the site, email and PDF), `log_safe.py` (error text that is safe to log), `feedback.py` (the optional "Was this useful?" comment), `report_signing.py` (signs scan results so reports can only be built from them). `cv_builder.py`, `cv_*_generator.py`, `bundle_credits.py`, `stripe_utils.py` and `paystack_utils.py` belong to the switched-off builder.
 - `templates/` (`privacy.html` is the privacy page), `static/js/` (`app.js`, `scan-utils.js`, `share.js`, `feedback.js`), `static/css/style.css`, `static/llms.txt`.
-- `tests/`: `qa_suite.py`, the `test_*.py` unittest files and `scan_utils.test.cjs`.
+- `tests/`: `qa_suite.py`, the `test_*.py` unittest files, `scan_utils.test.cjs` and `user-check/` (the Playwright user check, run with bun).
 - `.github/workflows/`: `ci.yml` (secret scan and tests) and `resumeradar-claude-review.yml` (below).
-- `.claude/skills/resumeradar-final-review/SKILL.md`: the review checklist. `.claude/settings.json` runs `qa_suite.py --quick` after edits to `app.py`, `index.html`, `app.js` or `style.css` on a local machine.
+- `.claude/skills/resumeradar-final-review/SKILL.md`: the review checklist. `.claude/skills/resumeradar-verify/SKILL.md`: the smoke test to run before handing over a commit. `.claude/settings.json` runs `qa_suite.py --quick` after edits to `app.py`, `index.html`, `app.js` or `style.css` on a local machine.
 
 ## Guards
 

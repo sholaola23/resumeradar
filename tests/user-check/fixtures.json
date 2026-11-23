@@ -1,0 +1,29 @@
+{
+  "_note": "Made-up sample data for the user check. Jordan Ellis is not a real person. fake_ai holds the canned replies the fake Claude client returns.",
+  "cv_text": "Jordan Ellis\nData Analyst\nLeeds, UK\n\nSummary\nData analyst with four years of experience turning sales and operations data into clear reports for managers.\n\nExperience\nData Analyst, Northfield Retail, 2022 to now\n- Built weekly sales dashboards in Power BI used by twelve store managers\n- Wrote SQL queries to clean and join stock and sales tables\n- Automated a monthly Excel report with Python, saving a day of work each month\n\nJunior Analyst, Harbour Logistics, 2020 to 2022\n- Tracked delivery times in Excel and shared findings with the operations team\n- Helped move reporting from spreadsheets to a SQL database\n\nSkills\nSQL, Python, Excel, Power BI, data cleaning, stakeholder communication\n\nEducation\nBSc Mathematics, University of Leeds",
+  "job_description": "We are hiring a Data Analyst to join our commercial team. You will build dashboards in Tableau or Power BI, write SQL to pull and clean data, and use Python for analysis and automation. You will work closely with stakeholders across finance and marketing, present findings clearly, and help design A/B tests. Experience with dbt, Snowflake and statistical analysis is a plus. You should be comfortable owning reporting end to end and explaining results to non-technical colleagues.",
+  "fake_ai": {
+    "scan": {
+      "summary": "Sample reply from the user check: the CV covers SQL, Python and Power BI well; add A/B testing and Tableau where they are true.",
+      "strengths": ["Clear SQL and Python work", "Dashboards used by managers", "Plain reporting for non-technical teams"],
+      "critical_improvements": [
+        {"section": "Experience", "issue": "Few numbers", "suggestion": "Add a real figure to each bullet if you have one", "priority": "high"}
+      ],
+      "keyword_suggestions": [
+        {"keyword": "A/B testing", "where_to_add": "Experience", "how_to_add": "Only if you have run or helped with one"}
+      ],
+      "rewrite_suggestions": [
+        {"section": "Summary", "current_issue": "Generic opening", "suggested_approach": "Name the kind of data and the people who used your reports"}
+      ],
+      "quick_wins": ["Add Tableau if you have used it", "Mention stakeholders by team"],
+      "cover_letter_points": [
+        "Your dashboards for store managers match the reporting focus",
+        "Your Python automation matches the analysis and automation duty",
+        "Your work with operations shows stakeholder communication"
+      ]
+    },
+    "cover_letter": "Sample reply from the user check. I am applying for the Data Analyst role in your commercial team. At Northfield Retail I build weekly Power BI dashboards and write SQL to clean and join sales data.\n\nI also automated a monthly report with Python. I would welcome the chance to bring this reporting experience to your team.",
+    "bullet": "Sample reply from the user check: built weekly Power BI sales dashboards used by twelve store managers.",
+    "summary": "Sample reply from the user check: data analyst with four years of SQL, Python and Power BI reporting for retail and logistics teams."
+  }
+}
