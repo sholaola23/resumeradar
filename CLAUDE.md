@@ -26,7 +26,7 @@ PORT=5011 FLASK_ENV=production .venv/bin/python app.py
 
 After a local run, scan a sample CV on `/` and check `/build` returns 404. The user check does this and more: the `resumeradar-verify` skill says how to run it, and `docs/feature-map.md` lists every flow and the test that covers it. Its launcher, `tests/user-check/serve.py`, fakes Claude, Resend and Beehiiv, runs a private Redis and refuses any connection off the machine; production never imports it. Tests need no API keys and no Redis service, but `tests/test_repeat_downloads.py` starts its own `redis-server`, so the binary must be installed.
 
-CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a gitleaks secret scan over the commit's history (confirmed-dead findings go in `.gitleaksignore`, each with how it was confirmed) the first three test commands above, and the user check (Playwright at 375px and 1280px with axe), all with no keys.
+CI (`.github/workflows/ci.yml`) runs on every PR and every push to `master`: a gitleaks secret scan over the commit's history (confirmed-dead findings go in `.gitleaksignore`, each with how it was confirmed), the first three test commands above, and the user check (Playwright at 375px and 1280px with axe), all with no keys.
 
 ## Structure
 
