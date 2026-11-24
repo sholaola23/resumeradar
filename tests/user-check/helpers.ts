@@ -33,10 +33,15 @@ export const test = base.extend<{ guard: Guard }>({
         guard.blocked.push(url.href);
         return route.abort('blockedbyclient');
       });
-      page.on('console', (msg) => {
-        if (msg.type() === 'error') guard.consoleErrors.push(msg.text());
-      });
-      page.on('pageerror', (err) => guard.consoleErrors.push(`page error: ${err.message}`));
+      // Every page in the test, including ones it opens (the confirm link).
+      const watch = (p: Page) => {
+        p.on('console', (msg) => {
+          if (msg.type() === 'error') guard.consoleErrors.push(msg.text());
+        });
+        p.on('pageerror', (err) => guard.consoleErrors.push(`page error: ${err.message}`));
+      };
+      watch(page);
+      context.on('page', watch);
 
       await use(guard);
 
@@ -55,7 +60,12 @@ export { expect };
 /** axe (WCAG 2.1 A and AA) on the page as it is now, plus no sideways scroll. */
 export async function checkPage(page: Page, label: string) {
   // Let fade-ins finish first, or axe measures half-faded text as low contrast.
-  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
+  // Spinners loop forever, so only wait for animations that end.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+  );
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
@@ -94,7 +104,12 @@ export async function scanPasted(page: Page) {
 export async function expectScanResults(page: Page) {
   const results = page.locator('#results');
   const error = page.locator('#errorMessage');
-  await expect(results.or(error).first(), 'scan finished').toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(async () => (await results.isVisible()) || (await error.isVisible()), {
+      message: 'scan finished with results or an error',
+      timeout: 30_000,
+    })
+    .toBe(true);
   if (await error.isVisible()) {
     throw new Error(`scan showed an error instead of results: ${(await error.innerText()).trim()}`);
   }

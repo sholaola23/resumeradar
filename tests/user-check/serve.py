@@ -240,7 +240,16 @@ requests.post = _fake_post
 
 # ---------------------------------------------------------------- the app
 
+# app.py calls load_dotenv(override=True), which would put a local .env's
+# REDIS_URL, keys or CV_BUILDER_ENABLED back over the values set above. Skip it.
+import dotenv  # noqa: E402
+
+dotenv.load_dotenv = lambda *a, **k: False
+
 import app as resumeradar  # noqa: E402
+
+if resumeradar._redis_client is None:
+    sys.exit('user check: the app could not reach the private Redis, so nothing would be tested properly')
 from flask import jsonify, send_file  # noqa: E402
 
 flask_app = resumeradar.app
@@ -299,4 +308,6 @@ if __name__ == '__main__':
     logging.getLogger('werkzeug').setLevel(logging.ERROR)  # no per-request lines
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     print(f'user check server on http://127.0.0.1:{PORT} (all outside services faked)', flush=True)
-    flask_app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False, threaded=True)
+    # load_dotenv=False: Flask would otherwise read a local .env here too.
+    flask_app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False, threaded=True,
+                  load_dotenv=False)

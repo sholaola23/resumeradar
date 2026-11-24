@@ -38,5 +38,8 @@ export default defineConfig({
     timeout: 60_000,
     stdout: 'ignore',
     stderr: 'pipe',
+    // SIGTERM, not the default SIGKILL, so serve.py stops its Redis and
+    // removes its temporary folder.
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
   },
 });

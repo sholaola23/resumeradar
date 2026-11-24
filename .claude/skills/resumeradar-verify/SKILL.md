@@ -24,8 +24,8 @@ bun x playwright install chromium   # skip in a Claude cloud session: Chromium i
 Pick the rows in `docs/feature-map.md` your change touches and run their tests by name, from `tests/user-check`:
 
 ```sh
-bun x playwright test -g "Email report"          # one feature (a describe block)
-bun x playwright test -g "cover letter|share"    # several
+bun x playwright test -g "Cover letter"          # one feature (a describe block)
+bun x playwright test -g "email the report|Share" # several (a case-sensitive regex)
 bun x playwright test                            # everything, about 1.5 minutes
 ```
 
@@ -37,7 +37,7 @@ To look around by hand, run `../../.venv/bin/python serve.py 5055` and open `htt
 
 ## 3. If the change adds or changes a flow
 
-- Add or update its test in `flows.spec.ts`, inside a `test.describe` named after the feature map row.
+- Add or update its test in `flows.spec.ts`, inside the `test.describe` for that feature, and name the test in the feature map row's "Covered by" column.
 - Update the row in `docs/feature-map.md` in the same commit.
 - If the flow calls a new outside service, fake it in `serve.py`. The network guard fails the check on any connection off this machine, so an unfaked service shows up as a red run.
 - Prove the new test by breaking the flow once and watching it go red.
