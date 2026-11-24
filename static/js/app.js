@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let response;
             try {
-                response = await fetch('/api/scan-broken', {
+                response = await fetch('/api/scan', {
                     method: 'POST',
                     body: formData,
                     signal: controller.signal,
