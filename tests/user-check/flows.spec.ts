@@ -1,5 +1,5 @@
 // Each test.describe block matches a row in docs/feature-map.md.
-import { test, expect, fixtures, checkPage, scanPasted, isApi } from './helpers';
+import { test, expect, fixtures, checkPage, scanPasted, expectScanResults, isApi } from './helpers';
 
 test.describe('Scan with a CV and a job description', () => {
   test('home page loads and passes axe', async ({ page }) => {
@@ -19,11 +19,8 @@ test.describe('Scan with a CV and a job description', () => {
     });
     await expect(page.locator('#fileName')).toHaveText('sample_cv.docx');
     await page.locator('#jobDescription').fill(fixtures.job_description);
-    const scan = page.waitForResponse(isApi('/api/scan'));
     await page.locator('#scanBtn').click();
-    expect((await scan).status()).toBe(200);
-    await expect(page.locator('#results')).toBeVisible();
-    await expect(page.locator('#scoreNumber')).toHaveText(/\d/);
+    await expectScanResults(page);
     await expect(page.locator('#missingKeywords')).not.toBeEmpty();
   });
 
@@ -37,11 +34,8 @@ test.describe('Scan with a CV and a job description', () => {
 
   test('example report runs a scan', async ({ page }) => {
     await page.goto('/');
-    const scan = page.waitForResponse(isApi('/api/scan'));
     await page.locator('#demoScanBtn').click();
-    expect((await scan).status()).toBe(200);
-    await expect(page.locator('#results')).toBeVisible();
-    await expect(page.locator('#scoreNumber')).toHaveText(/\d/);
+    await expectScanResults(page);
   });
 
   test('scan with nothing filled in shows an error', async ({ page, guard }) => {

@@ -82,11 +82,23 @@ export async function scanPasted(page: Page) {
   await page.locator('.tab-btn[data-tab="paste"]').click();
   await page.locator('#resumeText').fill(fixtures.cv_text);
   await page.locator('#jobDescription').fill(fixtures.job_description);
-  const scan = page.waitForResponse(isApi('/api/scan'));
   await page.locator('#scanBtn').click();
-  const response = await scan;
-  expect(response.status(), 'scan response').toBe(200);
-  await expect(page.locator('#results')).toBeVisible();
+  await expectScanResults(page);
+}
+
+/**
+ * Wait for the scan to end in results or an error, and fail at once on an
+ * error with its text. Waiting for a response by URL would hang until the
+ * test timeout when the scan calls the wrong address.
+ */
+export async function expectScanResults(page: Page) {
+  const results = page.locator('#results');
+  const error = page.locator('#errorMessage');
+  await expect(results.or(error).first(), 'scan finished').toBeVisible({ timeout: 30_000 });
+  if (await error.isVisible()) {
+    throw new Error(`scan showed an error instead of results: ${(await error.innerText()).trim()}`);
+  }
+  await expect(results).toBeVisible();
   await expect(page.locator('#scoreNumber')).toHaveText(/\d/);
 }
 
