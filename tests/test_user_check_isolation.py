@@ -5,6 +5,8 @@ nothing in the app imports, so no environment variable can switch them on.
 """
 import os
 import re
+import shutil
+import subprocess
 import sys
 import unittest
 from unittest.mock import patch
@@ -47,6 +49,37 @@ class UserCheckIsolationTest(unittest.TestCase):
         self.assertFalse([r for r in rules if r.startswith('/__user-check')], rules)
         with app.test_client() as client:
             self.assertEqual(client.get('/__user-check/outbox').status_code, 404)
+
+
+# Loads serve.py's setup (fakes, guard, private Redis) without starting the
+# server, then tries an outside call through a proxy on this machine.
+_PROXY_PROBE = r"""
+import runpy, sys
+path = sys.argv[1]
+sys.argv = [path, '5099']
+mod = runpy.run_path(path, run_name='user_check_probe')
+import requests
+try:
+    requests.get('https://example.com/', timeout=5)
+    print('REACHED')
+except Exception:
+    pass
+print('BLOCKED', len(mod['BLOCKED']))
+"""
+
+
+@unittest.skipUnless(shutil.which('redis-server'), 'serve.py needs redis-server')
+class UserCheckNetworkGuardTest(unittest.TestCase):
+    def test_a_local_proxy_cannot_carry_outside_calls_past_the_guard(self):
+        env = dict(os.environ, HTTPS_PROXY='http://127.0.0.1:9', https_proxy='http://127.0.0.1:9',
+                   HTTP_PROXY='http://127.0.0.1:9', NO_PROXY='', no_proxy='')
+        out = subprocess.run(
+            [sys.executable, '-c', _PROXY_PROBE, os.path.join(REPO, 'tests', 'user-check', 'serve.py')],
+            env=env, capture_output=True, text=True, timeout=60, cwd=REPO,
+        )
+        out = out.stdout + out.stderr[-2000:]
+        self.assertNotIn('REACHED', out)
+        self.assertRegex(out, r'BLOCKED [1-9]')
 
 
 if __name__ == '__main__':

@@ -40,6 +40,13 @@ import threading
 import time
 import types
 
+# A proxy on this machine (Claude cloud sessions have one on 127.0.0.1) would
+# let an outside call pass the loopback-only guard below. Drop every proxy
+# setting so outside calls go direct and get blocked.
+for _var in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'):
+    os.environ.pop(_var, None)
+os.environ['NO_PROXY'] = os.environ['no_proxy'] = '*'
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.getenv('USER_CHECK_PORT', '5055'))
