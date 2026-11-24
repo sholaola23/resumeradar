@@ -13,3 +13,5 @@ CV Templates/
 dump.rdb
 *.rdb
 .venv/
+tests/user-check/test-results/
+tests/user-check/playwright-report/
