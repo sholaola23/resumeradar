@@ -17,7 +17,7 @@ ResumeRadar is a free ATS resume scanner. Upload your resume, paste a job descri
 - **Keyword analysis** — matched and missing keywords across 5 categories, with source-grounded required/preferred priorities and recognition of explicit tool alternatives (technical skills, soft skills, certifications, education, action verbs)
 - **AI suggestions** — summary, strengths, improvements, quick wins, and cover-letter talking points powered by Claude
 - **Sub-scores** — ATS formatting (0-100) and recruiter tips (0-100) with expandable checklists, including a bullet-quantification checker
-- **Free AI micro-tools** — cover-letter generator (3/day), bullet enhancer (10/day), summary generator (5/day)
+- **Free AI micro-tools** — cover-letter generator (5/day), bullet enhancer (10/day), summary generator (5/day)
 - **Reports** — copy, download, or email a branded multi-page PDF report
 - **Scan history** — local-only history; trends compare the same job-description hash and scoring version (localStorage, never sent to the server)
 

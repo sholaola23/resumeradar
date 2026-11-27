@@ -98,6 +98,25 @@ def check_and_increment(tool_name, ip_address):
         return True  # Fail-open
 
 
+def release(tool_name, ip_address):
+    """
+    Give back one use counted by check_and_increment, for a request that
+    produced no result (a Claude error, or the daily AI budget being spent),
+    so a visitor is not locked out without getting anything. Never goes below
+    zero. Errors are swallowed: at worst the visitor keeps the count.
+    """
+    try:
+        if not _redis or tool_name not in DAILY_LIMITS:
+            return
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        key = f"{_RL_PREFIX}{tool_name}:{ip_address}:{today}"
+        current = _redis.get(key)
+        if current is not None and int(current) > 0:
+            _redis.decr(key)
+    except Exception:
+        pass
+
+
 def get_remaining(tool_name, ip_address):
     """
     Return how many requests remain for this IP/tool today.

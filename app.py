@@ -774,6 +774,8 @@ def generate_cover_letter_endpoint():
         result = generate_cover_letter(resume_text, job_description)
 
         if "error" in result:
+            if not bundle_bypass:
+                ai_ratelimit.release("cover_letter", _client_ip())
             status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
             return jsonify(result), status
 
@@ -813,6 +815,7 @@ def enhance_bullet_endpoint():
         result = enhance_bullet_point(bullet_text, job_context)
 
         if "error" in result:
+            ai_ratelimit.release("enhance_bullet", _client_ip())
             status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
             return jsonify(result), status
 
@@ -852,6 +855,7 @@ def generate_summary_endpoint():
         result = generate_resume_summary(resume_text, job_description)
 
         if "error" in result:
+            ai_ratelimit.release("generate_summary", _client_ip())
             status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
             return jsonify(result), status
 

@@ -1976,12 +1976,9 @@ Nice to Have
                 const data = await resp.json();
 
                 if (!resp.ok || data.error) {
-                    const msg = data.error || 'Something went wrong. Please try again.';
-                    if (resp.status === 429) {
-                        errorDiv.textContent = 'Daily limit reached (3/day). Try again tomorrow!';
-                    } else {
-                        errorDiv.textContent = msg;
-                    }
+                    // Show the server's own text: a 429 can be the daily cap or
+                    // the per-minute limit, and the server says which.
+                    errorDiv.textContent = data.error || 'Something went wrong. Please try again.';
                     errorDiv.style.display = 'block';
                     return;
                 }

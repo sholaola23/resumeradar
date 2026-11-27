@@ -7,7 +7,7 @@ Process (review levels, reviews, merging, feature map) follows shola-project-run
 ## Stack
 
 - Python 3.11 (`runtime.txt`), Flask, gunicorn (`Procfile`, `render.yaml`). Vanilla HTML, CSS and JS. Use pip and a venv for the app. bun is used only for the Playwright user check in `tests/user-check/`.
-- Redis for rate limits, the AI budget, the AI cache and funnel counts. Without `REDIS_URL`, Flask-Limiter and the scan count fall back to memory, the AI budget and the per-IP daily limits let every call through, and emailed reports are refused (they fail closed), so production must always have Redis.
+- Redis for rate limits, the AI budget, the AI cache and funnel counts. Without `REDIS_URL`, Flask-Limiter and the scan count fall back to memory, the AI budget and the per-visitor daily limits let every call through, and emailed reports are refused (they fail closed), so production must always have Redis.
 - Anthropic Claude for suggestions (`backend/ai_analyzer.py`), Resend for emailed reports, Beehiiv for newsletter sign-ups. fpdf2 for the report PDF.
 - Env var names are in `.env.example`. Never put values in code, commits or chat.
 

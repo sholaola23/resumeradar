@@ -45,6 +45,10 @@ class _FakeRedis:
     def get(self, key):
         return self.store.get(key)
 
+    def decr(self, key):
+        self.store[key] = self.store.get(key, 0) - 1
+        return self.store[key]
+
     def pipeline(self, transaction=True):
         return _FakePipe(self)
 
@@ -131,6 +135,26 @@ class ToolDailyLimitTest(unittest.TestCase):
         self.assertEqual(len(keys), 1)
         self.assertIn(':enhance_bullet:198.51.100.23:', keys[0])
         self.assertNotIn(CF_EDGES[0], keys[0])
+
+    def test_a_failed_call_does_not_use_up_the_allowance(self):
+        from backend import ai_budget
+        with patch.object(app_module, 'generate_cover_letter',
+                          return_value={'error': ai_budget.BUDGET_EXCEEDED_MESSAGE}):
+            for _ in range(8):
+                r = self._post('cover_letter', CF_EDGES[0], cf_header='198.51.100.23')
+                self.assertEqual(r.status_code, 503)
+        # The budget is back: all 5 of the day's letters are still there.
+        for i in range(5):
+            r = self._post('cover_letter', CF_EDGES[i % 3], cf_header='198.51.100.23')
+            self.assertEqual(r.status_code, 200, f'request {i + 1} refused')
+        self.assertEqual(self._post('cover_letter', CF_EDGES[0], cf_header='198.51.100.23').status_code, 429)
+
+    def test_failed_bullet_and_summary_calls_are_given_back(self):
+        for tool, fn in [('enhance_bullet', 'enhance_bullet_point'),
+                         ('generate_summary', 'generate_resume_summary')]:
+            with patch.object(app_module, fn, return_value={'error': 'AI error'}):
+                self.assertEqual(self._post(tool, CF_EDGES[0], cf_header='198.51.100.23').status_code, 500)
+        self.assertEqual(sum(int(v) for v in self.redis.store.values()), 0)
 
     def test_no_redis_lets_calls_through(self):
         ai_ratelimit.init(None)
