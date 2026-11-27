@@ -19,13 +19,19 @@ from datetime import datetime, timezone
 _RL_PREFIX = "resumeradar:ratelimit:"
 _RL_TTL = 86400  # 24 hours
 
-# Tool-specific daily limits (per IP)
+# Tool-specific daily limits, per visitor. Callers pass app._client_ip(), the
+# real visitor (CF-Connecting-IP only when the request came from Cloudflare),
+# never request.remote_addr, which behind Cloudflare is a rotating edge IP.
+# The free tools' numbers were set on 27 Nov 2026 from a week of usage (3
+# cover letters, 0 bullets, 0 summaries in ~114 scans). They sit above normal
+# use so a few people sharing one address under carrier NAT are not locked
+# out; ai_budget's daily cost cap remains the spend backstop.
 # "cv_generate" is shared by all three CV-builder generate routes so the cap
 # can't be sidestepped by rotating between them. It is set well above real
 # usage (including Sprint-plan users) — its job is to bound runaway spend,
 # not to ration normal use.
 DAILY_LIMITS = {
-    "cover_letter": 3,
+    "cover_letter": 5,
     "enhance_bullet": 10,
     "generate_summary": 5,
     # 50, not a tighter number, because even the true client IP is shared under
