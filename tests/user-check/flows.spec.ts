@@ -61,6 +61,26 @@ test.describe('Cover letter', () => {
     await expect(page.locator('#coverLetterBody')).toContainText('Sample reply from the user check');
     await checkPage(page, 'cover letter');
   });
+
+  test('after 5 letters the page shows the daily limit message', async ({ page, guard }) => {
+    guard.allowConsole.push(/status of 429/);
+    await scanPasted(page);
+    await expect(page.locator('#generateCoverLetterBtn')).toContainText('Free, 5 a day');
+    for (let i = 0; i < 5; i++) {
+      const r = await page.request.post('/api/generate/cover-letter', {
+        data: { resume_text: fixtures.cv_text + ' v' + i, job_description: fixtures.job_description },
+      });
+      expect(r.status()).toBe(200);
+    }
+    const button = page.locator('#generateCoverLetterBtn');
+    await button.scrollIntoViewIfNeeded();
+    const call = page.waitForResponse(isApi('/api/generate/cover-letter'));
+    await button.click();
+    expect((await call).status()).toBe(429);
+    await expect(page.locator('#coverLetterError'))
+      .toHaveText('Daily limit reached (5 per day). Try again tomorrow.');
+    await checkPage(page, 'cover letter daily limit');
+  });
 });
 
 test.describe('Bullet and summary tools (API only)', () => {
