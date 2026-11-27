@@ -10,7 +10,7 @@ export default defineConfig({
   testDir: '.',
   testMatch: /.*\.spec\.ts$/,
   // One worker: the flows share one local server, and its per-visitor limits
-  // (for example 3 cover letters a day) count every test.
+  // (for example 5 cover letters a day) count every test.
   workers: 1,
   fullyParallel: false,
   // A flaky check is fixed, not retried (shola-project-run-rules).

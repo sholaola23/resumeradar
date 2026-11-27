@@ -168,6 +168,10 @@ def _visitor_key(ip):
     return str(ip)
 
 
+def _daily_limit_message(tool):
+    """The 429 text for a per-visitor daily tool cap, from ai_ratelimit."""
+    return f"Daily limit reached ({ai_ratelimit.DAILY_LIMITS[tool]} per day). Try again tomorrow."
+
 _redis_limiter_uri = os.getenv('REDIS_URL', 'memory://')
 limiter = Limiter(
     app=app,
@@ -722,7 +726,7 @@ def scan_resume():
 def generate_cover_letter_endpoint():
     """
     Generate a tailored cover letter from resume + job description.
-    Burst limiter: 10/min (decorator). Daily limit: 3/day/IP (in-handler, H7).
+    Burst limiter: 10/min (decorator). Daily limit: 5/day per visitor (in-handler).
     Bundle users bypass daily limit but are still subject to burst limiter.
     """
     try:
@@ -762,15 +766,16 @@ def generate_cover_letter_endpoint():
             # If bundle exhausted/expired, fall through to free tier (H6 rule 4)
 
         if not bundle_bypass:
-            # STAGED ROLLOUT — see the note on the other tool routes below.
-            ip = request.remote_addr
-            if not ai_ratelimit.check_and_increment("cover_letter", ip):
+            # Per-visitor daily cap, keyed on the real visitor (_client_ip).
+            if not ai_ratelimit.check_and_increment("cover_letter", _client_ip()):
                 ai_metrics.record_rate_reject(ai_metrics.TOOL_COVER_LETTER)
-                return jsonify({"error": "Daily limit reached (3 per day). Try again tomorrow."}), 429
+                return jsonify({"error": _daily_limit_message("cover_letter")}), 429
 
         result = generate_cover_letter(resume_text, job_description)
 
         if "error" in result:
+            if not bundle_bypass:
+                ai_ratelimit.release("cover_letter", _client_ip())
             status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
             return jsonify(result), status
 
@@ -786,7 +791,7 @@ def generate_cover_letter_endpoint():
 def enhance_bullet_endpoint():
     """
     Enhance a resume bullet point with AI.
-    Burst limiter: 10/min (decorator). Daily limit: 10/day/IP (in-handler, H7).
+    Burst limiter: 10/min (decorator). Daily limit: 10/day per visitor (in-handler).
     """
     try:
         data = request.get_json()
@@ -802,23 +807,15 @@ def enhance_bullet_endpoint():
         if len(bullet_text) > 500:
             return jsonify({"error": "Bullet point is too long (max 500 characters)."}), 400
 
-        # In-handler daily rate limit (H7)
-        # STAGED ROLLOUT: still the old key on purpose. These three caps
-        # (3/5/10 per day) have never actually fired in production, because
-        # remote_addr is a rotating Cloudflare edge IP. Switching them to
-        # _client_ip() would enforce them for the first time in a single
-        # deploy, against numbers tuned when they were a no-op — and under
-        # carrier NAT (a large share of our Nigerian traffic) a shared
-        # 3-per-day would lock out a whole pool. Flip these only after
-        # ai_metrics rate_rejects is observable. See _client_ip().
-        ip = request.remote_addr
-        if not ai_ratelimit.check_and_increment("enhance_bullet", ip):
+        # In-handler daily cap, keyed on the real visitor (_client_ip).
+        if not ai_ratelimit.check_and_increment("enhance_bullet", _client_ip()):
             ai_metrics.record_rate_reject(ai_metrics.TOOL_ENHANCE_BULLET)
-            return jsonify({"error": "Daily limit reached (10 per day). Try again tomorrow."}), 429
+            return jsonify({"error": _daily_limit_message("enhance_bullet")}), 429
 
         result = enhance_bullet_point(bullet_text, job_context)
 
         if "error" in result:
+            ai_ratelimit.release("enhance_bullet", _client_ip())
             status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
             return jsonify(result), status
 
@@ -834,7 +831,7 @@ def enhance_bullet_endpoint():
 def generate_summary_endpoint():
     """
     Generate a professional resume summary.
-    Burst limiter: 10/min (decorator). Daily limit: 5/day/IP (in-handler, H7).
+    Burst limiter: 10/min (decorator). Daily limit: 5/day per visitor (in-handler).
     """
     try:
         data = request.get_json()
@@ -850,23 +847,15 @@ def generate_summary_endpoint():
         if not job_description or len(job_description.split()) < 10:
             return jsonify({"error": "Please provide a job description."}), 400
 
-        # In-handler daily rate limit (H7)
-        # STAGED ROLLOUT: still the old key on purpose. These three caps
-        # (3/5/10 per day) have never actually fired in production, because
-        # remote_addr is a rotating Cloudflare edge IP. Switching them to
-        # _client_ip() would enforce them for the first time in a single
-        # deploy, against numbers tuned when they were a no-op — and under
-        # carrier NAT (a large share of our Nigerian traffic) a shared
-        # 3-per-day would lock out a whole pool. Flip these only after
-        # ai_metrics rate_rejects is observable. See _client_ip().
-        ip = request.remote_addr
-        if not ai_ratelimit.check_and_increment("generate_summary", ip):
+        # In-handler daily cap, keyed on the real visitor (_client_ip).
+        if not ai_ratelimit.check_and_increment("generate_summary", _client_ip()):
             ai_metrics.record_rate_reject(ai_metrics.TOOL_GENERATE_SUMMARY)
-            return jsonify({"error": "Daily limit reached (5 per day). Try again tomorrow."}), 429
+            return jsonify({"error": _daily_limit_message("generate_summary")}), 429
 
         result = generate_resume_summary(resume_text, job_description)
 
         if "error" in result:
+            ai_ratelimit.release("generate_summary", _client_ip())
             status = 503 if result["error"] == ai_budget.BUDGET_EXCEEDED_MESSAGE else 500
             return jsonify(result), status
 
@@ -3619,11 +3608,8 @@ def admin_ai_metrics():
 
     ai_metrics has been recording requests, claude_calls, cache_hits,
     rate_rejects, budget_rejects and errors all along with nothing reading
-    them. This exposes them, primarily so rate_rejects can be watched before
-    the cover_letter / enhance_bullet / generate_summary daily caps are moved
-    onto _client_ip() — those caps have never actually fired in production, so
-    flipping them blind would enforce untested numbers. See the staged-rollout
-    note on those routes.
+    them. This exposes them, so rate_rejects on the cover_letter /
+    enhance_bullet / generate_summary per-visitor daily caps can be watched.
 
     Usage:
         GET /api/admin/ai-metrics?days=7
